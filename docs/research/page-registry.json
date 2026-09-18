@@ -1,0 +1,899 @@
+[
+  {
+    "id": "P01",
+    "name": "首页",
+    "route": "/pages/home/index",
+    "phase": "A",
+    "entry": "首页Tab或分享链接",
+    "content": "品牌主张、创建入口、场景照片／照片动态／声音入口、示例故事；游客、已登录未创建、已创建三种布局。",
+    "action": "游客可看内容；创建时登录；老用户主按钮改为继续与某位TA聊天，任务卡回到对应任务。",
+    "rules": "加载失败保留导航；无TA显示创建引导。推荐区不公开私人内容，声音未上线时隐藏收费入口。",
+    "readApis": [
+      "GET /home",
+      "GET /bootstrap"
+    ],
+    "writeApis": [],
+    "engineering": "游客、未建档、已建档三种状态；继续最近任务的目标ID来自服务端"
+  },
+  {
+    "id": "P02",
+    "name": "登录",
+    "route": "/pages/auth/login",
+    "phase": "A",
+    "entry": "创建、支付、收藏、发布或受邀加入时触发",
+    "content": "手机号、验证码登录入口、协议勾选和返回按钮；保留来源页面及未提交草稿。",
+    "action": "提交手机号到03；登录成功回原操作。后续小程序可增加平台登录并绑定同一账号。",
+    "rules": "手机号错误就地提示；协议不默认勾选；取消返回可浏览页面，不能丢上传素材。",
+    "readApis": [
+      "GET /legal/{type}"
+    ],
+    "writeApis": [
+      "POST /auth/otp"
+    ],
+    "engineering": "校验手机号与主动协议勾选；returnTo限定内部路由"
+  },
+  {
+    "id": "P03",
+    "name": "验证码",
+    "route": "/pages/auth/verify",
+    "phase": "A",
+    "entry": "02提交手机号后",
+    "content": "脱敏手机号、验证码输入、重发倒计时、修改手机号；避免重复注册造成多个账号。",
+    "action": "校验成功恢复原创建／订单／邀请；手机号变更返回02。",
+    "rules": "错误、过期、发送失败分别提示；重发频率由服务端控制，不能用前端倒计时作为唯一校验。",
+    "readApis": [],
+    "writeApis": [
+      "POST /auth/otp/verify"
+    ],
+    "engineering": "challengeId和脱敏手机号；倒计时不代替服务端限流"
+  },
+  {
+    "id": "P04",
+    "name": "协议阅读",
+    "route": "/pages/common/legal",
+    "phase": "A",
+    "entry": "登录页、结算页和账号设置",
+    "content": "按文档类型复用模板：用户协议、隐私说明、声音授权、购买与售后规则；展示版本和更新时间。",
+    "action": "阅读后回来源页；同意行为在来源页完成。声音材料用途说明与营销订阅分开。",
+    "rules": "内容无法加载时允许稍后重试；不得把打开文档记成用户同意；具体上线文本另行定稿。",
+    "readApis": [
+      "GET /legal/{type}"
+    ],
+    "writeApis": [],
+    "engineering": "type和version；打开协议不自动记录同意"
+  },
+  {
+    "id": "P05",
+    "name": "消息中心",
+    "route": "/pages/account/notifications",
+    "phase": "B",
+    "entry": "首页消息图标或我的",
+    "content": "生成结果、支付与售后状态、邀请、用户主动订阅的问候；按事项分组，展示未读。",
+    "action": "点击直达任务、订单、邀请或相关TA；可关闭问候提醒。",
+    "rules": "没有消息时显示空态；已删除对象显示已失效；推送是否可达取决于实际渠道授权。",
+    "readApis": [
+      "GET /notifications"
+    ],
+    "writeApis": [
+      "POST /notifications/read"
+    ],
+    "engineering": "离开任务页后能从消息回原任务；A可先以作品/导出详情恢复"
+  },
+  {
+    "id": "P06",
+    "name": "我的萤火",
+    "route": "/pages/profiles/index",
+    "phase": "A",
+    "entry": "萤火Tab",
+    "content": "人物空间列表、最近活动、日常记录／纪念空间标签和新建入口；头像仅用真实上传照片或名字占位。",
+    "action": "选择人物到08；新建到07。第二位TA先保存草稿，在开通前写明需要独立套餐。",
+    "rules": "免费名额占用时不在提交后突然收费；已付费空间到期仍可见，原有基础内容可访问。",
+    "readApis": [
+      "GET /profiles"
+    ],
+    "writeApis": [],
+    "engineering": "active/draft/已到期均可区分，不能隐藏已保存人物"
+  },
+  {
+    "id": "P07",
+    "name": "快捷创建TA",
+    "route": "/pages/profiles/create",
+    "phase": "A",
+    "entry": "01或06",
+    "content": "一页完成：TA称呼必填；关系、姓名、照片、TA对你的称呼和一句记忆均可跳过。关系用文字选项。",
+    "action": "点击创建，成功提示后进入19；后续从09补资料。首句避免凭空编造过去经历。",
+    "rules": "不强迫上传头像、生日或逝世日期。离开存草稿；重复点击不重复建空间；创建失败可重试。",
+    "readApis": [
+      "GET /bootstrap"
+    ],
+    "writeApis": [
+      "POST /profiles"
+    ],
+    "engineering": "displayName必填；免费资格用完先显示需套餐，提交后保留draft"
+  },
+  {
+    "id": "P08",
+    "name": "TA的萤火空间",
+    "route": "/pages/profiles/detail",
+    "phase": "A",
+    "entry": "06人物卡或聊天顶部",
+    "content": "名称、简短介绍、和TA说说话、照片／声音／故事统计、记忆时间线、共同记录与权益入口。",
+    "action": "聊天到19；查看记忆到13；添加到14；共同记录到10。默认不展示生卒年。",
+    "rules": "记忆主人与实际账号分开；没有照片也能正常显示。游客无法直接打开私有空间。",
+    "readApis": [
+      "GET /profiles/{id}",
+      "GET /profiles/{id}/entitlements"
+    ],
+    "writeApis": [],
+    "engineering": "profileId；摘要按当前账号可见范围统计"
+  },
+  {
+    "id": "P09",
+    "name": "人物资料",
+    "route": "/pages/profiles/edit",
+    "phase": "A",
+    "entry": "08编辑或20设置",
+    "content": "姓名、称呼、关系、性格描述、常说的话、日常记录／纪念空间；照片和日期可选。",
+    "action": "保存后更新空间与后续对话资料；历史聊天不重写。删除人物使用独立确认与导出提示。",
+    "rules": "创建者可编辑；协作者权限按12执行。修改纪念类型不自动发布或触发问候。",
+    "readApis": [
+      "GET /profiles/{id}"
+    ],
+    "writeApis": [
+      "PATCH /profiles/{id}"
+    ],
+    "engineering": "expectedVersion；称呼与共享人物资料分开"
+  },
+  {
+    "id": "P10",
+    "name": "共同记录成员",
+    "route": "/pages/family/members",
+    "phase": "B",
+    "entry": "08共同记录入口",
+    "content": "单独标明记忆主人；下方只列真实受邀账号、角色、邀请状态、最多5人含创建者。",
+    "action": "创建者邀请到11并设置12；成员可退出；移除后即时停止新增访问。",
+    "rules": "记忆会员或声音会员可邀请；体验中未具备该功能时不可售卖此权益。私聊和订单不默认共享。",
+    "readApis": [
+      "GET /profiles/{id}/members"
+    ],
+    "writeApis": [
+      "POST /profiles/{id}/invitations",
+      "DELETE /profiles/{id}/members/{userId}"
+    ],
+    "engineering": "剩余名额含owner，成员不展示私聊与私人订单"
+  },
+  {
+    "id": "P11",
+    "name": "邀请详情",
+    "route": "/pages/family/invitation",
+    "phase": "B",
+    "entry": "邀请链接、二维码或消息中心",
+    "content": "邀请者、TA名称、将获得的记忆访问权限、有效状态和接受／拒绝按钮。",
+    "action": "未登录先到02，返回后确认加入；接受后到08。过期可联系邀请者重新发起。",
+    "rules": "链接不直接泄露素材；建议单次使用、7天有效，可撤销。人数已满和账号已加入单独提示。",
+    "readApis": [
+      "GET /invitations/{token}"
+    ],
+    "writeApis": [
+      "POST /invitations/{token}/accept",
+      "DELETE /invitations/{id}"
+    ],
+    "engineering": "登录前只有最小邀请预览；接受并发不得超5人"
+  },
+  {
+    "id": "P12",
+    "name": "权限管理",
+    "route": "/pages/family/permissions",
+    "phase": "B",
+    "entry": "10成员菜单",
+    "content": "创建者、共同记录者、仅查看三种角色；分别说明上传、编辑、邀请和导出权限。",
+    "action": "保存后立即生效；修改他人角色前显示影响。创建者不可把自己误移除。",
+    "rules": "协作者默认只改自己的记录；跨作者编辑须授权。移除成员不自动删除其已提交的家庭记录。",
+    "readApis": [
+      "GET /profiles/{id}/members"
+    ],
+    "writeApis": [
+      "PATCH /profiles/{id}/members/{userId}"
+    ],
+    "engineering": "role和expectedVersion；不可把自己改成最后一个非owner"
+  },
+  {
+    "id": "P13",
+    "name": "记忆库",
+    "route": "/pages/memories/index",
+    "phase": "A",
+    "entry": "08照片／故事／声音入口",
+    "content": "全部、照片、故事、声音、视频筛选；时间顺序、搜索、数量和添加入口；原始与AI生成标签分开。",
+    "action": "点记录到15；照片预览到16；录音到17；添加到14。",
+    "rules": "容量满时显示清理、导出和扩容；不阻止读取旧内容。无结果与无任何记录使用不同空态。",
+    "readApis": [
+      "GET /profiles/{id}/memories"
+    ],
+    "writeApis": [],
+    "engineering": "type/query/cursor；列表返回position，回退不重置滚动"
+  },
+  {
+    "id": "P14",
+    "name": "添加或编辑记忆",
+    "route": "/pages/memories/edit",
+    "phase": "A",
+    "entry": "08、13、聊天消息菜单、作品结果",
+    "content": "类型选择、文件或正文、标题、日期可选、人物关联、是否允许用于AI对话的说明。",
+    "action": "保存到该TA私有或家庭范围；需公开时另开35发布草稿。聊天提炼的记忆经用户确认再保存。",
+    "rules": "支持草稿、上传进度与失败重试；重复保存不生成副本。录音／视频转写与AI识别可能有误，可编辑。",
+    "readApis": [
+      "GET /memories/{id}"
+    ],
+    "writeApis": [
+      "POST /uploads",
+      "POST /profiles/{id}/memories",
+      "PATCH /memories/{id}"
+    ],
+    "engineering": "body/assetIds/visibility/useForAi；上传与保存分状态"
+  },
+  {
+    "id": "P15",
+    "name": "记忆详情",
+    "route": "/pages/memories/detail",
+    "phase": "A",
+    "entry": "13记录卡或消息引用",
+    "content": "完整正文、素材、来源标签、时间、作者和可用操作；AI生成图片／音频有持续标识。",
+    "action": "编辑到14；创建者或有权限者可删除；分享至社区进入35并再次确认公开范围。",
+    "rules": "协作者不见他人私聊；删除确认说明对记忆检索的影响，历史聊天里的文本不随之伪造改写。",
+    "readApis": [
+      "GET /memories/{id}"
+    ],
+    "writeApis": [
+      "DELETE /memories/{id}"
+    ],
+    "engineering": "公开发布为新草稿；记忆删除先停检索"
+  },
+  {
+    "id": "P16",
+    "name": "照片查看器",
+    "route": "/pages/media/photo",
+    "phase": "A",
+    "entry": "13、15或聊天图片",
+    "content": "大图、前后切换、缩放、说明；允许时可保存原图；生成图保留AI标签。",
+    "action": "返回原相册位置；创建作品到对应工具；保存或下载只针对当前有访问权的图片。",
+    "rules": "加载原图失败先显示缩略图与重试；无权限不给原图链接；处理结果不覆盖上传原件。",
+    "readApis": [
+      "GET /assets/{id}/access"
+    ],
+    "writeApis": [],
+    "engineering": "assetId；前后图独立原件，权限失效时清空旧图缓存"
+  },
+  {
+    "id": "P17",
+    "name": "原始录音播放",
+    "route": "/pages/media/audio",
+    "phase": "A",
+    "entry": "13声音分类或15",
+    "content": "录音标题、波形、进度、时长、原始录音标签；转写内容若提供则可修正。",
+    "action": "播放、暂停、拖动和下载；想制作新声音时进入23。回放原音不消耗付费语音。",
+    "rules": "音频不可播放可重新上传；手机中断后保留进度。原始录音和AI声音不能用同一标签混称。",
+    "readApis": [
+      "GET /assets/{id}/access"
+    ],
+    "writeApis": [],
+    "engineering": "保留播放位置；录音原件与合成音标签不同"
+  },
+  {
+    "id": "P18",
+    "name": "我的作品",
+    "route": "/pages/works/index",
+    "phase": "B",
+    "entry": "我的、生成完成消息或工具首页",
+    "content": "照片、动态、留声作品按类型排列；进行中、成功、失败、未保存到TA的作品均可查。",
+    "action": "详情到32或26；绑定TA并保存可从此发起；无TA时创建后自动返回继续。",
+    "rules": "离开生成页任务仍继续；游客配置在登录后恢复；删除作品提示不会自动撤销已公开的社区副本。",
+    "readApis": [
+      "GET /works"
+    ],
+    "writeApis": [],
+    "engineering": "进行中/成功/失败/未绑定TA过滤；不以订单已付替代作品可用"
+  },
+  {
+    "id": "P19",
+    "name": "对话页",
+    "route": "/pages/chat/index",
+    "phase": "A",
+    "entry": "创建成功、08或首页继续聊天",
+    "content": "微信式文字气泡、直接展示照片与语音；顶部TA名称和小型AI对话说明；输入框“和TA说句话”。",
+    "action": "文字发送、图片上传、消息重试；更多菜单含保存为记忆、对话设置和声音入口。",
+    "rules": "不展示检索卡、来源模块、在线本人等误导状态；无聊天次数余额；回复中断可续接或重试，避免双发。",
+    "readApis": [
+      "GET /conversations/{id}/messages",
+      "GET /generations/{id}/events"
+    ],
+    "writeApis": [
+      "POST /profiles/{id}/conversation",
+      "POST /conversations/{id}/messages"
+    ],
+    "engineering": "clientMessageId/seq/epoch；发送、处理中、失败气泡可恢复"
+  },
+  {
+    "id": "P20",
+    "name": "对话设置",
+    "route": "/pages/chat/settings",
+    "phase": "A",
+    "entry": "19右上角",
+    "content": "对你的称呼、回复长短、声音开关、历史记录入口、记忆管理入口和清空聊天。",
+    "action": "资料跳09，历史到21；声音未开通跳23，已开通跳26；清空需确认。",
+    "rules": "清空当前账号聊天不删除家庭素材；私聊默认仅本人可见，角色和记忆主人不混淆。",
+    "readApis": [
+      "GET /profiles/{id}/preferences"
+    ],
+    "writeApis": [
+      "PATCH /profiles/{id}/preferences",
+      "POST /conversations/{id}/clear"
+    ],
+    "engineering": "callMe属于本人；清空私聊不删除家庭相册"
+  },
+  {
+    "id": "P21",
+    "name": "对话记录",
+    "route": "/pages/chat/history",
+    "phase": "A",
+    "entry": "20或个人记录入口",
+    "content": "按日期浏览、关键词搜索；只列该账号与该TA的对话；重要消息可收藏为私人记忆。",
+    "action": "定位后回19对应位置；支持导出申请到48／49。",
+    "rules": "无记录、搜索无结果、导出中分别处理；不因家庭邀请而把历史聊天给其他成员。",
+    "readApis": [
+      "GET /conversations/{id}/messages"
+    ],
+    "writeApis": [
+      "POST /exports"
+    ],
+    "engineering": "query/cursor；定位messageId回聊天；只查本人"
+  },
+  {
+    "id": "P22",
+    "name": "语音消息陪伴",
+    "route": "/pages/chat/voice",
+    "phase": "C",
+    "entry": "19声音模式或26开始使用",
+    "content": "语音气泡和文字转写、按住说话、播放设置；保留AI标识，采用消息交互而非来电界面。",
+    "action": "用户说完后提交，生成语音回复；可随时回文字模式；播放已生成音频无需再生成。",
+    "rules": "声音年费有效且绑定账号可用；到期先结束当前处理再回基础文字，不突然弹分钟充值。",
+    "readApis": [
+      "GET /profiles/{id}/entitlements",
+      "GET /generations/{id}/events"
+    ],
+    "writeApis": [
+      "POST /conversations/{id}/messages"
+    ],
+    "engineering": "kind=audio+assetId；C之前禁用录音生成入口；与P19共用聊天组件"
+  },
+  {
+    "id": "P23",
+    "name": "声音介绍与价格",
+    "route": "/pages/voice/intro",
+    "phase": "C",
+    "entry": "首页工具、聊天声音入口、17或38",
+    "content": "实际样例、素材要求、AI生成说明；声音年费299元和留声作品29.9元的区别。",
+    "action": "主要按钮先上传并试听到24；可查看39套餐详情；已开通用户直接到26。",
+    "rules": "未开放销售时不收款；不把语音消息说成实时通话。无录音可先保存文字记忆。",
+    "readApis": [
+      "GET /products",
+      "GET /tools"
+    ],
+    "writeApis": [],
+    "engineering": "年费与作品交付对比；有合格个性试听后才去支付"
+  },
+  {
+    "id": "P24",
+    "name": "声音素材上传",
+    "route": "/pages/voice/upload",
+    "phase": "C",
+    "entry": "23",
+    "content": "音频文件、有效人声检查、试听原件、素材使用说明和授权确认；支持补充素材。",
+    "action": "通过后到25生成短试听；不通过提供具体补充建议。支付前已知可交付范围。",
+    "rules": "混音、多人声、低清晰度等给出原因；不合适的方言以效果判断。授权未确认不能提交。",
+    "readApis": [
+      "GET /legal/{type}"
+    ],
+    "writeApis": [
+      "POST /uploads",
+      "POST /consents",
+      "POST /profiles/{id}/voice-trials"
+    ],
+    "engineering": "素材版本与consentId；失败显示具体补充建议"
+  },
+  {
+    "id": "P25",
+    "name": "声音复刻任务详情",
+    "route": "/pages/voice/task",
+    "phase": "C",
+    "entry": "24提交或05任务通知",
+    "content": "检查中、短试听生成中、可试听、激活中、失败；展示步骤、返回入口和真实进度状态。",
+    "action": "试听完成到26；付款后激活同一音色，自动衔接到语音对话或留声作品。",
+    "rules": "不编造百分比和完成时间；离开仍可继续；失败不重复收钱，已付款未交付可从订单处理。",
+    "readApis": [
+      "GET /tasks/{id}",
+      "GET /voice-profiles/{id}"
+    ],
+    "writeApis": [],
+    "engineering": "检查/试听/激活分别显示；禁止假进度百分比"
+  },
+  {
+    "id": "P26",
+    "name": "声音试听与管理",
+    "route": "/pages/voice/manage",
+    "phase": "C",
+    "entry": "25、20或声音会员入口",
+    "content": "试听原音与合成短句、调整素材、音色名称、服务期限；留声作品用户另有3段编辑与生成状态。",
+    "action": "满意后选套餐到40；开通后到22；留声作品输入最多200汉字，生成、回放、下载及保存。",
+    "rules": "短试听首轮1次加1次修正；付费作品只在成功交付时消耗份数；免费返工与主动换音色分开。",
+    "readApis": [
+      "GET /voice-profiles/{id}",
+      "GET /voice-profiles/{id}/works"
+    ],
+    "writeApis": [
+      "POST /voice-profiles/{id}/revision",
+      "POST /work-packages/{id}/slots/{slotNo}/generate",
+      "DELETE /voice-profiles/{id}"
+    ],
+    "engineering": "trial_ready/active/过期/撤权；作品slot与年费声音两种视图"
+  },
+  {
+    "id": "P27",
+    "name": "影像工具首页",
+    "route": "/pages/tools/index",
+    "phase": "B",
+    "entry": "首页快捷入口或我的作品",
+    "content": "场景照片、照片动态、画质优化；每项给真实示例、普通价和已绑定TA的会员价。",
+    "action": "选择到28／29／30；可先使用工具后建TA；返回首页或作品列表。",
+    "rules": "价格以服务端报价为准；未上线工具不放可购买按钮；不再只展示泛黄旧照片。",
+    "readApis": [
+      "GET /tools"
+    ],
+    "writeApis": [],
+    "engineering": "只对已验收工具开放购买；不同工具可以独立灰度"
+  },
+  {
+    "id": "P28",
+    "name": "场景照片设置",
+    "route": "/pages/tools/scene",
+    "phase": "D",
+    "entry": "27或人物照片菜单",
+    "content": "参考照片、目标人物、场景预设、生成4张规格；可选关联TA，展示本次实付。",
+    "action": "预检通过到40；支付后到31，完成到32。会员价须与有效付费TA关联。",
+    "rules": "素材不足、人数超限和人脸不清在付费前提示；不以自动勾选会员改变用户订单。",
+    "readApis": [
+      "GET /products/{code}"
+    ],
+    "writeApis": [
+      "POST /uploads",
+      "POST /media/preflight"
+    ],
+    "engineering": "4张场景、参考人物数量与规格；通过模型验收可提前至B"
+  },
+  {
+    "id": "P29",
+    "name": "照片动态设置",
+    "route": "/pages/tools/animate",
+    "phase": "D",
+    "entry": "27或16",
+    "content": "照片、微笑／眨眼等可交付动作、6秒与分辨率说明；动效样例和AI标识。",
+    "action": "确认动作与19.9元或12.9元会员价，到40；支付后自动开始31。",
+    "rules": "动作不支持或人物不清先处理；复杂双人拥抱首发不售；下单规格与结果严格对应。",
+    "readApis": [
+      "GET /products/{code}"
+    ],
+    "writeApis": [
+      "POST /uploads",
+      "POST /media/preflight"
+    ],
+    "engineering": "动作/6秒/分辨率；无复杂拥抱选项；可用性以实际交付为准"
+  },
+  {
+    "id": "P30",
+    "name": "画质优化设置",
+    "route": "/pages/tools/enhance",
+    "phase": "B",
+    "entry": "27或16",
+    "content": "现代家庭照片示例、上传原图、清晰度优化选项与价格；保留原图开关默认开启。",
+    "action": "确认2.9元或1.9元会员价后支付生成；完成到32比较前后。",
+    "rules": "不过度承诺恢复真实细节；预检失败不扣费，结果仍带AI处理标识。",
+    "readApis": [
+      "GET /products/{code}"
+    ],
+    "writeApis": [
+      "POST /uploads",
+      "POST /media/preflight"
+    ],
+    "engineering": "首发候选；保留原件必做，不因用户关开关销毁原图"
+  },
+  {
+    "id": "P31",
+    "name": "影像生成任务详情",
+    "route": "/pages/tasks/detail",
+    "phase": "B",
+    "entry": "支付成功、18或05",
+    "content": "排队、处理、成功、失败状态；缩略图、已确认规格、订单入口和离开提示。",
+    "action": "完成后打开32；失败给重试或退款进度；从我的作品可重新进入。",
+    "rules": "支付与任务分开记状态；重复刷新不新建任务；取消按钮只在确实可取消时出现。",
+    "readApis": [
+      "GET /tasks/{id}"
+    ],
+    "writeApis": [
+      "POST /tasks/{id}/retry"
+    ],
+    "engineering": "重试只补失败项；未知供应商状态显示核对中"
+  },
+  {
+    "id": "P32",
+    "name": "作品结果",
+    "route": "/pages/works/detail",
+    "phase": "B",
+    "entry": "31或18",
+    "content": "照片四宫格／动态播放／画质对比复用模板；规格、AI标签、下载和保存到TA。",
+    "action": "保存到TA；无TA可创建后回此页；公开分享先到35编辑，不能一键泄露原始素材。",
+    "rules": "部分照片失败补齐或明确处理；保存失败作品仍在18；生成图不默认替换人物头像。",
+    "readApis": [
+      "GET /works/{id}",
+      "GET /assets/{id}/access"
+    ],
+    "writeApis": [
+      "POST /works/{id}/save-to-profile"
+    ],
+    "engineering": "下载/保存/分享分开；保存失败仍可在作品中找到"
+  },
+  {
+    "id": "P33",
+    "name": "萤火社区",
+    "route": "/pages/community/index",
+    "phase": "A运营内容/C用户发布",
+    "entry": "社区Tab或首页故事推荐",
+    "content": "单列信息流；图文、纯文字、音频或视频卡按内容显示；推荐和关注可分切换。",
+    "action": "查看到34，作者到36，发布到35；收藏需登录但保留浏览位置。",
+    "rules": "纯文字不强制封面或标题；社区内容由用户明确公开，不自动抓取私人记忆。",
+    "readApis": [
+      "GET /posts"
+    ],
+    "writeApis": [],
+    "engineering": "单列、纯文字无需封面；A/B仅运营授权内容，C开启用户发布"
+  },
+  {
+    "id": "P34",
+    "name": "动态详情",
+    "route": "/pages/community/detail",
+    "phase": "C",
+    "entry": "33、36或37",
+    "content": "完整动态、作者、时间、AI素材标签、评论、点赞、收藏、举报。",
+    "action": "回复、收藏、查看作者；自己的动态可编辑或删除；删除公共副本不删除私人原件。",
+    "rules": "内容待审核、已删除、不可见分开提示；举报反馈不披露举报人身份。",
+    "readApis": [
+      "GET /posts/{id}",
+      "GET /posts/{id}/comments"
+    ],
+    "writeApis": [
+      "POST /posts/{id}/comments",
+      "PUT /posts/{id}/likes",
+      "PUT /posts/{id}/favorite",
+      "POST /reports"
+    ],
+    "engineering": "已撤回正文不能由缓存/收藏重新出现；B运营案例可用只读子集"
+  },
+  {
+    "id": "P35",
+    "name": "发布或编辑动态",
+    "route": "/pages/community/editor",
+    "phase": "C",
+    "entry": "社区发布按钮、15或32分享",
+    "content": "正文、可选照片／声音／视频、预览、公开范围和评论设置；保留来源素材的AI标识。",
+    "action": "先预览再确认发布；草稿可以取消。提交后给审核状态和返回自己主页入口。",
+    "rules": "无需标题或封面；私有素材转公开需再次确认；不自动附带姓名、地址、录音原件等隐藏信息。",
+    "readApis": [
+      "GET /posts/{id}"
+    ],
+    "writeApis": [
+      "POST /posts",
+      "PATCH /posts/{id}",
+      "POST /posts/{id}/publish"
+    ],
+    "engineering": "visibility=public必须再确认；修改正文产生待审版本"
+  },
+  {
+    "id": "P36",
+    "name": "作者主页",
+    "route": "/pages/community/author",
+    "phase": "C",
+    "entry": "33／34作者名称",
+    "content": "公开昵称、头像、简介及其公开动态；关注与举报入口。",
+    "action": "查看动态到34；本人可编辑公开简介；私人TA列表和家庭关系不在此页出现。",
+    "rules": "被屏蔽或账号停用显示对应状态；公开昵称可与私人账号称呼不同。",
+    "readApis": [
+      "GET /authors/{id}"
+    ],
+    "writeApis": [
+      "PUT /authors/{id}/follow"
+    ],
+    "engineering": "公开昵称/简介；不包含TA列表或真实家庭关系"
+  },
+  {
+    "id": "P37",
+    "name": "我的收藏",
+    "route": "/pages/community/favorites",
+    "phase": "C",
+    "entry": "我的或社区个人入口",
+    "content": "收藏的公开动态分类、来源和失效标识。",
+    "action": "打开34、取消收藏；返回保留列表位置。",
+    "rules": "收藏不会复制原作者所有权限；被撤回内容不可继续展示缓存正文。",
+    "readApis": [
+      "GET /me/favorites"
+    ],
+    "writeApis": [
+      "DELETE /posts/{id}/favorite"
+    ],
+    "engineering": "原文撤回后失效占位；收藏不复制访问权"
+  },
+  {
+    "id": "P38",
+    "name": "价格与权益",
+    "route": "/pages/billing/pricing",
+    "phase": "B",
+    "entry": "首页、我的、容量提醒或功能升级",
+    "content": "免费、99元记忆、299元声音三档；按TA开通；独立作品与扩容价格入口。",
+    "action": "选择TA和套餐到39／40；可以继续免费；展示手动续费与到期处理。",
+    "rules": "声音成本未验证或功能未交付时不可售；不展示终身、聊天余额或分钟包。",
+    "readApis": [
+      "GET /products",
+      "GET /me/services"
+    ],
+    "writeApis": [],
+    "engineering": "以生效商品版本展示三档；未可售声音明确不可购买"
+  },
+  {
+    "id": "P39",
+    "name": "套餐详情",
+    "route": "/pages/billing/plan",
+    "phase": "B",
+    "entry": "38或23",
+    "content": "包含与不包含内容、服务对象、365天期限、容量、语音消息范围、试听和退款规则。",
+    "action": "记忆会员确认到40；声音先完成试听再去40；可对比原有权益。",
+    "rules": "会员到期、升级和新增TA是不同操作；未用价值抵扣必须显示实际金额。",
+    "readApis": [
+      "GET /products/{code}",
+      "GET /profiles/{id}/entitlements"
+    ],
+    "writeApis": [
+      "POST /quotes"
+    ],
+    "engineering": "对象/365天/范围/手动续费/售后；声音购买需试听条件"
+  },
+  {
+    "id": "P40",
+    "name": "确认订单",
+    "route": "/pages/billing/checkout",
+    "phase": "B",
+    "entry": "套餐、影像或留声作品配置完成",
+    "content": "项目、绑定TA或独立作品、规格、期限、普通／会员价、真实抵扣、最终金额、售后入口。",
+    "action": "确认后发起支付；成功到41，按原操作返回；订单生成后保留价格快照。",
+    "rules": "修改素材／规格需重新报价；不预选额外服务；价格过期先告知，待支付不能反复新建扣款。",
+    "readApis": [
+      "GET /orders/{id}"
+    ],
+    "writeApis": [
+      "POST /quotes",
+      "POST /orders",
+      "POST /orders/{id}/payment"
+    ],
+    "engineering": "quoteId和条款版本；抵扣逐项显示；不接受前端自算金额"
+  },
+  {
+    "id": "P41",
+    "name": "支付结果",
+    "route": "/pages/billing/result",
+    "phase": "B",
+    "entry": "支付渠道返回或订单刷新",
+    "content": "处理中、成功、取消、失败；成功显示服务是否已开通或作品是否已排队。",
+    "action": "会员回原空间／邀请，声音回26／22，影像到31；取消回40保留设置。",
+    "rules": "支付返回不等于已到账；查服务端最终状态。禁止同时出现“失败请重买”和正在处理同一订单。",
+    "readApis": [
+      "GET /orders/{id}"
+    ],
+    "writeApis": [
+      "POST /orders/{id}/reconcile"
+    ],
+    "engineering": "pending/已付未交付/已开通/取消区分，按returnContext恢复"
+  },
+  {
+    "id": "P42",
+    "name": "订单列表",
+    "route": "/pages/billing/orders",
+    "phase": "B",
+    "entry": "我的或45",
+    "content": "全部、待支付、已支付、售后中；实际金额、类型、日期和绑定TA。",
+    "action": "点订单到43；待支付继续，已关闭订单可重新确认最新价格。",
+    "rules": "不显示他人订单；无订单提示先体验；列表不可把处理中的作品当成支付失败。",
+    "readApis": [
+      "GET /orders"
+    ],
+    "writeApis": [],
+    "engineering": "仅本人；状态筛选与cursor；不混入家人账单"
+  },
+  {
+    "id": "P43",
+    "name": "订单详情",
+    "route": "/pages/billing/order",
+    "phase": "B",
+    "entry": "42、任务或支付结果",
+    "content": "订单编号、实付与抵扣、支付状态、服务期限、任务状态、售后记录、客服入口。",
+    "action": "查看作品／权益，申请44退款，复制编号或下载可提供的凭证。",
+    "rules": "重复扣款先核对交易；退款与任务结果分别留痕；付费权益变更有可追溯记录。",
+    "readApis": [
+      "GET /orders/{id}"
+    ],
+    "writeApis": [
+      "POST /orders/{id}/cancel"
+    ],
+    "engineering": "支付/交付/退款分别显示，任务与售后入口始终可达"
+  },
+  {
+    "id": "P44",
+    "name": "退款与售后申请",
+    "route": "/pages/billing/refund",
+    "phase": "B",
+    "entry": "43或任务失败入口",
+    "content": "退款原因、关联作品、可选补充描述、已承诺处理时间；进度与处理结果。",
+    "action": "提交后回订单；修复、退款、关闭工单各有说明；原路退款失败可继续联系支持。",
+    "rules": "失败服务不强制换积分；升级抵扣要恢复旧权益；任何驳回均说明具体原因和后续入口。",
+    "readApis": [
+      "GET /refunds/{id}"
+    ],
+    "writeApis": [
+      "POST /orders/{id}/refunds"
+    ],
+    "engineering": "原因/可选附件/处理承诺；失败保留原申请而非重复退款"
+  },
+  {
+    "id": "P45",
+    "name": "服务与容量",
+    "route": "/pages/account/services",
+    "phase": "B",
+    "entry": "我的、容量提示或会员入口",
+    "content": "每位TA的套餐、有效期、素材已用／总容量、留声作品剩余份数、扩容记录。",
+    "action": "续费、升级、扩容、管理素材；独立作品剩余份数链接26。",
+    "rules": "取消文字次数和语音分钟余额。到期超额暂停新增，旧内容仍可读和导出。",
+    "readApis": [
+      "GET /me/services",
+      "GET /profiles/{id}/entitlements"
+    ],
+    "writeApis": [],
+    "engineering": "容量和期限，无聊天次数或分钟余额；扩容D才开放"
+  },
+  {
+    "id": "P46",
+    "name": "我的",
+    "route": "/pages/account/index",
+    "phase": "A",
+    "entry": "我的Tab",
+    "content": "账号、我的作品、订单、服务与容量、收藏、问候、隐私设置、帮助；私有记录与公开主页分开。",
+    "action": "进入相应页面；游客显示登录但可打开帮助与价格。",
+    "rules": "只展示实际有权限的TA与数据；未开通服务不给虚构余额。",
+    "readApis": [
+      "GET /me",
+      "GET /me/services"
+    ],
+    "writeApis": [],
+    "engineering": "各模块按能力开关展示；作品/订单在B后可达"
+  },
+  {
+    "id": "P47",
+    "name": "账号设置",
+    "route": "/pages/account/settings",
+    "phase": "A",
+    "entry": "46",
+    "content": "昵称、头像、手机号绑定、登录设备、退出登录；字体大小偏好可作为本页子视图。",
+    "action": "修改资料；敏感账号操作需再次校验；退出前提示未保存草稿。",
+    "rules": "更换手机号需验证新旧账号归属，不能仅凭前端修改；账号注销在48明确影响后办理。",
+    "readApis": [
+      "GET /me",
+      "GET /me/sessions"
+    ],
+    "writeApis": [
+      "PATCH /me",
+      "DELETE /me/sessions/{id}",
+      "POST /auth/logout"
+    ],
+    "engineering": "手机号更换走独立验证；退出清理本人私有缓存"
+  },
+  {
+    "id": "P48",
+    "name": "隐私与数据",
+    "route": "/pages/account/privacy",
+    "phase": "A",
+    "entry": "46／47",
+    "content": "私有与家庭共享范围、授权记录、数据导出、删除人物、撤销素材授权、账号注销。",
+    "action": "导出申请到49；删除／注销需确认具体对象和影响，先给导出选择。",
+    "rules": "用户授权撤销后停止相关新生成；共享记录与私人记录逐项处理，不能误删其他成员个人数据。",
+    "readApis": [
+      "GET /me/consents"
+    ],
+    "writeApis": [
+      "POST /consents/{id}/revoke",
+      "POST /exports",
+      "POST /me/deletion-requests",
+      "POST /profiles/{id}/deletion-requests"
+    ],
+    "engineering": "展示范围和影响；授权撤回先阻止新处理"
+  },
+  {
+    "id": "P49",
+    "name": "导出记录",
+    "route": "/pages/account/exports",
+    "phase": "A",
+    "entry": "48或21",
+    "content": "导出范围、申请时间、处理中／可下载／已过期；建议包含素材与可读正文、元数据。",
+    "action": "申请与下载；链接过期可重生成；返回原空间或隐私页。",
+    "rules": "校验当前账号和素材权限；下载链接设有效期，不通过公开社区链接分发私有导出文件。",
+    "readApis": [
+      "GET /exports",
+      "GET /exports/{id}"
+    ],
+    "writeApis": [
+      "POST /exports"
+    ],
+    "engineering": "处理/失败/可下载/过期；下载前重验权限"
+  },
+  {
+    "id": "P50",
+    "name": "问候与提醒设置",
+    "route": "/pages/reminders/settings",
+    "phase": "D",
+    "entry": "46、纪念日页或消息设置",
+    "content": "默认关闭；选择TA、日期类型、消息方式、接收时间和免打扰；区分服务消息与陪伴问候。",
+    "action": "明确开启后才排任务；可暂停或删除；试发样例不替用户默认授权推送。",
+    "rules": "受渠道授权和套餐权益影响；到期停止新高级问候。用户关闭后，已排未发任务也取消。",
+    "readApis": [
+      "GET /reminders"
+    ],
+    "writeApis": [
+      "POST /reminders",
+      "PATCH /reminders/{id}",
+      "DELETE /reminders/{id}"
+    ],
+    "engineering": "默认关闭；时区/免打扰/渠道订阅；关闭撤销已排队任务"
+  },
+  {
+    "id": "P51",
+    "name": "纪念日管理",
+    "route": "/pages/reminders/anniversaries",
+    "phase": "D",
+    "entry": "50或08",
+    "content": "生日、团聚日、自定义纪念日；公历／农历标记、年份可选、是否提醒。",
+    "action": "保存日期；需要自动问候时到50选模板与时段。",
+    "rules": "不自动推断逝世日；农历和闰月转换未完成前不提供不可靠提醒，显示下一次实际日期供确认。",
+    "readApis": [
+      "GET /profiles/{id}/anniversaries"
+    ],
+    "writeApis": [
+      "POST /profiles/{id}/anniversaries",
+      "PATCH /anniversaries/{id}",
+      "DELETE /anniversaries/{id}"
+    ],
+    "engineering": "历法/闰月/年份可选；预览下次实际日期确认"
+  },
+  {
+    "id": "P52",
+    "name": "帮助与反馈",
+    "route": "/pages/account/help",
+    "phase": "A",
+    "entry": "46、订单、上传失败或试听页",
+    "content": "功能说明、素材示例、收费问答、隐私说明、工单提交和处理进度。",
+    "action": "按问题带入最少必要的订单／任务编号；用户确认后再附素材，接收处理结果。",
+    "rules": "人工服务时段和预计响应应与团队能力一致；不宣称全天真人在线或医疗心理治疗。",
+    "readApis": [
+      "GET /help",
+      "GET /support-tickets",
+      "GET /support-tickets/{id}"
+    ],
+    "writeApis": [
+      "POST /support-tickets",
+      "POST /support-tickets/{id}/replies"
+    ],
+    "engineering": "类型/正文/自愿附材料；订单/任务可带入，不默认发送私聊"
+  }
+]
