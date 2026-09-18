@@ -1,0 +1,1361 @@
+openapi: 3.1.0
+info:
+  title: 萤火 V1 H5 API
+  version: 1.0.0
+  description: |
+    萤火首期移动端 H5 API 契约。
+    V1 只实现手机号会话、记忆空间、文字对话、影像订单和微信 H5 支付。
+    小程序 code、openid、JSAPI 支付和 wx.requestPayment 不属于 V1。
+    所有金额单位为人民币分，所有时间使用 RFC3339 UTC。
+servers:
+  - url: https://staging-api.example.com/api/v1
+    description: 替换为实际 staging API 域名
+  - url: https://api.example.com/api/v1
+    description: 替换为实际 production API 域名
+tags:
+  - name: Bootstrap
+  - name: Auth
+  - name: Profiles
+  - name: Memories
+  - name: Uploads
+  - name: Chat
+  - name: Commerce
+  - name: Payments
+  - name: Support
+paths:
+  /bootstrap:
+    get:
+      tags: [Bootstrap]
+      summary: 获取前端能力、协议和商品入口
+      security: []
+      responses:
+        "200":
+          description: 当前应用配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapResponse"
+  /auth/otp:
+    post:
+      tags: [Auth]
+      summary: 发送手机号验证码
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpRequest"
+      responses:
+        "202":
+          description: 验证码已进入发送流程
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpChallengeResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: 验证验证码并建立 H5 会话
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerifyRequest"
+      responses:
+        "200":
+          description: 登录成功；服务端通过 HttpOnly Cookie 建立会话
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: 撤销当前会话
+      responses:
+        "204":
+          description: 已退出
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /me:
+    get:
+      tags: [Auth]
+      summary: 获取当前账号
+      responses:
+        "200":
+          description: 当前用户
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /profiles:
+    get:
+      tags: [Profiles]
+      summary: 获取当前账号可见的TA空间
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 空间列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Profiles]
+      summary: 创建TA或可恢复草稿
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileRequest"
+      responses:
+        "201":
+          description: 已创建空间或草稿
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /profiles/{profileId}:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+    get:
+      tags: [Profiles]
+      summary: 获取TA空间摘要
+      responses:
+        "200":
+          description: 当前账号可见的空间
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Profiles]
+      summary: 修改TA空间资料
+      parameters:
+        - $ref: "#/components/parameters/ExpectedVersion"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /profiles/{profileId}/memories:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+    get:
+      tags: [Memories]
+      summary: 获取当前账号可见的记忆
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: visibility
+          in: query
+          schema:
+            type: string
+            enum: [private, family]
+      responses:
+        "200":
+          description: 记忆列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Memories]
+      summary: 创建一条已确认记忆
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemoryRequest"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: 创建私有上传会话
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadRequest"
+      responses:
+        "201":
+          description: 上传会话
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          description: 超过容量或单文件限制
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /uploads/{uploadSessionId}/complete:
+    parameters:
+      - name: uploadSessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Uploads]
+      summary: 完成上传并触发服务端校验
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 校验中的资产
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /profiles/{profileId}/conversations/{conversationId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ProfileId"
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Chat]
+      summary: 发送文字消息并创建可恢复生成任务
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "202":
+          description: 生成已排队
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /generations/{generationId}:
+    parameters:
+      - name: generationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Chat]
+      summary: 获取生成任务最终快照
+      responses:
+        "200":
+          description: 生成状态和完整正文
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /generations/{generationId}/events:
+    parameters:
+      - name: generationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Chat]
+      summary: 读取可恢复生成事件
+      parameters:
+        - name: afterSeq
+          in: query
+          schema:
+            type: integer
+            minimum: -1
+            default: -1
+      responses:
+        "200":
+          description: 事件列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerationEventsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          description: 事件已过期，需要读取生成快照
+  /quotes:
+    post:
+      tags: [Commerce]
+      summary: 创建商品报价
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteRequest"
+      responses:
+        "201":
+          description: 服务端计算的报价快照
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /orders:
+    get:
+      tags: [Commerce]
+      summary: 获取当前账号订单
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 订单列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderListResponse"
+    post:
+      tags: [Commerce]
+      summary: 根据报价创建订单
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderRequest"
+      responses:
+        "201":
+          description: 订单快照
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /orders/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    get:
+      tags: [Commerce]
+      summary: 获取订单、支付、交付和退款状态
+      responses:
+        "200":
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /orders/{orderId}/payment:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [Payments]
+      summary: 创建或复用微信 H5 支付尝试
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentRequest"
+      responses:
+        "200":
+          description: 短期支付跳转信息
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: 支付渠道暂不可用
+  /orders/{orderId}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [Payments]
+      summary: 受控主动查单
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: 当前服务端状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /orders/{orderId}/refunds:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      tags: [Commerce]
+      summary: 提交售后退款申请
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRefundRequest"
+      responses:
+        "201":
+          description: 退款申请已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefundResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /entitlements:
+    get:
+      tags: [Commerce]
+      summary: 获取当前账号的权益和容量
+      parameters:
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 权益快照
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementsResponse"
+  /payments/wechat_h5/notify:
+    post:
+      tags: [Payments]
+      summary: 微信支付异步回调
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: 已成功验签、解密并落账
+        "400":
+          description: 签名、解密或业务核对失败
+        "500":
+          description: 数据库或内部处理失败
+  /refunds/wechat_h5/notify:
+    post:
+      tags: [Payments]
+      summary: 微信退款异步回调
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: 已成功处理
+        "400":
+          description: 回调无效
+        "500":
+          description: 内部处理失败
+  /support-tickets:
+    get:
+      tags: [Support]
+      summary: 获取当前账号工单
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 工单列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketListResponse"
+    post:
+      tags: [Support]
+      summary: 创建售后或帮助工单
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+      responses:
+        "201":
+          description: 工单
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketResponse"
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: yinghuo_session
+      description: HttpOnly、Secure、SameSite=Lax 或更严格的 H5 会话 Cookie
+  parameters:
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    ExpectedVersion:
+      name: expectedVersion
+      in: header
+      required: false
+      schema:
+        type: integer
+  responses:
+    Unauthorized:
+      description: 未登录或会话已失效
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: 资源不存在或当前账号无权识别
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: 状态、版本或幂等冲突
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationError:
+      description: 输入不合格
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    RateLimited:
+      description: 请求过于频繁
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+  schemas:
+    BaseResponse:
+      type: object
+      required: [data, traceId]
+      properties:
+        data: {}
+        traceId:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [error, traceId]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            retryable:
+              type: boolean
+            fieldErrors:
+              type: object
+              additionalProperties:
+                type: string
+        traceId:
+          type: string
+    User:
+      type: object
+      required: [id, displayName, timezone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          maxLength: 80
+        timezone:
+          type: string
+          example: Asia/Shanghai
+        status:
+          type: string
+          enum: [active, suspended, deleting, deleted]
+    UserResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/User"
+    OtpRequest:
+      type: object
+      required: [phone, purpose]
+      properties:
+        phone:
+          type: string
+          description: 服务端规范化的手机号输入
+        purpose:
+          type: string
+          enum: [login, change_phone]
+    OtpVerifyRequest:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 4
+          maxLength: 8
+    OtpChallengeResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [challengeId, expiresAt, retryAfterSeconds]
+              properties:
+                challengeId:
+                  type: string
+                  format: uuid
+                expiresAt:
+                  type: string
+                  format: date-time
+                retryAfterSeconds:
+                  type: integer
+    BootstrapResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [appVersion, phase, features, products, terms]
+              properties:
+                appVersion:
+                  type: string
+                phase:
+                  type: string
+                  enum: [A, B, C1, C2, D]
+                features:
+                  type: object
+                  additionalProperties:
+                    type: boolean
+                products:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ProductVersion"
+                terms:
+                  type: object
+                  additionalProperties:
+                    type: string
+    ProductVersion:
+      type: object
+      required: [code, version, priceFen, currency, termsVersion, saleEnabled]
+      properties:
+        code:
+          type: string
+        version:
+          type: integer
+        priceFen:
+          type: integer
+          minimum: 0
+        memberPriceFen:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          enum: [CNY]
+        durationDays:
+          type: integer
+        termsVersion:
+          type: string
+        saleEnabled:
+          type: boolean
+        specs:
+          type: object
+          additionalProperties: true
+    CreateProfileRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        relationship:
+          type: string
+          maxLength: 40
+        callMe:
+          type: string
+          maxLength: 40
+        avatarAssetId:
+          type: string
+          format: uuid
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        relationship:
+          type: string
+          maxLength: 40
+        avatarAssetId:
+          type: string
+          format: uuid
+    Profile:
+      type: object
+      required: [id, displayName, status, version, capabilities]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        relationship:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, deleting, deleted]
+        version:
+          type: integer
+        capabilities:
+          type: object
+          additionalProperties:
+            type: boolean
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+    ProfileResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Profile"
+    ProfileListResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/CursorPageProfile"
+    CursorPageProfile:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Profile"
+        nextCursor:
+          type: string
+          nullable: true
+    CreateMemoryRequest:
+      type: object
+      required: [body, visibility, useForAi]
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        visibility:
+          type: string
+          enum: [private, family]
+        useForAi:
+          type: boolean
+        assetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    Memory:
+      type: object
+      required: [id, body, visibility, confirmationState, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        visibility:
+          type: string
+          enum: [private, family]
+        confirmationState:
+          type: string
+          enum: [confirmed, rejected, suggested]
+        useForAi:
+          type: boolean
+        version:
+          type: integer
+    MemoryResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Memory"
+    MemoryListResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/CursorPageMemory"
+    CursorPageMemory:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Memory"
+        nextCursor:
+          type: string
+          nullable: true
+    CreateUploadRequest:
+      type: object
+      required: [purpose, filename, mimeType, sizeBytes]
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum: [memory_original, avatar, voice_material, image_input, export]
+        filename:
+          type: string
+          maxLength: 255
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 1
+    UploadResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [uploadSessionId, expiresAt, uploadUrl]
+              properties:
+                uploadSessionId:
+                  type: string
+                  format: uuid
+                expiresAt:
+                  type: string
+                  format: date-time
+                uploadUrl:
+                  type: string
+                  format: uri
+                headers:
+                  type: object
+                  additionalProperties:
+                    type: string
+    AssetResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [assetId, status]
+              properties:
+                assetId:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [checking, ready, rejected]
+                rejectReason:
+                  type: string
+    SendMessageRequest:
+      type: object
+      required: [clientMessageId, kind, text, conversationEpoch]
+      properties:
+        clientMessageId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [text]
+        text:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        conversationEpoch:
+          type: integer
+          minimum: 0
+    GenerationResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [generationId, status]
+              properties:
+                generationId:
+                  type: string
+                  format: uuid
+                userMessageId:
+                  type: string
+                  format: uuid
+                assistantMessageId:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum: [queued, running, completed, failed, cancelled]
+                text:
+                  type: string
+                nextSeq:
+                  type: integer
+    GenerationEventsResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [events, nextSeq]
+              properties:
+                events:
+                  type: array
+                  items:
+                    type: object
+                    required: [seq, type]
+                    properties:
+                      seq:
+                        type: integer
+                      type:
+                        type: string
+                        enum: [started, text_delta, completed, failed, cancelled, snapshot_required]
+                      payload:
+                        type: object
+                        additionalProperties: true
+                nextSeq:
+                  type: integer
+    CreateQuoteRequest:
+      type: object
+      required: [productCode, operation]
+      properties:
+        productCode:
+          type: string
+        profileId:
+          type: string
+          format: uuid
+        operation:
+          type: string
+          enum: [new, renew, upgrade]
+        inputRevision:
+          type: integer
+          nullable: true
+        creditSourceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    QuoteResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [quoteId, productVersion, payableFen, currency, expiresAt, termsVersion]
+              properties:
+                quoteId:
+                  type: string
+                  format: uuid
+                productVersion:
+                  type: integer
+                listPriceFen:
+                  type: integer
+                discountFen:
+                  type: integer
+                creditFen:
+                  type: integer
+                payableFen:
+                  type: integer
+                currency:
+                  type: string
+                  enum: [CNY]
+                expiresAt:
+                  type: string
+                  format: date-time
+                termsVersion:
+                  type: string
+                specs:
+                  type: object
+                  additionalProperties: true
+    CreateOrderRequest:
+      type: object
+      required: [quoteId, acceptedTermsVersion, returnContext]
+      properties:
+        quoteId:
+          type: string
+          format: uuid
+        acceptedTermsVersion:
+          type: string
+        returnContext:
+          type: object
+          required: [pageId]
+          properties:
+            pageId:
+              type: string
+            profileId:
+              type: string
+              format: uuid
+    Order:
+      type: object
+      required: [id, status, paymentState, fulfillmentState, payableFen, currency]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending_payment, paid, cancelled, closed]
+        paymentState:
+          type: string
+          enum: [created, pending, succeeded, failed]
+        fulfillmentState:
+          type: string
+          enum: [pending, activating, processing, delivered, failed]
+        refundState:
+          type: string
+          enum: [none, requested, processing, succeeded, rejected, failed]
+        payableFen:
+          type: integer
+        paidFen:
+          type: integer
+        currency:
+          type: string
+          enum: [CNY]
+        channel:
+          type: string
+          enum: [wechat_h5]
+          nullable: true
+        providerTradeNo:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    OrderResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/Order"
+    OrderListResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/CursorPageOrder"
+    CursorPageOrder:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        nextCursor:
+          type: string
+          nullable: true
+    CreatePaymentRequest:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [wechat_h5]
+    PaymentResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [orderId, channel, h5Url, expiresAt, resultPath]
+              properties:
+                orderId:
+                  type: string
+                  format: uuid
+                channel:
+                  type: string
+                  enum: [wechat_h5]
+                h5Url:
+                  type: string
+                  format: uri
+                expiresAt:
+                  type: string
+                  format: date-time
+                resultPath:
+                  type: string
+    CreateRefundRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        requestFen:
+          type: integer
+          minimum: 1
+    RefundResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [id, state, requestFen]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                state:
+                  type: string
+                  enum: [requested, reviewing, approved, processing, succeeded, rejected, failed]
+                requestFen:
+                  type: integer
+                providerRefundNo:
+                  type: string
+                  nullable: true
+    EntitlementsResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [asOf, capabilities, storage]
+              properties:
+                asOf:
+                  type: string
+                  format: date-time
+                capabilities:
+                  type: object
+                  additionalProperties:
+                    type: boolean
+                storage:
+                  type: object
+                  required: [usedBytes, reservedBytes, limitBytes]
+                  properties:
+                    usedBytes:
+                      type: integer
+                    reservedBytes:
+                      type: integer
+                    limitBytes:
+                      type: integer
+    CreateTicketRequest:
+      type: object
+      required: [kind, subject, body]
+      properties:
+        kind:
+          type: string
+          enum: [help, payment, refund, generation, privacy, report]
+        subject:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 5000
+        orderId:
+          type: string
+          format: uuid
+    SupportTicketResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [id, kind, status]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                status:
+                  type: string
+                  enum: [open, waiting_user, waiting_staff, resolved, closed]
+                createdAt:
+                  type: string
+                  format: date-time
+    SupportTicketListResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseResponse"
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items, nextCursor]
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/SupportTicketResponse"
+                nextCursor:
+                  type: string
+                  nullable: true
