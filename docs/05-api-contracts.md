@@ -19,7 +19,7 @@
 |---|---|---|
 | 公共 | GET /bootstrap；GET /home；GET /legal/{type} | 能力开关、当前商品版本/协议版本、首页状态 |
 | 登录 | POST /auth/otp；POST /auth/otp/verify | phone+purpose；challengeId+code，建立会话 |
-| 平台身份 | POST /auth/wechat；POST /auth/identities/link | code/appId/channel；经验证绑定，冲突显式返回 |
+| 平台身份（V2） | POST /auth/wechat；POST /auth/identities/link | V1不实现；保留给小程序或后续H5 OAuth迁移，V1前端不得依赖 |
 | 会话 | POST /auth/refresh；POST /auth/logout；GET /me/sessions；DELETE /me/sessions/{id} | 轮换、撤销本人会话 |
 | 账号 | GET/PATCH /me | 个人昵称/公开简介/时区/字号；手机号变更另验证 |
 | 人物 | GET/POST /profiles；GET/PATCH /profiles/{id} | 称呼、可选关系；返回draft/active及capabilities |
