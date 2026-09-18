@@ -41,9 +41,9 @@
 | 任务 | GET /tasks/{id}；POST /tasks/{id}/retry | 订单派生生成自动入队，不通过前端“支付成功”启动 |
 | 作品 | GET /works；GET /works/{id}；POST /works/{id}/save-to-profile；DELETE /works/{id} | 归属校验；保存TA时检查容量与权限 |
 | 商品 | GET /products；GET /products/{code} | 生效版本、真实售价、可售状态、适用渠道 |
-| 交易 | POST /quotes；POST /orders；POST /orders/{id}/payment | 商品+目标+输入版本→报价；quoteId→订单；渠道→支付参数 |
+| 交易 | POST /quotes；POST /orders；POST /orders/{id}/payment | 商品+目标+输入版本→报价；quoteId→订单；V1仅wechat_h5→返回h5Url |
 | 查单 | GET /orders；GET /orders/{id}；POST /orders/{id}/reconcile；POST /orders/{id}/cancel | 订单buyer才可读；reconcile有频控、仅可信渠道查单 |
-| 回调 | POST /payments/{channel}/notify；POST /refunds/{channel}/notify | 无用户会话；必须渠道验签、解密、防重放、业务核对 |
+| 回调 | POST /payments/{channel}/notify；POST /refunds/{channel}/notify | V1微信H5无用户会话；原始body验签、解密、防重放、业务核对；成功返回200，处理失败返回4xx/5xx |
 | 售后 | POST /orders/{id}/refunds；GET /refunds/{id} | reason/requestFen?/supportingAssetIds；后端核可退额 |
 | 权益 | GET /profiles/{id}/entitlements；GET /me/services | 当前能力、到期时间、容量、留声slot；不返回分钟余额 |
 | 社区 | GET/POST /posts；GET/PATCH/DELETE /posts/{id}；POST /posts/{id}/publish | 草稿版本、公开副本与授权；已审核版本才可公开 |
@@ -106,6 +106,35 @@ POST /uploads：`{profileId?,purpose:"memory_original",filename,mimeType,sizeByt
 
 创建订单仅传`{quoteId,acceptedTermsVersion,returnContext:{pageId:"P10",profileId:"<uuid>"}}`，返回orderId、真实应付与状态。支付参数需要`channel`但金额不可更改；渠道不支持返回`CHANNEL_UNAVAILABLE`，不假装支付成功。
 
+### 微信 H5 支付参数
+
+V1 只接受 channel:"wechat_h5"。客户端请求：
+
+~~~json
+{"channel":"wechat_h5"}
+~~~
+
+服务端根据订单快照调用微信 H5 下单，客户端只接收短期跳转信息：
+
+~~~json
+{
+  "data": {
+    "orderId": "<uuid>",
+    "channel": "wechat_h5",
+    "h5Url": "https://pay.weixin.qq.com/...",
+    "expiresAt": "<RFC3339>",
+    "resultPath": "/pages/billing/result?orderId=<uuid>"
+  },
+  "traceId": "<trace>"
+}
+~~~
+
+客户端将 h5Url 交给浏览器跳转；不得自行拼金额、商户号、回调地址或任意 return URL。支付返回页只请求 GET /orders/{id}，必要时请求一次 POST /orders/{id}/reconcile，最终以服务端支付状态为准。
+
+服务端下单必须从订单读取 appid、mchid、notify_url、description、out_trade_no、time_expire、amount、scene_info.payer_client_ip 和 scene_info.h5_info。用户IP只能来自可信代理链；缺失或不可信时返回 WECHAT_CLIENT_IP_MISSING。notify_url必须是生产配置的HTTPS回调地址，不能让客户端提交。
+
+小程序 JSAPI 参数、openid和 wx.requestPayment 不属于V1接口；V2新增 wechat_mini_program 时再扩展 payment response，不改变订单和权益接口。
+
 ### 权益
 
 GET entitlements返回`{profileId,asOf,capabilities,storage:{usedBytes,reservedBytes,limitBytes},plans,voiceBeneficiaryUserId?,workPackages}`。`asOf`用于显示服务器判断时间。前端只能据此决定UI，不把上一次缓存结果当授权。
@@ -120,6 +149,9 @@ GET entitlements返回`{profileId,asOf,capabilities,storage:{usedBytes,reservedB
 | PRODUCT_NOT_FOR_SALE / CHANNEL_UNAVAILABLE | 保留配置，说明尚不可购买 |
 | QUOTE_EXPIRED / INPUT_REVISION_CHANGED | 重新报价，必须再次确认 |
 | PAYMENT_PENDING | 查原订单，不引导重买 |
+| WECHAT_H5_CONFIG_MISSING / WECHAT_CLIENT_IP_MISSING | 支付入口暂不可用，保留订单配置，不伪造成功 |
+| WECHAT_H5_URL_EXPIRED | 重新为同一订单生成支付尝试，不重复创建业务订单 |
+| WECHAT_CALLBACK_INVALID | 支付核验失败，进入人工/自动核对，不直接开通权益 |
 | CAPACITY_EXCEEDED | 清理/导出/扩容；旧资料仍可读 |
 | INVITE_EXPIRED / MEMBER_LIMIT_REACHED | 联系邀请者或管理成员 |
 | MATERIAL_UNSUITABLE / CONSENT_REQUIRED | 明确缺什么材料/授权，未付款不扣费 |
