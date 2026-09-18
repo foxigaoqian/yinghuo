@@ -18,12 +18,16 @@
 | [API契约](docs/05-api-contracts.md) | 接口清单、请求响应、错误码、幂等和聊天传输 |
 | [交易与权益状态机](docs/06-commerce.md) | 报价、支付、升级、交付、退款和到期 |
 | [微信 H5 支付实施](docs/11-wechat-h5-payment.md) | 微信 H5 下单、回调、退款、对账和上线检查 |
+| [OpenAPI 契约](docs/12-openapi.yaml) | 可供前后端生成类型和校验的 V1 H5 API |
+| [数据库实施规格](docs/13-database-schema.md) | PostgreSQL表、约束、索引、迁移和恢复验收 |
+| [V1 工程运行手册](docs/14-v1-engineering-runbook.md) | 工程骨架、环境变量、支付实现、部署和上线门槛 |
+| [合规与内容安全](docs/15-compliance-and-content-safety.md) | 授权、AI标识、社区审核、数据权利和上线检查 |
 | [AI、记忆与媒体管线](docs/07-ai-and-media.md) | 记忆检索、声音试听、影像生成、效果验证 |
 | [GitHub开源复用调研](docs/08-open-source.md) | 哪些直接采用、哪些参考、许可证与维护证据 |
 | [开发任务与验收](docs/09-delivery-plan.md) | 依赖顺序、三人分工、测试、监控与发布门槛 |
 | [决策记录与待办](docs/10-decisions.md) | 已有方向、此次技术建议和仍需实测的事项 |
 
-产品伙伴先读 01、06、09；前端读 02、05；后端读 03–07；准备采用开源代码时先读 08。
+产品伙伴先读 01、06、09、15；前端读 02、05、12；后端读 03–07、12–14；准备采用开源代码时先读 08。
 
 ## 推荐实施路线
 
