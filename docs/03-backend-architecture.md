@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TD
-  H[H5与微信小程序] --> API[NestJS API]
+  H[移动端H5] --> API[NestJS API]
   A[运营后台] --> API
   API --> DB[PostgreSQL与Outbox]
   API --> O[私有对象存储]
@@ -25,7 +25,7 @@ flowchart TD
 
 | 目录（计划） | 职责 |
 |---|---|
-| apps/client | uni-app用户端；H5与mp-weixin构建 |
+| apps/client | uni-app用户端；V1只构建移动端H5，保留可迁移组件边界 |
 | apps/admin | 独立运营后台；可从Vben一个应用裁剪 |
 | apps/server | NestJS模块、HTTP API、鉴权、支付回调 |
 | apps/worker | 复用业务服务，执行生成、转写、导出与对账 |
@@ -40,7 +40,7 @@ flowchart TD
 
 | 模块 | 输入与校验 | 产出/责任 |
 |---|---|---|
-| Auth | 手机验证码、微信code、已验证绑定 | User、Identity、Session；不在前端交换密钥 |
+| Auth | H5手机号验证码、可选H5平台身份绑定、已验证账号关联 | User、Identity、Session；V1不接小程序code，不在前端交换密钥 |
 | Spaces | 当前账号、TA草稿、免费资格 | TA、成员、个人对话配置 |
 | Memory | 内容、来源、可见范围、AI授权 | 条目版本、候选确认、检索索引 |
 | Assets | 上传会话、字节数、归属与授权 | 私有对象、预检、转写、访问控制 |
@@ -63,11 +63,9 @@ JWT若使用短期access token，refresh token必须轮换、可撤销且服务�
 
 ## 5. 登录与跨端账号
 
-H5先用手机号验证码，建议60秒重发冷却、5分钟有效、每挑战最多5次失败；手机号/IP/设备的反刷限制由服务端配置。这些是登录安全限制，与聊天付费无关。验证码存hash，不记明文日志。
+V1 H5 使用同站点 HttpOnly 安全会话 Cookie 并做 CSRF 防护，首期以手机号验证码登录为主；如后续增加微信内 H5 OAuth，身份仍通过(provider, app_id, subject)建立唯一Identity，不能把身份信息当支付凭证。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
 
-小程序code由服务端与平台交换身份。用(provider, app_id, subject)建立唯一Identity；不假定两个应用的openid相同，也不假定一定有unionid。关联现有手机号账号需完成手机号验证或已有会话再确认。发生两个已有账号冲突时先提示，不自动合并记忆、订单和身份。
-
-H5优先同站点HttpOnly安全会话Cookie并做CSRF防护；小程序使用平台适配的短期令牌。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
+V2 才接入小程序code、openid和平台短期令牌。小程序身份不能提前混入V1支付逻辑，也不能假定不同appId的openid相同。
 
 ## 6. 服务、事务与可靠性
 
@@ -93,7 +91,9 @@ BullMQ官方要求任务在重试时保持幂等；本方案额外用数据库�
 | Storage | 受控上传、私有读取、删除、校验对象属性 |
 | Push | 用户授权检查、发送、状态、不支持时退回站内消息 |
 
-H5普通浏览器、微信内H5、小程序的支付通道分别适配；`channelCapabilities`由服务端返回。不能看到用户在微信里就假定商户已开通对应通道。供应商输出不直接作为前端链接长期保存，必须转存并检查结果。
+V1 只实现 wechat_h5 支付适配器，覆盖普通手机浏览器和微信内置浏览器的真实联调。H5 下单由服务端调用微信 H5 支付接口，传入服务端计算的金额、订单号、HTTPS回调地址、可信用户IP和H5场景信息，返回短期 h5Url；前端跳转后必须回到订单结果页查服务端状态。
+
+Payment 适配器至少提供：创建H5预支付、验签解密支付/退款回调、按商户订单号或渠道交易号查单、关单、申请退款、查退款、申请交易账单和校验账单摘要。V2 再增加 wechat_mini_program，不改订单、权益和退款核心。供应商输出不直接作为前端长期链接保存，必须转存并检查结果。详细字段见[微信 H5 支付实施](11-wechat-h5-payment.md)。
 
 ## 8. 部署与运维建议
 
