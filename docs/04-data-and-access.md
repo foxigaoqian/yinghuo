@@ -53,12 +53,12 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 | quotes | actor_id, profile_id?, product_version_id, input_revision, price_breakdown, expires_at, status | 报价金额服务端计算；一般10分钟有效，未支付需重验 |
 | orders | buyer_id, profile_id?, quote_id, currency, payable_fen, status, fulfillment_status, expires_at, return_context | quote消费唯一；按(buyer_id,created_at,id)分页 |
 | order_items | order_id, product_version_id, spec_snapshot, gross_fen, discount_fen, credit_fen, payable_fen | 首发1单1商品也保留明细；快照不可改 |
-| payments | order_id, channel, provider_trade_no, state, paid_fen, paid_at | UNIQUE(channel,provider_trade_no)，可信回调或查单确认 |
-| payment_events | channel, event_id, payload_digest, verified_at, result | UNIQUE(channel,event_id)，必要密文审计独立受控保存 |
+| payments | order_id, channel, out_trade_no, provider_trade_no, provider_state, currency, state, paid_fen, paid_at, payer_client_ip, h5_url_expires_at | V1 channel=wechat_h5；UNIQUE(channel,provider_trade_no)；可信回调或查单确认；不保存密钥 |
+| payment_events | channel, event_id, event_type, provider_serial, payload_digest, verified_at, result | UNIQUE(channel,event_id)，原始请求体只按最小必要范围受控留存，严禁记录密钥 |
 | entitlement_grants | order_item_id, profile_id, beneficiary_user_id?, type, starts_at, ends_at, state, snapshot | 对每种权益UNIQUE(order_item_id,type)；共享能力与个人声音分开 |
 | entitlement_ledger | grant_id, event_type, delta, effective_at, source_id, revision | append-only；source事件唯一；停用/恢复都有流水 |
 | credits | source_order_item_id, target_order_id?, amount_fen, state, reserved_until | 防止同一留声作品重复抵扣/重复退款；预留与consume同事务 |
-| refund_requests | order_id, applicant_id, reason, request_fen, state, provider_refund_no?, decision | 锁订单核对累计退款≤实付；同一幂等键不重复申请 |
+| refund_requests | order_id, applicant_id, reason, request_fen, state, provider_refund_no?, provider_refund_id?, provider_state?, decision | 锁订单核对累计退款≤实付；同一幂等键不重复申请；退款回调或查退款确认成功 |
 | storage_scopes | id, owner_user_id, profile_id?, used_bytes, reserved_bytes, capacity_bytes, revision | TA存储和独立作品空间分别计量 |
 | work_packages | order_item_id, voice_profile_id, expires_at, total_slots, delivered_slots | 留声包3个slot，不以生成尝试数扣减 |
 | package_slots | package_id, slot_no, state, work_id?, revision | UNIQUE(package_id,slot_no)；reserve/deliver/release原子化 |
