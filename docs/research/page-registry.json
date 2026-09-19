@@ -831,7 +831,8 @@
     "rules": "校验当前账号和素材权限；下载链接设有效期，不通过公开社区链接分发私有导出文件。",
     "readApis": [
       "GET /exports",
-      "GET /exports/{id}"
+      "GET /exports/{id}",
+      "GET /exports/{id}/download"
     ],
     "writeApis": [
       "POST /exports"

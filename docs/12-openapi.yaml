@@ -1,43 +1,45 @@
 openapi: 3.0.3
 info:
   title: 萤火 V1 H5 API
-  version: 1.0.0
-  description: |
-    萤火首期移动端 H5 API 契约。
-    V1 只实现手机号会话、记忆空间、文字对话、影像订单和微信 H5 支付。
-    小程序 code、openid、JSAPI 支付和 wx.requestPayment 不属于 V1。
-    所有金额单位为人民币分，所有时间使用 RFC3339 UTC。
+  version: 1.1.0
+  description: 移动端H5首发A/B契约。微信网页JSAPI与Stripe为按账号资格开放的条件通道；小程序、C/D功能另行实施。业务默认见17，后台权限见18。
 servers:
-  - url: https://staging-api.example.com/api/v1
-    description: 替换为实际 staging API 域名
-  - url: https://api.example.com/api/v1
-    description: 替换为实际 production API 域名
+- url: https://staging-api.example.com/api/v1
+  description: 替换为实际 staging API 域名
+- url: https://api.example.com/api/v1
+  description: 替换为实际 production API 域名
 tags:
-  - name: Bootstrap
-  - name: Auth
-  - name: Profiles
-  - name: Memories
-  - name: Uploads
-  - name: Chat
-  - name: Commerce
-  - name: Payments
-  - name: Support
+- name: Bootstrap
+- name: Auth
+- name: Profiles
+- name: Memories
+- name: Uploads
+- name: Chat
+- name: Commerce
+- name: Payments
+- name: Support
 paths:
   /bootstrap:
     get:
-      tags: [Bootstrap]
+      tags:
+      - Bootstrap
       summary: 获取前端能力、协议和商品入口
       security: []
       responses:
-        "200":
+        '200':
           description: 当前应用配置
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BootstrapResponse"
+                $ref: '#/components/schemas/BootstrapResponse'
+      operationId: get_bootstrap
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /auth/otp:
     post:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: 发送手机号验证码
       security: []
       requestBody:
@@ -45,21 +47,28 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OtpRequest"
+              $ref: '#/components/schemas/OtpRequest'
       responses:
-        "202":
+        '202':
           description: 验证码已进入发送流程
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OtpChallengeResponse"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "429":
-          $ref: "#/components/responses/RateLimited"
+                $ref: '#/components/schemas/OtpChallengeResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_auth_otp
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /auth/otp/verify:
     post:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: 验证验证码并建立 H5 会话
       security: []
       requestBody:
@@ -67,9 +76,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OtpVerifyRequest"
+              $ref: '#/components/schemas/OtpVerifyRequest'
       responses:
-        "200":
+        '200':
           description: 登录成功；服务端通过 HttpOnly Cookie 建立会话
           headers:
             Set-Cookie:
@@ -78,455 +87,628 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_auth_otp_verify
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /auth/logout:
     post:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: 撤销当前会话
       responses:
-        "204":
+        '204':
           description: 已退出
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_auth_logout
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /me:
     get:
-      tags: [Auth]
+      tags:
+      - Auth
       summary: 获取当前账号
       responses:
-        "200":
+        '200':
           description: 当前用户
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UserResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get_me
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    patch:
+      summary: 修改本人偏好
+      operationId: patch_me
+      tags:
+      - me
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /profiles:
     get:
-      tags: [Profiles]
+      tags:
+      - Profiles
       summary: 获取当前账号可见的TA空间
       parameters:
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
       responses:
-        "200":
+        '200':
           description: 空间列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileListResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
+                $ref: '#/components/schemas/ProfileListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get_profiles
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
     post:
-      tags: [Profiles]
+      tags:
+      - Profiles
       summary: 创建TA或可恢复草稿
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateProfileRequest"
+              $ref: '#/components/schemas/CreateProfileRequest'
       responses:
-        "201":
+        '201':
           description: 已创建空间或草稿
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: post_profiles
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /profiles/{profileId}:
     parameters:
-      - $ref: "#/components/parameters/ProfileId"
+    - $ref: '#/components/parameters/ProfileId'
     get:
-      tags: [Profiles]
+      tags:
+      - Profiles
       summary: 获取TA空间摘要
       responses:
-        "200":
+        '200':
           description: 当前账号可见的空间
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
+                $ref: '#/components/schemas/ProfileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: get_profiles_profileId
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
     patch:
-      tags: [Profiles]
+      tags:
+      - Profiles
       summary: 修改TA空间资料
       parameters:
-        - $ref: "#/components/parameters/ExpectedVersion"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateProfileRequest"
+              $ref: '#/components/schemas/UpdateProfileRequest'
       responses:
-        "200":
+        '200':
           description: 已更新
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
+                $ref: '#/components/schemas/ProfileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: patch_profiles_profileId
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /profiles/{profileId}/memories:
     parameters:
-      - $ref: "#/components/parameters/ProfileId"
+    - $ref: '#/components/parameters/ProfileId'
     get:
-      tags: [Memories]
+      tags:
+      - Memories
       summary: 获取当前账号可见的记忆
       parameters:
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
-        - name: visibility
-          in: query
-          schema:
-            type: string
-            enum: [private, family]
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      - name: visibility
+        in: query
+        schema:
+          type: string
+          enum:
+          - private
+          - family
       responses:
-        "200":
+        '200':
           description: 记忆列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryListResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
+                $ref: '#/components/schemas/MemoryListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: get_profiles_profileId_memories
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
     post:
-      tags: [Memories]
+      tags:
+      - Memories
       summary: 创建一条已确认记忆
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateMemoryRequest"
+              $ref: '#/components/schemas/CreateMemoryRequest'
       responses:
-        "201":
+        '201':
           description: 已创建
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MemoryResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/MemoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_profiles_profileId_memories
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /uploads:
     post:
-      tags: [Uploads]
+      tags:
+      - Uploads
       summary: 创建私有上传会话
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateUploadRequest"
+              $ref: '#/components/schemas/CreateUploadRequest'
       responses:
-        "201":
+        '201':
           description: 上传会话
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UploadResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "413":
+                $ref: '#/components/schemas/UploadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
           description: 超过容量或单文件限制
-        "422":
-          $ref: "#/components/responses/ValidationError"
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_uploads
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /uploads/{uploadSessionId}/complete:
     parameters:
-      - name: uploadSessionId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+    - name: uploadSessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     post:
-      tags: [Uploads]
+      tags:
+      - Uploads
       summary: 完成上传并触发服务端校验
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       responses:
-        "200":
+        '200':
           description: 校验中的资产
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AssetResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-  /profiles/{profileId}/conversations/{conversationId}/messages:
-    parameters:
-      - $ref: "#/components/parameters/ProfileId"
-      - name: conversationId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    post:
-      tags: [Chat]
-      summary: 发送文字消息并创建可恢复生成任务
-      parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SendMessageRequest"
-      responses:
-        "202":
-          description: 生成已排队
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GenerationResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/AssetResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: post_uploads_uploadSessionId_complete
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /generations/{generationId}:
     parameters:
-      - name: generationId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+    - name: generationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     get:
-      tags: [Chat]
+      tags:
+      - Chat
       summary: 获取生成任务最终快照
       responses:
-        "200":
+        '200':
           description: 生成状态和完整正文
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerationResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
+                $ref: '#/components/schemas/GenerationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: get_generations_generationId
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /generations/{generationId}/events:
     parameters:
-      - name: generationId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+    - name: generationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     get:
-      tags: [Chat]
+      tags:
+      - Chat
       summary: 读取可恢复生成事件
       parameters:
-        - name: afterSeq
-          in: query
-          schema:
-            type: integer
-            minimum: -1
-            default: -1
+      - name: afterSeq
+        in: query
+        schema:
+          type: integer
+          minimum: -1
+          default: -1
       responses:
-        "200":
+        '200':
           description: 事件列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GenerationEventsResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "410":
+                $ref: '#/components/schemas/GenerationEventsResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
           description: 事件已过期，需要读取生成快照
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: get_generations_generationId_events
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /quotes:
     post:
-      tags: [Commerce]
+      tags:
+      - Commerce
       summary: 创建商品报价
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateQuoteRequest"
+              $ref: '#/components/schemas/CreateQuoteRequest'
       responses:
-        "201":
+        '201':
           description: 服务端计算的报价快照
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/QuoteResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/QuoteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: post_quotes
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /orders:
     get:
-      tags: [Commerce]
+      tags:
+      - Commerce
       summary: 获取当前账号订单
       parameters:
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
       responses:
-        "200":
+        '200':
           description: 订单列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderListResponse"
+                $ref: '#/components/schemas/OrderListResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get_orders
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
     post:
-      tags: [Commerce]
+      tags:
+      - Commerce
       summary: 根据报价创建订单
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateOrderRequest"
+              $ref: '#/components/schemas/CreateOrderRequest'
       responses:
-        "201":
+        '201':
           description: 订单快照
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderResponse"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
+                $ref: '#/components/schemas/OrderResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: post_orders
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /orders/{orderId}:
     parameters:
-      - $ref: "#/components/parameters/OrderId"
+    - $ref: '#/components/parameters/OrderId'
     get:
-      tags: [Commerce]
+      tags:
+      - Commerce
       summary: 获取订单、支付、交付和退款状态
       responses:
-        "200":
+        '200':
           description: 订单详情
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: get_orders_orderId
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /orders/{orderId}/payment:
     parameters:
-      - $ref: "#/components/parameters/OrderId"
+    - $ref: '#/components/parameters/OrderId'
     post:
-      tags: [Payments]
+      tags:
+      - Payments
       summary: 创建或复用微信 H5 支付尝试
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePaymentRequest"
+              $ref: '#/components/schemas/CreatePaymentRequest'
       responses:
-        "200":
+        '200':
           description: 短期支付跳转信息
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PaymentResponse"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-        "503":
+                $ref: '#/components/schemas/PaymentResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
           description: 支付渠道暂不可用
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: post_orders_orderId_payment
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /orders/{orderId}/reconcile:
     parameters:
-      - $ref: "#/components/parameters/OrderId"
+    - $ref: '#/components/parameters/OrderId'
     post:
-      tags: [Payments]
+      tags:
+      - Payments
       summary: 受控主动查单
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       responses:
-        "200":
+        '200':
           description: 当前服务端状态
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OrderResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "429":
-          $ref: "#/components/responses/RateLimited"
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_orders_orderId_reconcile
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /orders/{orderId}/refunds:
     parameters:
-      - $ref: "#/components/parameters/OrderId"
+    - $ref: '#/components/parameters/OrderId'
     post:
-      tags: [Commerce]
+      tags:
+      - Commerce
       summary: 提交售后退款申请
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateRefundRequest"
+              $ref: '#/components/schemas/CreateRefundRequest'
       responses:
-        "201":
+        '201':
           description: 退款申请已创建
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RefundResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "422":
-          $ref: "#/components/responses/ValidationError"
-  /entitlements:
-    get:
-      tags: [Commerce]
-      summary: 获取当前账号的权益和容量
-      parameters:
-        - name: profileId
-          in: query
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: 权益快照
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EntitlementsResponse"
+                $ref: '#/components/schemas/RefundResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: post_orders_orderId_refunds
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /payments/wechat_h5/notify:
     post:
-      tags: [Payments]
+      tags:
+      - Payments
       summary: 微信支付异步回调
       security: []
       requestBody:
@@ -537,15 +719,23 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        "200":
+        '200':
           description: 已成功验签、解密并落账
-        "400":
+        '400':
           description: 签名、解密或业务核对失败
-        "500":
+        '500':
           description: 数据库或内部处理失败
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_payments_wechat_h5_notify
+      x-phase: B
+      parameters: []
+      x-webhook-signature-required: true
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /refunds/wechat_h5/notify:
     post:
-      tags: [Payments]
+      tags:
+      - Payments
       summary: 微信退款异步回调
       security: []
       requestBody:
@@ -556,44 +746,2703 @@ paths:
               type: object
               additionalProperties: true
       responses:
-        "200":
+        '200':
           description: 已成功处理
-        "400":
+        '400':
           description: 回调无效
-        "500":
+        '500':
           description: 内部处理失败
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_refunds_wechat_h5_notify
+      x-phase: B
+      parameters: []
+      x-webhook-signature-required: true
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
   /support-tickets:
     get:
-      tags: [Support]
+      tags:
+      - Support
       summary: 获取当前账号工单
       parameters:
-        - $ref: "#/components/parameters/Cursor"
-        - $ref: "#/components/parameters/Limit"
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
       responses:
-        "200":
+        '200':
           description: 工单列表
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SupportTicketListResponse"
+                $ref: '#/components/schemas/SupportTicketListResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get_support_tickets
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
     post:
-      tags: [Support]
+      tags:
+      - Support
       summary: 创建售后或帮助工单
       parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateTicketRequest"
+              $ref: '#/components/schemas/CreateTicketRequest'
       responses:
-        "201":
+        '201':
           description: 工单
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SupportTicketResponse"
+                $ref: '#/components/schemas/SupportTicketResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_support_tickets
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /conversations/{conversationId}/messages:
+    parameters:
+    - name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    post:
+      tags:
+      - Chat
+      summary: 发送文字消息并创建可恢复生成任务
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '202':
+          description: 生成已排队
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+      operationId: post_conversations_conversationId_messages
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    get:
+      summary: 本人聊天历史
+      operationId: get_conversations_conversationId_messages
+      tags:
+      - conversations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      - name: query
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/entitlements:
+    get:
+      tags:
+      - Commerce
+      summary: 获取当前账号的权益和容量
+      responses:
+        '200':
+          description: 权益快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementsResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      operationId: get_profiles_profileId_entitlements
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    parameters:
+    - $ref: '#/components/parameters/ProfileId'
+  /home:
+    get:
+      summary: 首页状态和授权运营故事
+      operationId: get_home
+      tags:
+      - home
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResult'
+      security: []
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /legal/{type}:
+    parameters:
+    - name: type
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 200
+    get:
+      summary: 当前已发布协议
+      operationId: get_legal_type
+      tags:
+      - legal
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalDocumentResult'
+      security: []
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /auth/refresh:
+    post:
+      summary: 轮换服务端会话
+      operationId: post_auth_refresh
+      tags:
+      - auth
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /me/sessions:
+    get:
+      summary: 本人登录设备
+      operationId: get_me_sessions
+      tags:
+      - me
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionViewPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /me/sessions/{sessionId}:
+    parameters:
+    - name: sessionId
+      in: path
+      required: true
+      schema: &id001
+        type: string
+        format: uuid
+    delete:
+      summary: 撤销本人会话
+      operationId: delete_me_sessions_sessionId
+      tags:
+      - me
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/preferences:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 读取本人对话偏好
+      operationId: get_profiles_profileId_preferences
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    patch:
+      summary: 修改本人对话偏好
+      operationId: patch_profiles_profileId_preferences
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferencesPatch'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/members:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 读取空间成员
+      operationId: get_profiles_profileId_members
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/members/{userId}:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    - name: userId
+      in: path
+      required: true
+      schema: *id001
+    patch:
+      summary: owner修改成员角色
+      operationId: patch_profiles_profileId_members_userId
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberPatch'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    delete:
+      summary: owner移除成员
+      operationId: delete_profiles_profileId_members_userId
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IfMatch'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/invitations:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: owner创建一次性邀请
+      operationId: post_profiles_profileId_invitations
+      tags:
+      - profiles
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationCreate'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /invitations/{token}:
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 200
+    get:
+      summary: 读取邀请最小预览
+      operationId: get_invitations_token
+      tags:
+      - invitations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResult'
+      security: []
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /invitations/{token}/accept:
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 200
+    post:
+      summary: 原子接受邀请并检查名额
+      operationId: post_invitations_token_accept
+      tags:
+      - invitations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /invitations/{invitationId}:
+    parameters:
+    - name: invitationId
+      in: path
+      required: true
+      schema: *id001
+    delete:
+      summary: owner撤销邀请
+      operationId: delete_invitations_invitationId
+      tags:
+      - invitations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IfMatch'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /memories/{memoryId}:
+    parameters:
+    - name: memoryId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 读取有权记忆
+      operationId: get_memories_memoryId
+      tags:
+      - memories
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    patch:
+      summary: 修改记忆及版本
+      operationId: patch_memories_memoryId
+      tags:
+      - memories
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryPatch'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    delete:
+      summary: 删除记忆并撤销检索
+      operationId: delete_memories_memoryId
+      tags:
+      - memories
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IfMatch'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/memory-candidates:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 待确认记忆
+      operationId: get_profiles_profileId_memory_candidates
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryCandidatePageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /memory-candidates/{candidateId}/confirm:
+    parameters:
+    - name: candidateId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 确认候选记忆
+      operationId: post_memory_candidates_candidateId_confirm
+      tags:
+      - memory-candidates
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateConfirm'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /memory-candidates/{candidateId}/reject:
+    parameters:
+    - name: candidateId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 拒绝候选记忆
+      operationId: post_memory_candidates_candidateId_reject
+      tags:
+      - memory-candidates
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /assets/{assetId}/access:
+    parameters:
+    - name: assetId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 重验权后签发短时读取URL
+      operationId: get_assets_assetId_access
+      tags:
+      - assets
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetAccessResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/conversation:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 幂等取得本人主对话
+      operationId: post_profiles_profileId_conversation
+      tags:
+      - profiles
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /conversations/{conversationId}/clear:
+    parameters:
+    - name: conversationId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 清空本人聊天并增加epoch
+      operationId: post_conversations_conversationId_clear
+      tags:
+      - conversations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearConversation'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /generations/{generationId}/retry:
+    parameters:
+    - name: generationId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 重试失败生成，不复制用户消息
+      operationId: post_generations_generationId_retry
+      tags:
+      - generations
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /generations/{generationId}/cancel:
+    parameters:
+    - name: generationId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 请求取消当前生成
+      operationId: post_generations_generationId_cancel
+      tags:
+      - generations
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /tools:
+    get:
+      summary: 仅返回已验收工具
+      operationId: get_tools
+      tags:
+      - tools
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolPageResult'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /media/preflight:
+    post:
+      summary: 检查素材与授权，生成可报价输入快照
+      operationId: post_media_preflight
+      tags:
+      - media
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreflightResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightRequest'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /tasks/{taskId}:
+    parameters:
+    - name: taskId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 读取本人异步任务
+      operationId: get_tasks_taskId
+      tags:
+      - tasks
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /tasks/{taskId}/retry:
+    parameters:
+    - name: taskId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 仅重试缺失输出
+      operationId: post_tasks_taskId_retry
+      tags:
+      - tasks
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /works:
+    get:
+      summary: 本人作品列表
+      operationId: get_works
+      tags:
+      - works
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /works/{workId}:
+    parameters:
+    - name: workId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 本人作品详情
+      operationId: get_works_workId
+      tags:
+      - works
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    delete:
+      summary: 删除本人作品引用
+      operationId: delete_works_workId
+      tags:
+      - works
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IfMatch'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /works/{workId}/save-to-profile:
+    parameters:
+    - name: workId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 检查容量与权限后保存作品
+      operationId: post_works_workId_save_to_profile
+      tags:
+      - works
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveWork'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /products:
+    get:
+      summary: 已发布商品
+      operationId: get_products
+      tags:
+      - products
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionPageResult'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /products/{code}:
+    parameters:
+    - name: code
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 200
+    get:
+      summary: 商品当前版本
+      operationId: get_products_code
+      tags:
+      - products
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionResult'
+      security: []
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /orders/{orderId}/cancel:
+    parameters:
+    - name: orderId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 查渠道并关闭未支付订单
+      operationId: post_orders_orderId_cancel
+      tags:
+      - orders
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /refunds/{refundId}:
+    parameters:
+    - name: refundId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 本人退款进度
+      operationId: get_refunds_refundId
+      tags:
+      - refunds
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundViewResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /me/services:
+    get:
+      summary: 本人服务与容量
+      operationId: get_me_services
+      tags:
+      - me
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementsResponse'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /notifications:
+    get:
+      summary: 本人服务通知
+      operationId: get_notifications
+      tags:
+      - notifications
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /notifications/read:
+    post:
+      summary: 本人可见通知标记已读
+      operationId: post_notifications_read
+      tags:
+      - notifications
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadNotifications'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /me/consents:
+    get:
+      summary: 本人授权记录
+      operationId: get_me_consents
+      tags:
+      - me
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /consents:
+    post:
+      summary: 记录明确同意和协议版本
+      operationId: post_consents
+      tags:
+      - consents
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentCreate'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /consents/{consentId}/revoke:
+    parameters:
+    - name: consentId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 先撤授权再异步清理
+      operationId: post_consents_consentId_revoke
+      tags:
+      - consents
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /exports:
+    get:
+      summary: 本人导出记录
+      operationId: get_exports
+      tags:
+      - exports
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    post:
+      summary: 申请当前有权数据导出
+      operationId: post_exports
+      tags:
+      - exports
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreate'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /exports/{exportId}:
+    parameters:
+    - name: exportId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 读取导出状态
+      operationId: get_exports_exportId
+      tags:
+      - exports
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /exports/{exportId}/download:
+    parameters:
+    - name: exportId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 再次验权后取得导出下载地址
+      operationId: get_exports_exportId_download
+      tags:
+      - exports
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetAccessResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /me/deletion-requests:
+    post:
+      summary: 验证近期OTP后申请账号删除
+      operationId: post_me_deletion_requests
+      tags:
+      - me
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionCreate'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /profiles/{profileId}/deletion-requests:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: owner验证OTP后申请TA删除
+      operationId: post_profiles_profileId_deletion_requests
+      tags:
+      - profiles
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionCreate'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /deletion-requests/{requestId}:
+    parameters:
+    - name: requestId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 申请人查询删除进度
+      operationId: get_deletion_requests_requestId
+      tags:
+      - deletion-requests
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /help:
+    get:
+      summary: 公开帮助与服务时段
+      operationId: get_help
+      tags:
+      - help
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HelpItemPageResult'
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /support-tickets/{ticketId}:
+    parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: *id001
+    get:
+      summary: 本人工单详情
+      operationId: get_support_tickets_ticketId
+      tags:
+      - support-tickets
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: A
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /support-tickets/{ticketId}/replies:
+    parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 本人工单追加回复和授权附件
+      operationId: post_support_tickets_ticketId_replies
+      tags:
+      - support-tickets
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReplyResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketReplyRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /payment-capabilities:
+    get:
+      summary: 当前容器可用的收款通道
+      operationId: get_payment_capabilities
+      tags:
+      - payment-capabilities
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResult'
+      security: []
+      parameters:
+      - name: container
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - browser
+          - wechat
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /auth/wechat/authorize:
+    get:
+      summary: OAuth/OIDC重定向：state一次性校验
+      operationId: get_auth_wechat_authorize
+      tags:
+      - auth
+      responses:
+        '302':
+          description: 重定向至认证端或站内白名单页面
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-phase: B
+      parameters:
+      - name: returnTo
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      description: 仅wechat_jsapi启用时可用；state一次性、绑定会话与浏览器、10分钟过期；其他状态422。
+  /auth/wechat/callback:
+    get:
+      summary: OAuth/OIDC重定向：state一次性校验
+      operationId: get_auth_wechat_callback
+      tags:
+      - auth
+      responses:
+        '302':
+          description: 重定向至认证端或站内白名单页面
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+      security: []
+      x-phase: B
+      parameters:
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 2000
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 2000
+      description: 仅wechat_jsapi启用时可用；state一次性、绑定会话与浏览器、10分钟过期；其他状态422。
+  /admin/auth/authorize:
+    get:
+      summary: OAuth/OIDC重定向：state一次性校验
+      operationId: get_admin_auth_authorize
+      tags:
+      - Admin
+      responses:
+        '302':
+          description: 重定向至认证端或站内白名单页面
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+      security: []
+      x-phase: A
+      parameters:
+      - name: returnTo
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/auth/callback:
+    get:
+      summary: OAuth/OIDC重定向：state一次性校验
+      operationId: get_admin_auth_callback
+      tags:
+      - Admin
+      responses:
+        '302':
+          description: 重定向至认证端或站内白名单页面
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+      security: []
+      x-phase: A
+      parameters:
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 2000
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 2000
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/auth/logout:
+    post:
+      summary: 注销后台会话
+      operationId: post_admin_auth_logout
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: session.self
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/users:
+    get:
+      summary: 后台查询：users
+      operationId: get_admin_users
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: account.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/profiles:
+    get:
+      summary: 后台查询：profiles
+      operationId: get_admin_profiles
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: account.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/products:
+    get:
+      summary: 后台查询：products
+      operationId: get_admin_products
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: catalog.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/orders:
+    get:
+      summary: 后台查询：orders
+      operationId: get_admin_orders
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/refunds:
+    get:
+      summary: 后台查询：refunds
+      operationId: get_admin_refunds
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundViewPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/tasks:
+    get:
+      summary: 后台查询：tasks
+      operationId: get_admin_tasks
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: task.manage
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/support-tickets:
+    get:
+      summary: 后台查询：support-tickets
+      operationId: get_admin_support_tickets
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: support.manage
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/reconciliations:
+    get:
+      summary: 后台查询：reconciliations
+      operationId: get_admin_reconciliations
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.reconcile
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+    post:
+      summary: 后台操作：reconciliations
+      operationId: post_admin_reconciliations
+      tags:
+      - Admin
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.reconcile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationRequest'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/reconciliation-items:
+    get:
+      summary: 后台查询：reconciliation-items
+      operationId: get_admin_reconciliation_items
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationItemPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.reconcile
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: B
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/data-requests:
+    get:
+      summary: 后台查询：data-requests
+      operationId: get_admin_data_requests
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataRequestPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: data.manage
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/audit-events:
+    get:
+      summary: 后台查询：audit-events
+      operationId: get_admin_audit_events
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPageResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security:
+      - adminCookie: []
+      x-required-scope: audit.read
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      x-phase: A
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/users/{userId}/suspend:
+    parameters:
+    - name: userId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：suspend
+      operationId: post_admin_users_userId_suspend
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: account.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/products/{productId}/versions:
+    parameters:
+    - name: productId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：versions
+      operationId: post_admin_products_productId_versions
+      tags:
+      - Admin
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: catalog.write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateVersion'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/products/{productId}/publish:
+    parameters:
+    - name: productId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：publish
+      operationId: post_admin_products_productId_publish
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: catalog.publish
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishProduct'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/products/{productId}/disable:
+    parameters:
+    - name: productId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：disable
+      operationId: post_admin_products_productId_disable
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductVersionResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: catalog.publish
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/profiles/{profileId}/compensations:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：compensations
+      operationId: post_admin_profiles_profileId_compensations
+      tags:
+      - Admin
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AckResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: entitlement.compensate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Compensation'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/refunds/{refundId}/decision:
+    parameters:
+    - name: refundId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：decision
+      operationId: post_admin_refunds_refundId_decision
+      tags:
+      - Admin
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundViewResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.refund
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundDecision'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/reconciliation-items/{itemId}/resolve:
+    parameters:
+    - name: itemId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：resolve
+      operationId: post_admin_reconciliation_items_itemId_resolve
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationItemResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: finance.reconcile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveDifference'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/tasks/{taskId}/retry:
+    parameters:
+    - name: taskId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：retry
+      operationId: post_admin_tasks_taskId_retry
+      tags:
+      - Admin
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: task.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      x-phase: B
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/support-tickets/{ticketId}/replies:
+    parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：replies
+      operationId: post_admin_support_tickets_ticketId_replies
+      tags:
+      - Admin
+      responses:
+        '201':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketReplyResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: support.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketReplyRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/support-tickets/{ticketId}/resolve:
+    parameters:
+    - name: ticketId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：resolve
+      operationId: post_admin_support_tickets_ticketId_resolve
+      tags:
+      - Admin
+      responses:
+        '200':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportTicketResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: support.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /admin/data-requests/{requestId}/retry:
+    parameters:
+    - name: requestId
+      in: path
+      required: true
+      schema: *id001
+    post:
+      summary: 后台操作：retry
+      operationId: post_admin_data_requests_requestId_retry
+      tags:
+      - Admin
+      responses:
+        '202':
+          description: 成功（异步只代表受理）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataRequestResult'
+        '401':
+          description: 会话无效
+        '403':
+          description: 已知能力/CSRF/scope拒绝
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security:
+      - adminCookie: []
+      x-required-scope: data.manage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /payments/wechat_jsapi/notify:
+    post:
+      summary: 供应商签名验证及事件持久化
+      security: []
+      x-webhook-signature-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 渠道原始事件；先按原始字节验签，不作为自由业务写入
+      responses:
+        '200':
+          description: 已持久化或已处理
+        '400':
+          description: 签名或载荷错误
+        '500':
+          description: 持久化失败，请渠道重试
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_payments_wechat_jsapi_notify
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /refunds/wechat_jsapi/notify:
+    post:
+      summary: 供应商签名验证及事件持久化
+      security: []
+      x-webhook-signature-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 渠道原始事件；先按原始字节验签，不作为自由业务写入
+      responses:
+        '200':
+          description: 已持久化或已处理
+        '400':
+          description: 签名或载荷错误
+        '500':
+          description: 持久化失败，请渠道重试
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_refunds_wechat_jsapi_notify
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /payments/stripe_checkout/notify:
+    post:
+      summary: 供应商签名验证及事件持久化
+      security: []
+      x-webhook-signature-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: 渠道原始事件；先按原始字节验签，不作为自由业务写入
+      responses:
+        '200':
+          description: 已持久化或已处理
+        '400':
+          description: 签名或载荷错误
+        '500':
+          description: 持久化失败，请渠道重试
+        '409':
+          $ref: '#/components/responses/Conflict'
+      operationId: post_payments_stripe_checkout_notify
+      x-phase: B
+      parameters: []
+      description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
 components:
   securitySchemes:
     sessionCookie:
@@ -601,6 +3450,11 @@ components:
       in: cookie
       name: yinghuo_session
       description: HttpOnly、Secure、SameSite=Lax 或更严格的 H5 会话 Cookie
+    adminCookie:
+      type: apiKey
+      in: cookie
+      name: yinghuo_admin_session
+      description: 独立后台MFA会话，不接受用户Cookie
   parameters:
     ProfileId:
       name: profileId
@@ -637,58 +3491,74 @@ components:
         type: string
         minLength: 16
         maxLength: 128
-    ExpectedVersion:
-      name: expectedVersion
+    CsrfToken:
+      name: X-CSRF-Token
       in: header
-      required: false
+      required: true
       schema:
-        type: integer
+        type: string
+        maxLength: 200
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 被删对象当前十进制version；先验权，再比较版本
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]*$
   responses:
     Unauthorized:
       description: 未登录或会话已失效
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
     NotFound:
       description: 资源不存在或当前账号无权识别
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
     Conflict:
       description: 状态、版本或幂等冲突
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
     ValidationError:
       description: 输入不合格
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
     RateLimited:
       description: 请求过于频繁
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/ErrorEnvelope"
+            $ref: '#/components/schemas/ErrorEnvelope'
   schemas:
     BaseResponse:
       type: object
-      required: [data, traceId]
+      required:
+      - data
+      - traceId
       properties:
         data: {}
         traceId:
           type: string
     ErrorEnvelope:
       type: object
-      required: [error, traceId]
+      required:
+      - error
+      - traceId
       properties:
         error:
           type: object
-          required: [code, message, retryable]
+          required:
+          - code
+          - message
+          - retryable
           properties:
             code:
               type: string
@@ -704,7 +3574,10 @@ components:
           type: string
     User:
       type: object
-      required: [id, displayName, timezone]
+      required:
+      - id
+      - displayName
+      - timezone
       properties:
         id:
           type: string
@@ -717,81 +3590,129 @@ components:
           example: Asia/Shanghai
         status:
           type: string
-          enum: [active, suspended, deleting, deleted]
+          enum:
+          - active
+          - suspended
+          - deleting
+          - deleted
     UserResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/User"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/User'
     OtpRequest:
       type: object
-      required: [phone, purpose]
+      required:
+      - phone
+      - purpose
       properties:
         phone:
           type: string
           description: 服务端规范化的手机号输入
         purpose:
           type: string
-          enum: [login, change_phone]
+          enum:
+          - login
+          - change_phone
     OtpVerifyRequest:
       type: object
-      required: [challengeId, code]
+      required:
+      - challengeId
+      - code
+      - acceptedTermsVersion
+      - acceptedPrivacyVersion
       properties:
         challengeId:
           type: string
           format: uuid
         code:
           type: string
-          minLength: 4
-          maxLength: 8
+          pattern: ^[0-9]{6}$
+        acceptedTermsVersion:
+          type: string
+          maxLength: 80
+        acceptedPrivacyVersion:
+          type: string
+          maxLength: 80
     OtpChallengeResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [challengeId, expiresAt, retryAfterSeconds]
-              properties:
-                challengeId:
-                  type: string
-                  format: uuid
-                expiresAt:
-                  type: string
-                  format: date-time
-                retryAfterSeconds:
-                  type: integer
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - challengeId
+            - expiresAt
+            - retryAfterSeconds
+            properties:
+              challengeId:
+                type: string
+                format: uuid
+              expiresAt:
+                type: string
+                format: date-time
+              retryAfterSeconds:
+                type: integer
     BootstrapResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [appVersion, phase, features, products, terms]
-              properties:
-                appVersion:
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - appVersion
+            - phase
+            - features
+            - products
+            - terms
+            - csrfToken
+            - paymentCapabilities
+            - canCreateFreeProfile
+            properties:
+              appVersion:
+                type: string
+              phase:
+                type: string
+                enum:
+                - A
+                - B
+                - C1
+                - C2
+                - D
+              features:
+                type: object
+                additionalProperties:
+                  type: boolean
+              products:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductVersion'
+              terms:
+                type: object
+                additionalProperties:
                   type: string
-                phase:
-                  type: string
-                  enum: [A, B, C1, C2, D]
-                features:
-                  type: object
-                  additionalProperties:
-                    type: boolean
-                products:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/ProductVersion"
-                terms:
-                  type: object
-                  additionalProperties:
-                    type: string
+              csrfToken:
+                type: string
+                maxLength: 200
+              paymentCapabilities:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentCapability'
+              canCreateFreeProfile: &id003
+                type: boolean
     ProductVersion:
       type: object
-      required: [code, version, priceFen, currency, termsVersion, saleEnabled]
+      required:
+      - code
+      - version
+      - priceFen
+      - currency
+      - termsVersion
+      - saleEnabled
       properties:
         code:
           type: string
@@ -805,7 +3726,8 @@ components:
           minimum: 0
         currency:
           type: string
-          enum: [CNY]
+          enum:
+          - CNY
         durationDays:
           type: integer
         termsVersion:
@@ -815,9 +3737,17 @@ components:
         specs:
           type: object
           additionalProperties: true
+        catalogVersion:
+          type: integer
+          minimum: 1
+          description: 商品聚合乐观锁版本，后台expectedVersion使用此值
+        productId:
+          type: string
+          format: uuid
     CreateProfileRequest:
       type: object
-      required: [displayName]
+      required:
+      - displayName
       properties:
         displayName:
           type: string
@@ -845,9 +3775,19 @@ components:
         avatarAssetId:
           type: string
           format: uuid
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - expectedVersion
     Profile:
       type: object
-      required: [id, displayName, status, version, capabilities]
+      required:
+      - id
+      - displayName
+      - status
+      - version
+      - capabilities
       properties:
         id:
           type: string
@@ -858,7 +3798,11 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, active, deleting, deleted]
+          enum:
+          - draft
+          - active
+          - deleting
+          - deleted
         version:
           type: integer
         capabilities:
@@ -869,34 +3813,46 @@ components:
           type: object
           additionalProperties:
             type: integer
+        requiresPlan:
+          type: boolean
+        nextPage:
+          type: string
+          enum:
+          - P19
+          - P38
     ProfileResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/Profile"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Profile'
     ProfileListResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/CursorPageProfile"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/CursorPageProfile'
     CursorPageProfile:
       type: object
-      required: [items, nextCursor]
+      required:
+      - items
+      - nextCursor
       properties:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/Profile"
+            $ref: '#/components/schemas/Profile'
         nextCursor:
           type: string
           nullable: true
     CreateMemoryRequest:
       type: object
-      required: [body, visibility, useForAi]
+      required:
+      - body
+      - visibility
+      - useForAi
       properties:
         title:
           type: string
@@ -907,7 +3863,9 @@ components:
           maxLength: 10000
         visibility:
           type: string
-          enum: [private, family]
+          enum:
+          - private
+          - family
         useForAi:
           type: boolean
         assetIds:
@@ -917,7 +3875,12 @@ components:
             format: uuid
     Memory:
       type: object
-      required: [id, body, visibility, confirmationState, version]
+      required:
+      - id
+      - body
+      - visibility
+      - confirmationState
+      - version
       properties:
         id:
           type: string
@@ -928,49 +3891,72 @@ components:
           type: string
         visibility:
           type: string
-          enum: [private, family]
+          enum:
+          - private
+          - family
         confirmationState:
           type: string
-          enum: [confirmed, rejected, suggested]
+          enum:
+          - confirmed
+          - rejected
+          - suggested
         useForAi:
           type: boolean
         version:
           type: integer
+        activeForBasic:
+          type: boolean
+        assetIds:
+          type: array
+          items: &id002
+            type: string
+            format: uuid
     MemoryResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/Memory"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Memory'
     MemoryListResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/CursorPageMemory"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/CursorPageMemory'
     CursorPageMemory:
       type: object
-      required: [items, nextCursor]
+      required:
+      - items
+      - nextCursor
       properties:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/Memory"
+            $ref: '#/components/schemas/Memory'
         nextCursor:
           type: string
           nullable: true
     CreateUploadRequest:
       type: object
-      required: [purpose, filename, mimeType, sizeBytes]
+      required:
+      - purpose
+      - filename
+      - mimeType
+      - sizeBytes
       properties:
         profileId:
           type: string
           format: uuid
         purpose:
           type: string
-          enum: [memory_original, avatar, voice_material, image_input, export]
+          enum:
+          - memory_original
+          - avatar
+          - voice_material
+          - image_input
+          - export
         filename:
           type: string
           maxLength: 255
@@ -981,113 +3967,160 @@ components:
           minimum: 1
     UploadResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [uploadSessionId, expiresAt, uploadUrl]
-              properties:
-                uploadSessionId:
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - uploadSessionId
+            - expiresAt
+            - uploadUrl
+            properties:
+              uploadSessionId:
+                type: string
+                format: uuid
+              expiresAt:
+                type: string
+                format: date-time
+              uploadUrl:
+                type: string
+                format: uri
+              headers:
+                type: object
+                additionalProperties:
                   type: string
-                  format: uuid
-                expiresAt:
-                  type: string
-                  format: date-time
-                uploadUrl:
-                  type: string
-                  format: uri
-                headers:
-                  type: object
-                  additionalProperties:
-                    type: string
     AssetResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [assetId, status]
-              properties:
-                assetId:
-                  type: string
-                  format: uuid
-                status:
-                  type: string
-                  enum: [checking, ready, rejected]
-                rejectReason:
-                  type: string
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - assetId
+            - status
+            properties:
+              assetId:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum:
+                - checking
+                - ready
+                - rejected
+              rejectReason:
+                type: string
     SendMessageRequest:
       type: object
-      required: [clientMessageId, kind, text, conversationEpoch]
+      required:
+      - clientMessageId
+      - kind
+      - conversationEpoch
       properties:
         clientMessageId:
           type: string
           format: uuid
         kind:
           type: string
-          enum: [text]
+          enum:
+          - text
+          - image
         text:
           type: string
           minLength: 1
           maxLength: 10000
         conversationEpoch:
           type: integer
-          minimum: 0
+          minimum: 1
+        assetId: *id002
+      oneOf:
+      - properties:
+          kind:
+            enum:
+            - text
+        required:
+        - text
+      - properties:
+          kind:
+            enum:
+            - image
+        required:
+        - assetId
+      description: image仅本人ready且授权资产；视觉未开启时只保存图片并提示补充说明，不调用模型伪造看图。
     GenerationResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [generationId, status]
-              properties:
-                generationId:
-                  type: string
-                  format: uuid
-                userMessageId:
-                  type: string
-                  format: uuid
-                assistantMessageId:
-                  type: string
-                  format: uuid
-                status:
-                  type: string
-                  enum: [queued, running, completed, failed, cancelled]
-                text:
-                  type: string
-                nextSeq:
-                  type: integer
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - generationId
+            - status
+            properties:
+              generationId:
+                type: string
+                format: uuid
+              userMessageId:
+                type: string
+                format: uuid
+              assistantMessageId:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum:
+                - queued
+                - running
+                - completed
+                - failed
+                - cancelled
+              text:
+                type: string
+              nextSeq:
+                type: integer
     GenerationEventsResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [events, nextSeq]
-              properties:
-                events:
-                  type: array
-                  items:
-                    type: object
-                    required: [seq, type]
-                    properties:
-                      seq:
-                        type: integer
-                      type:
-                        type: string
-                        enum: [started, text_delta, completed, failed, cancelled, snapshot_required]
-                      payload:
-                        type: object
-                        additionalProperties: true
-                nextSeq:
-                  type: integer
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - events
+            - nextSeq
+            properties:
+              events:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - seq
+                  - type
+                  properties:
+                    seq:
+                      type: integer
+                    type:
+                      type: string
+                      enum:
+                      - started
+                      - text_delta
+                      - completed
+                      - failed
+                      - cancelled
+                      - snapshot_required
+                    payload:
+                      type: object
+                      additionalProperties: true
+              nextSeq:
+                type: integer
     CreateQuoteRequest:
       type: object
-      required: [productCode, operation]
+      required:
+      - productCode
+      - operation
       properties:
         productCode:
           type: string
@@ -1096,7 +4129,9 @@ components:
           format: uuid
         operation:
           type: string
-          enum: [new, renew, upgrade]
+          enum:
+          - new
+          - renew
         inputRevision:
           type: integer
           nullable: true
@@ -1105,42 +4140,55 @@ components:
           items:
             type: string
             format: uuid
+          maxItems: 0
+        preflightId: *id002
+      description: A/B仅new/renew；enhance必须传preflightId和匹配的inputRevision；memory_year必须传profileId。升级和credits属C1。
     QuoteResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [quoteId, productVersion, payableFen, currency, expiresAt, termsVersion]
-              properties:
-                quoteId:
-                  type: string
-                  format: uuid
-                productVersion:
-                  type: integer
-                listPriceFen:
-                  type: integer
-                discountFen:
-                  type: integer
-                creditFen:
-                  type: integer
-                payableFen:
-                  type: integer
-                currency:
-                  type: string
-                  enum: [CNY]
-                expiresAt:
-                  type: string
-                  format: date-time
-                termsVersion:
-                  type: string
-                specs:
-                  type: object
-                  additionalProperties: true
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - quoteId
+            - productVersion
+            - payableFen
+            - currency
+            - expiresAt
+            - termsVersion
+            properties:
+              quoteId:
+                type: string
+                format: uuid
+              productVersion:
+                type: integer
+              listPriceFen:
+                type: integer
+              discountFen:
+                type: integer
+              creditFen:
+                type: integer
+              payableFen:
+                type: integer
+              currency:
+                type: string
+                enum:
+                - CNY
+              expiresAt:
+                type: string
+                format: date-time
+              termsVersion:
+                type: string
+              specs:
+                type: object
+                additionalProperties: true
     CreateOrderRequest:
       type: object
-      required: [quoteId, acceptedTermsVersion, returnContext]
+      required:
+      - quoteId
+      - acceptedTermsVersion
+      - returnContext
       properties:
         quoteId:
           type: string
@@ -1149,7 +4197,8 @@ components:
           type: string
         returnContext:
           type: object
-          required: [pageId]
+          required:
+          - pageId
           properties:
             pageId:
               type: string
@@ -1158,33 +4207,62 @@ components:
               format: uuid
     Order:
       type: object
-      required: [id, status, paymentState, fulfillmentState, payableFen, currency]
+      required:
+      - id
+      - status
+      - paymentState
+      - fulfillmentState
+      - payableFen
+      - currency
       properties:
         id:
           type: string
           format: uuid
         status:
           type: string
-          enum: [pending_payment, paid, cancelled, closed]
+          enum:
+          - pending_payment
+          - paid
+          - cancelled
+          - closed
         paymentState:
           type: string
-          enum: [created, pending, succeeded, failed]
+          enum:
+          - created
+          - pending
+          - succeeded
+          - failed
         fulfillmentState:
           type: string
-          enum: [pending, activating, processing, delivered, failed]
+          enum:
+          - pending
+          - activating
+          - processing
+          - delivered
+          - failed
         refundState:
           type: string
-          enum: [none, requested, processing, succeeded, rejected, failed]
+          enum:
+          - none
+          - requested
+          - processing
+          - succeeded
+          - rejected
+          - failed
         payableFen:
           type: integer
         paidFen:
           type: integer
         currency:
           type: string
-          enum: [CNY]
+          enum:
+          - CNY
         channel:
           type: string
-          enum: [wechat_h5]
+          enum:
+          - wechat_h5
+          - wechat_jsapi
+          - stripe_checkout
           nullable: true
         providerTradeNo:
           type: string
@@ -1197,62 +4275,59 @@ components:
           format: date-time
     OrderResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/Order"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/Order'
     OrderListResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/CursorPageOrder"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/CursorPageOrder'
     CursorPageOrder:
       type: object
-      required: [items, nextCursor]
+      required:
+      - items
+      - nextCursor
       properties:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/Order"
+            $ref: '#/components/schemas/Order'
         nextCursor:
           type: string
           nullable: true
     CreatePaymentRequest:
       type: object
-      required: [channel]
+      additionalProperties: false
       properties:
         channel:
           type: string
-          enum: [wechat_h5]
-    PaymentResponse:
-      allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [orderId, channel, h5Url, expiresAt, resultPath]
-              properties:
-                orderId:
-                  type: string
-                  format: uuid
-                channel:
-                  type: string
-                  enum: [wechat_h5]
-                h5Url:
-                  type: string
-                  format: uri
-                expiresAt:
-                  type: string
-                  format: date-time
-                resultPath:
-                  type: string
+          enum:
+          - wechat_h5
+          - wechat_jsapi
+          - stripe_checkout
+      required:
+      - channel
+    PaymentResponse: &id006
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentData'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
     CreateRefundRequest:
       type: object
-      required: [reason]
+      required:
+      - reason
       properties:
         reason:
           type: string
@@ -1263,57 +4338,82 @@ components:
           minimum: 1
     RefundResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [id, state, requestFen]
-              properties:
-                id:
-                  type: string
-                  format: uuid
-                state:
-                  type: string
-                  enum: [requested, reviewing, approved, processing, succeeded, rejected, failed]
-                requestFen:
-                  type: integer
-                providerRefundNo:
-                  type: string
-                  nullable: true
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - id
+            - state
+            - requestFen
+            properties:
+              id:
+                type: string
+                format: uuid
+              state:
+                type: string
+                enum:
+                - requested
+                - reviewing
+                - approved
+                - processing
+                - succeeded
+                - rejected
+                - failed
+              requestFen:
+                type: integer
+              providerRefundNo:
+                type: string
+                nullable: true
     EntitlementsResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [asOf, capabilities, storage]
-              properties:
-                asOf:
-                  type: string
-                  format: date-time
-                capabilities:
-                  type: object
-                  additionalProperties:
-                    type: boolean
-                storage:
-                  type: object
-                  required: [usedBytes, reservedBytes, limitBytes]
-                  properties:
-                    usedBytes:
-                      type: integer
-                    reservedBytes:
-                      type: integer
-                    limitBytes:
-                      type: integer
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - asOf
+            - capabilities
+            - storage
+            properties:
+              asOf:
+                type: string
+                format: date-time
+              capabilities:
+                type: object
+                additionalProperties:
+                  type: boolean
+              storage:
+                type: object
+                required:
+                - usedBytes
+                - reservedBytes
+                - limitBytes
+                properties:
+                  usedBytes:
+                    type: integer
+                  reservedBytes:
+                    type: integer
+                  limitBytes:
+                    type: integer
     CreateTicketRequest:
       type: object
-      required: [kind, subject, body]
+      required:
+      - kind
+      - subject
+      - body
       properties:
         kind:
           type: string
-          enum: [help, payment, refund, generation, privacy, report]
+          enum:
+          - help
+          - payment
+          - refund
+          - generation
+          - privacy
+          - report
         subject:
           type: string
           maxLength: 120
@@ -1323,42 +4423,2275 @@ components:
         orderId:
           type: string
           format: uuid
+        taskId: *id002
+        assetIds:
+          type: array
+          items: *id002
+          maxItems: 5
+        attachmentConsentId: *id002
     SupportTicket:
       type: object
-      required: [id, kind, status, createdAt]
+      required:
+      - id
+      - kind
+      - status
+      - createdAt
+      - subject
+      - body
+      - replies
+      - version
       properties:
         id:
           type: string
           format: uuid
         kind:
           type: string
-          enum: [help, payment, refund, generation, privacy, report]
+          enum:
+          - help
+          - payment
+          - refund
+          - generation
+          - privacy
+          - report
         status:
           type: string
-          enum: [open, waiting_user, waiting_staff, resolved, closed]
+          enum:
+          - open
+          - waiting_user
+          - waiting_staff
+          - resolved
+          - closed
         createdAt:
           type: string
           format: date-time
+        subject:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 5000
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketReply'
+        version:
+          type: integer
+          minimum: 1
     SupportTicketResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              $ref: "#/components/schemas/SupportTicket"
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/SupportTicket'
     SupportTicketListResponse:
       allOf:
-        - $ref: "#/components/schemas/BaseResponse"
-        - type: object
-          properties:
-            data:
-              type: object
-              required: [items, nextCursor]
-              properties:
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            type: object
+            required:
+            - items
+            - nextCursor
+            properties:
+              items:
+                type: array
                 items:
-                  type: array
-                  items:
-                    $ref: "#/components/schemas/SupportTicket"
-                nextCursor:
-                  type: string
-                  nullable: true
+                  $ref: '#/components/schemas/SupportTicket'
+              nextCursor:
+                type: string
+                nullable: true
+    Ack:
+      type: object
+      additionalProperties: false
+      properties:
+        accepted: *id003
+      required:
+      - accepted
+    VersionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - expectedVersion
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 2
+          maxLength: 1000
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - reason
+      - expectedVersion
+    UserPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName:
+          type: string
+          maxLength: 80
+        timezone:
+          type: string
+          maxLength: 80
+        fontSize:
+          type: string
+          enum:
+          - normal
+          - large
+      minProperties: 1
+    SessionView:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        deviceLabel:
+          type: string
+          maxLength: 120
+        createdAt: &id004
+          type: string
+          format: date-time
+        expiresAt: *id004
+        current: *id003
+      required:
+      - id
+      - deviceLabel
+      - createdAt
+      - expiresAt
+      - current
+    LegalDocument:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+          - terms
+          - privacy
+          - ai
+          - material
+          - refund
+        version:
+          type: string
+          maxLength: 80
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          maxLength: 100000
+        publishedAt: *id004
+      required:
+      - type
+      - version
+      - title
+      - body
+      - publishedAt
+    PublicStory:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        title:
+          type: string
+          maxLength: 200
+        excerpt:
+          type: string
+          maxLength: 1000
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        sourceLabel:
+          type: string
+          maxLength: 200
+        rightsReference:
+          type: string
+          maxLength: 200
+      required:
+      - id
+      - title
+      - excerpt
+      - imageUrl
+      - sourceLabel
+      - rightsReference
+    Home:
+      type: object
+      additionalProperties: false
+      properties:
+        publicStories:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicStory'
+        recentProfileId:
+          type: string
+          format: uuid
+          nullable: true
+        recentTaskId:
+          type: string
+          format: uuid
+          nullable: true
+        canCreateFreeProfile: *id003
+      required:
+      - publicStories
+      - recentProfileId
+      - recentTaskId
+      - canCreateFreeProfile
+    Preferences:
+      type: object
+      additionalProperties: false
+      properties:
+        callMe:
+          type: string
+          maxLength: 40
+        replyLength:
+          type: string
+          enum:
+          - short
+          - normal
+        voiceEnabled: *id003
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - callMe
+      - replyLength
+      - voiceEnabled
+      - version
+    PreferencesPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        callMe:
+          type: string
+          maxLength: 40
+        replyLength:
+          type: string
+          enum:
+          - short
+          - normal
+        voiceEnabled: *id003
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - expectedVersion
+    Member:
+      type: object
+      additionalProperties: false
+      properties:
+        userId: *id001
+        displayName:
+          type: string
+          maxLength: 80
+        role:
+          type: string
+          enum:
+          - owner
+          - editor
+          - viewer
+        status:
+          type: string
+          enum:
+          - active
+          - removed
+          - pending
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - userId
+      - displayName
+      - role
+      - status
+      - version
+    MemberPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum:
+          - editor
+          - viewer
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - role
+      - expectedVersion
+    InvitationCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          enum:
+          - editor
+          - viewer
+      required:
+      - role
+    Invitation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        profileId: *id001
+        displayName:
+          type: string
+          maxLength: 80
+        role:
+          type: string
+          enum:
+          - editor
+          - viewer
+        expiresAt: *id004
+        status:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - revoked
+          - expired
+        version:
+          type: integer
+          minimum: 1
+        inviteUrl:
+          type: string
+          format: uri
+      required:
+      - id
+      - profileId
+      - displayName
+      - role
+      - expiresAt
+      - status
+      - version
+    MemoryPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        body:
+          type: string
+          maxLength: 10000
+        visibility:
+          type: string
+          enum:
+          - private
+          - family
+        useForAi: *id003
+        activeForBasic: *id003
+        assetIds:
+          type: array
+          items: *id001
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - expectedVersion
+    MemoryCandidate:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        profileId: *id001
+        body:
+          type: string
+          maxLength: 10000
+        state:
+          type: string
+          enum:
+          - suggested
+          - confirmed
+          - rejected
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - profileId
+      - body
+      - state
+      - version
+    CandidateConfirm:
+      type: object
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+          maxLength: 10000
+        visibility:
+          type: string
+          enum:
+          - private
+          - family
+        useForAi: *id003
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - body
+      - visibility
+      - useForAi
+      - expectedVersion
+    Conversation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        profileId: *id001
+        epoch:
+          type: integer
+          minimum: 1
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - profileId
+      - epoch
+      - lastMessageAt
+    Message:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        conversationId: *id001
+        role:
+          type: string
+          enum:
+          - user
+          - assistant
+        text:
+          type: string
+          maxLength: 30000
+        assetId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum:
+          - queued
+          - generating
+          - completed
+          - failed
+          - cancelled
+        epoch:
+          type: integer
+          minimum: 1
+        createdAt: *id004
+      required:
+      - id
+      - conversationId
+      - role
+      - text
+      - assetId
+      - status
+      - epoch
+      - createdAt
+    ClearConversation:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedEpoch:
+          type: integer
+          minimum: 1
+      required:
+      - expectedEpoch
+    AssetAccess:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+        expiresAt: *id004
+        mimeType:
+          type: string
+          maxLength: 120
+      required:
+      - url
+      - expiresAt
+      - mimeType
+    Tool:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          maxLength: 80
+        name:
+          type: string
+          maxLength: 100
+        enabled: *id003
+        disabledReason:
+          type: string
+          nullable: true
+        productCode:
+          type: string
+          maxLength: 80
+        acceptedMimeTypes:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+        maxInputBytes: &id005
+          type: integer
+          minimum: 0
+      required:
+      - code
+      - name
+      - enabled
+      - disabledReason
+      - productCode
+      - acceptedMimeTypes
+      - maxInputBytes
+    PreflightRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum:
+          - enhance
+        assetIds:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: *id001
+        profileId: *id001
+        consentId: *id001
+      required:
+      - kind
+      - assetIds
+      - consentId
+    Preflight:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        inputRevision:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - ready
+          - rejected
+        reason:
+          type: string
+          nullable: true
+        expiresAt: *id004
+        productCode:
+          type: string
+          maxLength: 80
+      required:
+      - id
+      - inputRevision
+      - status
+      - reason
+      - expiresAt
+      - productCode
+    Task:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        kind:
+          type: string
+          maxLength: 80
+        status:
+          type: string
+          enum:
+          - queued
+          - preflight
+          - submitted
+          - processing
+          - verifying
+          - succeeded
+          - partial
+          - retry_wait
+          - reconciling
+          - failed
+          - cancelled
+        requiredOutputs:
+          type: integer
+          minimum: 1
+        completedOutputs: *id005
+        workIds:
+          type: array
+          items: *id001
+        errorCode:
+          type: string
+          nullable: true
+        retryable: *id003
+        updatedAt: *id004
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - kind
+      - status
+      - requiredOutputs
+      - completedOutputs
+      - workIds
+      - errorCode
+      - retryable
+      - updatedAt
+      - version
+    Work:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        taskId: *id001
+        profileId:
+          type: string
+          format: uuid
+          nullable: true
+        outputAssetId: *id001
+        kind:
+          type: string
+          maxLength: 80
+        aiGenerated: *id003
+        createdAt: *id004
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - taskId
+      - profileId
+      - outputAssetId
+      - kind
+      - aiGenerated
+      - createdAt
+      - version
+    SaveWork:
+      type: object
+      additionalProperties: false
+      properties:
+        profileId: *id001
+        visibility:
+          type: string
+          enum:
+          - private
+          - family
+        useForAi: *id003
+      required:
+      - profileId
+      - visibility
+      - useForAi
+    Notification:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        kind:
+          type: string
+          maxLength: 80
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          maxLength: 1000
+        pageId:
+          type: string
+          maxLength: 10
+        targetId:
+          type: string
+          format: uuid
+          nullable: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: *id004
+      required:
+      - id
+      - kind
+      - title
+      - body
+      - pageId
+      - targetId
+      - readAt
+      - createdAt
+    ReadNotifications:
+      type: object
+      additionalProperties: false
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: *id001
+      required:
+      - ids
+    Consent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        purpose:
+          type: string
+          enum:
+          - terms
+          - privacy
+          - ai
+          - material
+          - voice
+          - public
+          - marketing
+        version:
+          type: string
+          maxLength: 80
+        profileId:
+          type: string
+          format: uuid
+          nullable: true
+        assetIds:
+          type: array
+          items: *id001
+        grantedAt: *id004
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id
+      - purpose
+      - version
+      - profileId
+      - assetIds
+      - grantedAt
+      - revokedAt
+    ConsentCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        purpose:
+          type: string
+          enum:
+          - terms
+          - privacy
+          - ai
+          - material
+          - voice
+          - public
+          - marketing
+        version:
+          type: string
+          maxLength: 80
+        profileId: *id001
+        assetIds:
+          type: array
+          items: *id001
+        agreed:
+          type: boolean
+          enum:
+          - true
+      required:
+      - purpose
+      - version
+      - agreed
+    ExportCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        scope:
+          type: string
+          enum:
+          - account
+          - profile
+          - conversation
+        profileId: *id001
+        conversationId: *id001
+        includeAssets: *id003
+      required:
+      - scope
+      - includeAssets
+    Export:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - ready
+          - failed
+          - expired
+          - cancelled
+        scope:
+          type: string
+          enum:
+          - account
+          - profile
+          - conversation
+        createdAt: *id004
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+      required:
+      - id
+      - status
+      - scope
+      - createdAt
+      - expiresAt
+      - errorCode
+    DeletionCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        confirm:
+          type: boolean
+          enum:
+          - true
+        reauthChallengeId: *id001
+        reauthCode:
+          type: string
+          pattern: ^[0-9]{6}$
+        reason:
+          type: string
+          maxLength: 1000
+      required:
+      - confirm
+      - reauthChallengeId
+      - reauthCode
+    Deletion:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        targetType:
+          type: string
+          enum:
+          - user
+          - profile
+        targetId: *id001
+        status:
+          type: string
+          enum:
+          - requested
+          - access_revoked
+          - processing
+          - completed
+          - failed
+        createdAt: *id004
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+      required:
+      - id
+      - targetType
+      - targetId
+      - status
+      - createdAt
+      - completedAt
+      - errorCode
+    HelpItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          maxLength: 80
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+          maxLength: 10000
+        updatedAt: *id004
+      required:
+      - id
+      - title
+      - body
+      - updatedAt
+    TicketReplyRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        assetIds:
+          type: array
+          maxItems: 5
+          items: *id001
+        attachmentConsentId: *id001
+      required:
+      - body
+    TicketReply:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        ticketId: *id001
+        authorType:
+          type: string
+          enum:
+          - user
+          - support
+        body:
+          type: string
+          maxLength: 5000
+        assetIds:
+          type: array
+          items: *id001
+        createdAt: *id004
+      required:
+      - id
+      - ticketId
+      - authorType
+      - body
+      - assetIds
+      - createdAt
+    Capabilities:
+      type: object
+      additionalProperties: false
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentCapability'
+      required:
+      - channels
+    PaymentCapability:
+      type: object
+      additionalProperties: false
+      properties:
+        channel:
+          type: string
+          enum:
+          - wechat_h5
+          - wechat_jsapi
+          - stripe_checkout
+        enabled: *id003
+        actionType:
+          type: string
+          enum:
+          - redirect
+          - wechat_jsapi
+        disabledReason:
+          type: string
+          nullable: true
+      required:
+      - channel
+      - enabled
+      - actionType
+      - disabledReason
+    RedirectAction:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+          - redirect
+        url:
+          type: string
+          format: uri
+      required:
+      - type
+      - url
+    JsapiAction:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+          - wechat_jsapi
+        appId:
+          type: string
+          maxLength: 100
+        timeStamp:
+          type: string
+          maxLength: 40
+        nonceStr:
+          type: string
+          maxLength: 100
+        package:
+          type: string
+          maxLength: 200
+        signType:
+          type: string
+          enum:
+          - RSA
+        paySign:
+          type: string
+          maxLength: 2000
+      required:
+      - type
+      - appId
+      - timeStamp
+      - nonceStr
+      - package
+      - signType
+      - paySign
+    PaymentData:
+      type: object
+      additionalProperties: false
+      properties:
+        orderId: *id001
+        channel:
+          type: string
+          enum:
+          - wechat_h5
+          - wechat_jsapi
+          - stripe_checkout
+        expiresAt: *id004
+        resultPath:
+          type: string
+          maxLength: 1000
+        action:
+          oneOf:
+          - $ref: '#/components/schemas/RedirectAction'
+          - $ref: '#/components/schemas/JsapiAction'
+          discriminator:
+            propertyName: type
+      required:
+      - orderId
+      - channel
+      - expiresAt
+      - resultPath
+      - action
+    PaymentDataResult: *id006
+    RefundView:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        orderId: *id001
+        requestFen: *id005
+        state:
+          type: string
+          enum:
+          - requested
+          - reviewing
+          - approved
+          - processing
+          - succeeded
+          - rejected
+          - failed
+        reason:
+          type: string
+          maxLength: 500
+        createdAt: *id004
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - orderId
+      - requestFen
+      - state
+      - reason
+      - createdAt
+      - version
+    AdminUser:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        displayName:
+          type: string
+          maxLength: 80
+        maskedPhone:
+          type: string
+          maxLength: 40
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+          - deleting
+          - deleted
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - displayName
+      - maskedPhone
+      - status
+      - version
+    ProductCreateVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        priceFen: *id005
+        durationDays:
+          type: integer
+          minimum: 1
+        storageBytes: *id005
+        maxFamilyMembers:
+          type: integer
+          minimum: 1
+        termsVersion:
+          type: string
+          maxLength: 80
+        reason:
+          type: string
+          maxLength: 1000
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - priceFen
+      - durationDays
+      - storageBytes
+      - maxFamilyMembers
+      - termsVersion
+      - reason
+      - expectedVersion
+    PublishProduct:
+      type: object
+      additionalProperties: false
+      properties:
+        productVersion:
+          type: integer
+          minimum: 1
+        termsApprovalId: *id001
+        acceptanceRecordIds:
+          type: array
+          items: *id001
+        reason:
+          type: string
+          maxLength: 1000
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - productVersion
+      - termsApprovalId
+      - acceptanceRecordIds
+      - reason
+      - expectedVersion
+    Compensation:
+      type: object
+      additionalProperties: false
+      properties:
+        ticketId: *id001
+        grantType:
+          type: string
+          enum:
+          - memory
+          - storage
+        durationDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+        reason:
+          type: string
+          maxLength: 1000
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - ticketId
+      - grantType
+      - durationDays
+      - reason
+      - expectedVersion
+    RefundDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+        reason:
+          type: string
+          maxLength: 1000
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - decision
+      - reason
+      - expectedVersion
+    ReconciliationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+          format: date
+        providerAccountId:
+          type: string
+          maxLength: 100
+        channel:
+          type: string
+          enum:
+          - wechat_h5
+          - wechat_jsapi
+          - stripe_checkout
+      required:
+      - date
+      - providerAccountId
+      - channel
+    Reconciliation:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - completed
+          - failed
+        channel:
+          type: string
+          maxLength: 60
+        date:
+          type: string
+          format: date
+        differenceCount: *id005
+        createdAt: *id004
+      required:
+      - id
+      - status
+      - channel
+      - date
+      - differenceCount
+      - createdAt
+    ReconciliationItem:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        runId: *id001
+        kind:
+          type: string
+          maxLength: 100
+        orderId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum:
+          - open
+          - resolved
+        amountFen: *id005
+        currency:
+          type: string
+          enum:
+          - CNY
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - runId
+      - kind
+      - orderId
+      - status
+      - amountFen
+      - currency
+      - version
+    ResolveDifference:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+        resolutionType:
+          type: string
+          enum:
+          - replay
+          - refund
+          - compensation
+          - verified_no_change
+        evidenceReference:
+          type: string
+          maxLength: 200
+        expectedVersion:
+          type: integer
+          minimum: 1
+      required:
+      - reason
+      - resolutionType
+      - evidenceReference
+      - expectedVersion
+    DataRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        kind:
+          type: string
+          enum:
+          - export
+          - delete
+        requesterId: *id001
+        status:
+          type: string
+          maxLength: 60
+        createdAt: *id004
+        errorCode:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+      required:
+      - id
+      - kind
+      - requesterId
+      - status
+      - createdAt
+      - errorCode
+      - version
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        actorId: *id001
+        scope:
+          type: string
+          maxLength: 100
+        action:
+          type: string
+          maxLength: 100
+        targetType:
+          type: string
+          maxLength: 100
+        targetId:
+          type: string
+          maxLength: 100
+        reason:
+          type: string
+          maxLength: 1000
+        traceId:
+          type: string
+          maxLength: 128
+        createdAt: *id004
+      required:
+      - id
+      - actorId
+      - scope
+      - action
+      - targetType
+      - targetId
+      - reason
+      - traceId
+      - createdAt
+    HomeResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Home'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    LegalDocumentResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/LegalDocument'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    UserResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    AckResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Ack'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    SessionViewPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionView'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    SessionViewPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionViewPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    PreferencesResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Preferences'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    MemberPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    MemberPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/MemberPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    MemberResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Member'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    InvitationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Invitation'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    MemoryResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Memory'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    MemoryCandidatePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryCandidate'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    MemoryCandidatePageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/MemoryCandidatePage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    AssetAccessResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AssetAccess'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ConversationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Conversation'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    MessagePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    MessagePageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/MessagePage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    GenerationResponseResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/GenerationResponse'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ToolPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tool'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ToolPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ToolPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    PreflightResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Preflight'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    TaskResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Task'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    WorkPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Work'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    WorkPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/WorkPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    WorkResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Work'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ProductVersionPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVersion'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ProductVersionPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductVersionPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ProductVersionResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ProductVersion'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    OrderResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Order'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    RefundViewResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/RefundView'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    EntitlementsResponseResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/EntitlementsResponse'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    NotificationPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    NotificationPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/NotificationPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ConsentPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Consent'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ConsentPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ConsentPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ConsentResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Consent'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ExportPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Export'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ExportPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ExportPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ExportResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Export'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    DeletionResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Deletion'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    HelpItemPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HelpItem'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    HelpItemPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/HelpItemPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    SupportTicketResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SupportTicket'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    TicketReplyResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/TicketReply'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    CapabilitiesResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Capabilities'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    AdminUserPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    AdminUserPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminUserPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ProfilePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Profile'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ProfilePageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfilePage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    OrderPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    OrderPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/OrderPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    RefundViewPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RefundView'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    RefundViewPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/RefundViewPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    TaskPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    TaskPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/TaskPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    SupportTicketPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportTicket'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    SupportTicketPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/SupportTicketPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ReconciliationPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reconciliation'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ReconciliationPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconciliationPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ReconciliationItemPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciliationItem'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    ReconciliationItemPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconciliationItemPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    DataRequestPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataRequest'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    DataRequestPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/DataRequestPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    AuditEventPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+      - items
+      - nextCursor
+    AuditEventPageResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AuditEventPage'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    AdminUserResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminUser'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ReconciliationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/Reconciliation'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    ReconciliationItemResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconciliationItem'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+    DataRequestResult:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/DataRequest'
+        traceId:
+          type: string
+          maxLength: 128
+      required:
+      - data
+      - traceId
+security:
+- sessionCookie: []

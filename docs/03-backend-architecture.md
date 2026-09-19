@@ -63,9 +63,9 @@ JWT若使用短期access token，refresh token必须轮换、可撤销且服务�
 
 ## 5. 登录与跨端账号
 
-V1 H5 使用同站点 HttpOnly 安全会话 Cookie 并做 CSRF 防护，首期以手机号验证码登录为主；如后续增加微信内 H5 OAuth，身份仍通过(provider, app_id, subject)建立唯一Identity，不能把身份信息当支付凭证。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
+V1 H5 使用同站点 HttpOnly 安全会话 Cookie 并做 CSRF 防护，首期以手机号验证码登录为主；如V1启用微信内 H5 OAuth，身份仍通过(provider, app_id, subject)建立唯一Identity，不能把身份信息当支付凭证。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
 
-V2 才接入小程序code、openid和平台短期令牌。小程序身份不能提前混入V1支付逻辑，也不能假定不同appId的openid相同。
+V1 如启用微信内网页支付，补充公众号 OAuth 身份绑定，openid 必须属于配置的公众号 appid。V2 才接入小程序 code 与其身份；不同 appid 的 openid 不互换。
 
 ## 6. 服务、事务与可靠性
 
@@ -91,9 +91,9 @@ BullMQ官方要求任务在重试时保持幂等；本方案额外用数据库�
 | Storage | 受控上传、私有读取、删除、校验对象属性 |
 | Push | 用户授权检查、发送、状态、不支持时退回站内消息 |
 
-V1 只实现 wechat_h5 支付适配器，覆盖普通手机浏览器和微信内置浏览器的真实联调。H5 下单由服务端调用微信 H5 支付接口，传入服务端计算的金额、订单号、HTTPS回调地址、可信用户IP和H5场景信息，返回短期 h5Url；前端跳转后必须回到订单结果页查服务端状态。
+首期仍只做移动端 H5。支付按实际商户资格和容器选择：微信外浏览器用 wechat_h5，微信内网页用 wechat_jsapi；已有受支持地区且获准收款的 Stripe 账号时可启用 stripe_checkout。所有通道默认关闭，完成对应验收才发布。JSAPI 网页支付不是小程序开发；小程序 code 登录与 wx.requestPayment 留到 V2。通道选择及资格见[支付路由与 Stripe](16-payment-routing-and-stripe.md)。
 
-Payment 适配器至少提供：创建H5预支付、验签解密支付/退款回调、按商户订单号或渠道交易号查单、关单、申请退款、查退款、申请交易账单和校验账单摘要。V2 再增加 wechat_mini_program，不改订单、权益和退款核心。供应商输出不直接作为前端长期链接保存，必须转存并检查结果。详细字段见[微信 H5 支付实施](11-wechat-h5-payment.md)。
+Payment 适配器实现 createPrepay/query/close/refund/queryRefund/reconcile；返回统一 PaymentAction。签名、Webhook 事件、金额单位和原始状态由各适配器处理。交易核心按 providerAccountId + providerObjectId 去重；不同渠道不能共用签名密钥。供应商结果须转存并检查后才能交付。
 
 ## 8. 部署与运维建议
 
@@ -104,3 +104,7 @@ Payment 适配器至少提供：创建H5预支付、验签解密支付/退款回
 PostgreSQL事务是最终账本；缓存失效不得把过期权益变为有效。媒体访问短时有效；缓存不能绕过授权。备份恢复后先重放删除墓碑，再开放应用，避免已删数据重新可见。
 
 初始内部目标：核心元数据API p95小于500ms（不含模型/上传）；50并发会话试压无越权和重复交付。以上是验收目标，不是已测结果。模型首字、总时长分别监控，不向用户承诺无依据的固定完成秒数。
+
+
+
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。

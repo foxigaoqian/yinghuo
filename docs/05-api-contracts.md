@@ -19,7 +19,7 @@
 |---|---|---|
 | 公共 | GET /bootstrap；GET /home；GET /legal/{type} | 能力开关、当前商品版本/协议版本、首页状态 |
 | 登录 | POST /auth/otp；POST /auth/otp/verify | phone+purpose；challengeId+code，建立会话 |
-| 平台身份（V2） | POST /auth/wechat；POST /auth/identities/link | V1不实现；保留给小程序或后续H5 OAuth迁移，V1前端不得依赖 |
+| 平台身份（按通道启用） | GET /auth/wechat/authorize；GET /auth/wechat/callback | V1仅在wechat_jsapi启用时实现公众号OAuth；小程序登录V2 |
 | 会话 | POST /auth/refresh；POST /auth/logout；GET /me/sessions；DELETE /me/sessions/{id} | 轮换、撤销本人会话 |
 | 账号 | GET/PATCH /me | 个人昵称/公开简介/时区/字号；手机号变更另验证 |
 | 人物 | GET/POST /profiles；GET/PATCH /profiles/{id} | 称呼、可选关系；返回draft/active及capabilities |
@@ -41,9 +41,9 @@
 | 任务 | GET /tasks/{id}；POST /tasks/{id}/retry | 订单派生生成自动入队，不通过前端“支付成功”启动 |
 | 作品 | GET /works；GET /works/{id}；POST /works/{id}/save-to-profile；DELETE /works/{id} | 归属校验；保存TA时检查容量与权限 |
 | 商品 | GET /products；GET /products/{code} | 生效版本、真实售价、可售状态、适用渠道 |
-| 交易 | POST /quotes；POST /orders；POST /orders/{id}/payment | 商品+目标+输入版本→报价；quoteId→订单；V1仅wechat_h5→返回h5Url |
+| 交易 | POST /quotes；POST /orders；POST /orders/{id}/payment | 商品+目标+输入版本→报价；quoteId→订单；已开通channel→返回PaymentAction |
 | 查单 | GET /orders；GET /orders/{id}；POST /orders/{id}/reconcile；POST /orders/{id}/cancel | 订单buyer才可读；reconcile有频控、仅可信渠道查单 |
-| 回调 | POST /payments/{channel}/notify；POST /refunds/{channel}/notify | V1微信H5无用户会话；原始body验签、解密、防重放、业务核对；成功返回200，处理失败返回4xx/5xx |
+| 回调 | POST /payments/{channel}/notify；POST /refunds/{channel}/notify | 渠道回调无用户会话；原始body验签、解密、防重放、业务核对；成功返回200，处理失败返回4xx/5xx |
 | 售后 | POST /orders/{id}/refunds；GET /refunds/{id} | reason/requestFen?/supportingAssetIds；后端核可退额 |
 | 权益 | GET /profiles/{id}/entitlements；GET /me/services | 当前能力、到期时间、容量、留声slot；不返回分钟余额 |
 | 社区 | GET/POST /posts；GET/PATCH/DELETE /posts/{id}；POST /posts/{id}/publish | 草稿版本、公开副本与授权；已审核版本才可公开 |
@@ -108,7 +108,7 @@ POST /uploads：`{profileId?,purpose:"memory_original",filename,mimeType,sizeByt
 
 ### 微信 H5 支付参数
 
-V1 只接受 channel:"wechat_h5"。客户端请求：
+V1 接受已启用的 wechat_h5 / wechat_jsapi / stripe_checkout。以下为微信外浏览器示例；统一响应契约以12和16为准。客户端请求：
 
 ~~~json
 {"channel":"wechat_h5"}
@@ -121,7 +121,7 @@ V1 只接受 channel:"wechat_h5"。客户端请求：
   "data": {
     "orderId": "<uuid>",
     "channel": "wechat_h5",
-    "h5Url": "https://pay.weixin.qq.com/...",
+    "action": {"type": "redirect", "url": "https://pay.weixin.qq.com/..."},
     "expiresAt": "<RFC3339>",
     "resultPath": "/pages/billing/result?orderId=<uuid>"
   },
@@ -129,11 +129,11 @@ V1 只接受 channel:"wechat_h5"。客户端请求：
 }
 ~~~
 
-客户端将 h5Url 交给浏览器跳转；不得自行拼金额、商户号、回调地址或任意 return URL。支付返回页只请求 GET /orders/{id}，必要时请求一次 POST /orders/{id}/reconcile，最终以服务端支付状态为准。
+客户端按 action.type 执行，redirect 将 action.url 交给浏览器跳转；不得自行拼金额、商户号、回调地址或任意 return URL。支付返回页只请求 GET /orders/{id}，必要时请求一次 POST /orders/{id}/reconcile，最终以服务端支付状态为准。
 
 服务端下单必须从订单读取 appid、mchid、notify_url、description、out_trade_no、time_expire、amount、scene_info.payer_client_ip 和 scene_info.h5_info。用户IP只能来自可信代理链；缺失或不可信时返回 WECHAT_CLIENT_IP_MISSING。notify_url必须是生产配置的HTTPS回调地址，不能让客户端提交。
 
-小程序 JSAPI 参数、openid和 wx.requestPayment 不属于V1接口；V2新增 wechat_mini_program 时再扩展 payment response，不改变订单和权益接口。
+公众号openid和网页JSAPI属于V1条件通道；小程序code与wx.requestPayment留到V2。Stripe Checkout也复用PaymentAction，不改订单和权益接口。
 
 ### 权益
 
@@ -166,3 +166,7 @@ GET entitlements返回`{profileId,asOf,capabilities,storage:{usedBytes,reservedB
 读写权限分离，金额调整、退款、授权素材查看必须填原因且有审计。禁止后台提供任意SQL执行或绕过支付账本的“直接改会员到期日”；人工补偿走补偿grant事件。普通客服不能修改商品售价或导出全部用户资料。
 
 实施第一步将本目录转成OpenAPI，先覆盖A和B阶段；后续在CI检查生成客户端与服务端契约一致。本文示例的尖括号值为占位，不是可执行测试凭据。
+
+
+
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。

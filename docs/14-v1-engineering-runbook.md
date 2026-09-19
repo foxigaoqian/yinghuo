@@ -10,7 +10,7 @@
 - 移动端 H5：登录、创建TA、保存记忆、文字对话、照片/故事上传；
 - 基础权限：TA空间、家庭成员、私人聊天和素材隔离；
 - 作品入口：至少一种经过样片验收的影像工具；
-- 商品、报价、订单、微信 H5 支付、订单恢复、退款申请；
+- 商品、报价、订单、按16验收的支付通道、订单恢复、退款申请；
 - 服务端回调、主动查单、Outbox、Worker、权益激活；
 - 后台：用户/空间、商品/权益、订单/退款/对账、任务、工单；
 - 数据导出、删除、撤销AI/声音授权；
@@ -18,7 +18,7 @@
 
 ### V1 明确不做
 
-- 微信小程序 code、openid、JSAPI 支付、wx.requestPayment；
+- 微信小程序 code 登录、小程序 openid 和 wx.requestPayment（公众号 openid 与网页 JSAPI 属于 V1 条件通道）；
 - 小程序原生录音、订阅消息和小程序分享；
 - 实时电话、实时视频、复杂数字人；
 - 自动续费和按分钟计费；
@@ -44,7 +44,7 @@ yinghuo/
 │   ├── docker/
 │   └── deploy/
 ├── docs/
-│   ├── openapi.yaml
+│   ├── 12-openapi.yaml
 │   └── ...
 ├── pnpm-workspace.yaml
 ├── package.json
@@ -60,7 +60,7 @@ yinghuo/
 默认候选：
 
 - Node.js 24.x，确定补丁版本后写入 .nvmrc 或 mise 配置；
-- pnpm 10.x，版本写入 packageManager；
+- 用户端候选pnpm 10.x；若采用Vben，其独立包要求按08核验，不能强行共用10.x。M0构建通过后固定版本/锁文件；
 - PostgreSQL 16+；
 - Redis兼容服务，仅用于队列和短期缓存；
 - S3兼容私有对象存储；
@@ -385,4 +385,12 @@ API进入只读或维护页；不接受新的收费、退款和删除请求，�
 - 内容安全事件和授权撤回处理结果；
 - H5用户明确存在原生录音、分享或订阅消息需求。
 
-V2 新增小程序身份、JSAPI 支付、原生媒体能力和真机验收；订单、权益、退款、对账和后台交易核心保持不变。
+V2 新增小程序身份、wx.requestPayment 和原生媒体能力；网页JSAPI和H5真机验收在V1完成；订单、权益、退款、对账和后台交易核心保持不变。
+
+
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
+
+
+### V1.1增加的服务端配置
+
+PAYMENT_CHANNELS、STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_ACCOUNT_ID、STRIPE_API_VERSION、STRIPE_CHECKOUT_ENABLED=false；WECHAT_JSAPI_ENABLED=false、WECHAT_OFFICIAL_APPID、WECHAT_OFFICIAL_SECRET、WECHAT_OAUTH_CALLBACK；ADMIN_OIDC_ISSUER、ADMIN_OIDC_CLIENT_ID、ADMIN_OIDC_CLIENT_SECRET、ADMIN_OIDC_REDIRECT_URI。生产密钥不写入本文件。管理端与用户端Cookie隔离；统一API路径见12。

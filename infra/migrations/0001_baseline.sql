@@ -1,43 +1,5 @@
-# 萤火 V1 数据库实施规格
-
-版本：V1.1（下方代码为0001基线；最终结构必须同时应用0002）  
-数据库：PostgreSQL 16+  
-适用范围：移动端 H5 A/B，按资格开放支付通道，NestJS API + Worker
-
-本文把 04 数据模型中的概念表落到可执行的 PostgreSQL 设计。正式迁移前仍需在 staging 使用真实数据库跑迁移、回滚和恢复演练；本文不包含任何真实用户数据或生产密钥。
-
-## 1. 数据库原则
-
-- 主键统一使用 UUID；服务端生成，不接受前端指定业务主键。
-- 时间统一使用 timestamptz 存 UTC；用户时区只用于展示和纪念日计算。
-- 金额统一使用 bigint 人民币分；不使用浮点数。
-- 重要业务状态使用枚举或受约束的 text；禁止前端直接写状态。
-- 可编辑对象使用 version 乐观锁；交易、权益、账本和审计记录追加写入。
-- 私有数据依赖服务端授权查询；不把 PostgreSQL 行可见性误当成完整业务权限。
-- 付款、退款、权益和交付分别保存；不使用一个 paid 字段覆盖整个交易生命周期。
-- 删除采用状态、撤权、异步清理和最小审计记录分层处理。
-
-## 2. 迁移顺序
-
-~~~text
-0001_baseline.sql    # 本文基础表
-0002_v1_gaps.sql     # A/B补充与统一支付
-../seed/0001_development.sql  # 仅开发环境，可选
-~~~
-
-每个迁移必须：
-
-1. 可重复执行或明确记录版本；
-2. 先向前兼容，再发布依赖新字段的应用；
-3. 不在迁移中调用模型、支付或媒体供应商；
-4. 在 staging 备份恢复副本上验证；
-5. 记录执行人、版本、开始时间、耗时和结果。
-
-## 3. 扩展与枚举
-
-首期只需要 pgcrypto；向量检索等能力等选定 embedding 模型后再单独迁移。
-
-~~~sql
+-- V1.1 new-install baseline; not run against any production database.
+BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE user_status AS ENUM ('active', 'suspended', 'deleting', 'deleted');
@@ -53,13 +15,7 @@ CREATE TYPE fulfillment_state AS ENUM ('pending', 'activating', 'processing', 'd
 CREATE TYPE refund_state AS ENUM ('requested', 'reviewing', 'approved', 'processing', 'succeeded', 'rejected', 'failed');
 CREATE TYPE task_status AS ENUM ('queued', 'preflight', 'submitted', 'processing', 'verifying', 'succeeded', 'partial', 'retry_wait', 'reconciling', 'failed', 'cancelled');
 CREATE TYPE outbox_status AS ENUM ('pending', 'processing', 'sent', 'failed');
-~~~
 
-## 4. 账号、身份和TA空间
-
-手机号原文不作为业务主键。手机号登录使用规范化值的安全摘要；如业务确实需要展示或变更手机号，使用受控加密字段，不在普通日志输出。
-
-~~~sql
 CREATE TABLE app_users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   display_name varchar(80) NOT NULL DEFAULT '',
@@ -185,20 +141,7 @@ CREATE TABLE consents (
 
 CREATE INDEX consents_scope_lookup
   ON consents(user_id, profile_id, purpose, revoked_at);
-~~~
 
-约束要求：
-
-- profile_members 的 owner 数量、最多5名有效成员必须在事务中锁 profile 后检查；
-- invitation token 只保存 hash，接受时在事务内核验、消费和写成员；
-- profile 的 creator_user_id 不自动代表可读所有成员私聊；
-- V1公众号身份写identities(provider=wechat_official, app_id, subject=openid)；V2小程序使用独立provider/app_id。
-
-## 5. 上传、媒体和记忆
-
-对象存储 key 必须由服务端生成。数据库只保存对象元数据、授权和状态；访问对象前每次重新校验当前账号权限。
-
-~~~sql
 CREATE TABLE storage_scopes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES app_users(id),
@@ -300,13 +243,7 @@ CREATE TABLE memory_chunks (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(memory_id, memory_version, id)
 );
-~~~
 
-V1 先允许 embedding 为空，文本检索可以使用受控关键词或已确认条目；模型确定后再把 embedding jsonb 替换为固定维度的 pgvector 列和索引，不能在未确定维度时锁死生产结构。
-
-## 6. 对话与生成
-
-~~~sql
 CREATE TABLE conversations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   profile_id uuid NOT NULL REFERENCES profiles(id),
@@ -366,13 +303,7 @@ CREATE TABLE stream_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(generation_id, seq)
 );
-~~~
 
-清空私聊时只递增 conversations.epoch 并按策略隐藏旧消息；在途 generation 必须比较 epoch，旧任务不能重新写回当前对话。
-
-## 7. 商品、订单、支付和权益
-
-~~~sql
 CREATE TABLE products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code varchar(80) NOT NULL UNIQUE,
@@ -522,13 +453,7 @@ CREATE TABLE refund_requests (
 
 CREATE INDEX refunds_order_state
   ON refund_requests(order_id, state, created_at DESC);
-~~~
 
-支付回调事务必须锁 orders 行，校验订单金额和累计实收，再写 payments、payment_events、orders、entitlement_grants 和 outbox_events。前端跳转不能直接写任何支付状态。
-
-## 8. 异步任务、作品和 Outbox
-
-~~~sql
 CREATE TABLE tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   kind varchar(60) NOT NULL,
@@ -592,60 +517,5 @@ CREATE TABLE outbox_events (
 
 CREATE INDEX outbox_pending
   ON outbox_events(status, available_at, created_at);
-~~~
 
-Outbox 事件在业务事务中产生；Worker 领取使用租约，供应商超时先查状态，不依据网络异常盲目创建第二个任务。
-
-## 9. 幂等、索引与业务不变量
-
-必须在代码测试和数据库约束中同时保证：
-
-| 不变量 | 实现要求 |
-|---|---|
-| 一个手机号挑战不能被重复消费 | auth_challenges consumed_at + 行锁 |
-| 一个TA只有一个有效owner | partial unique index + 成员事务锁 |
-| 一个账号最多一个免费active TA | app_users行锁 + profiles查询 |
-| 同一消息不产生两条用户消息 | messages conversation_id + client_message_id唯一 |
-| 同一用户消息只有一条生成运行 | generation_runs.user_message_id唯一 |
-| 同一支付回调不重复落账 | payment_events channel + event_id唯一 |
-| 同一渠道交易不重复记账 | payments channel + provider_trade_no唯一 |
-| 同一订单权益不重复发放 | entitlement_grants order_item_id + type唯一 |
-| 累计退款不超过实付 | 锁订单后聚合退款成功/处理中金额 |
-| C1同一留声slot不重复消费 | C1新增package_slots迁移后再启用，A/B不销售 |
-| Outbox事件可重试 | status、attempts、available_at、last_error |
-
-金额聚合、库存/容量预留、成员人数和免费资格不能只靠前端或缓存判断。
-
-## 10. 删除、导出和备份
-
-- 删除TA先写删除请求、撤销新访问和检索资格，再异步清理媒体、衍生物和供应商音色。
-- 删除不应抹掉财务、退款、支付回调和最小审计记录。
-- 导出任务生成独立导出包；生成和下载时都重新检查当前权限。
-- 已经发出的短时下载地址无法保证远程收回，页面必须提前说明。
-- 备份恢复后重放删除墓碑；恢复演练必须验证已删除对象不会重新出现在 API 和对象存储索引。
-- 财务留存、原始素材、导出包和日志的实际保留期限由合规评审后写入配置，不在代码中硬编码“永久”。
-
-## 11. Schema 验收
-
-迁移完成后至少执行：
-
-- 并发创建免费TA，确认只成功一个active；
-- 并发接受最后一个邀请，确认不会出现第6个成员；
-- 重复微信回调和查单同时到达，确认只生成一个payment事实和一个grant；
-- 同时申请两个退款，确认累计金额不超过实付；
-- 上传超时释放reserved_bytes；
-- 清空对话后旧generation不能写回；
-- 删除TA后新读取、检索、导出都重新校验权限；
-- 从备份恢复后验证删除墓碑、支付账本和outbox状态。
-
-所有迁移在进入 B 阶段前必须有 staging 实测记录和回滚方案。
-
-
-> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
-
-
-## V1.1新增表与执行口径
-
-[0001](../infra/migrations/0001_baseline.sql)与[0002](../infra/migrations/0002_v1_gaps.sql)按顺序执行。0002补齐请求幂等、OAuth、候选记忆、任务租约与fencing、作品归属、素材预检、支付账号/尝试/争议/对账、导出删除/墓碑、消息工单、后台身份/审计/发布审批。列名统一status，API使用camelCase映射；同一作品一个deliveryIndex一个outputAssetId。基线旧result_asset_ids只作兼容列，V1新增交付以output_asset_id为准。C/D的credits、voice_profiles、package_slots、posts、reminders不在首发迁移，相关能力不得提前启用。
-
-补偿grant必须有compensationId、工单、原因和审批人；一般grant有orderItemId。两种来源互斥，不能无来源人工开会员。删除墓碑须另存不可变恢复日志，不能只和被恢复数据库同一时间点回滚；恢复开放前追平墓碑水位。
+COMMIT;

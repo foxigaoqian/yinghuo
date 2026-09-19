@@ -4,40 +4,17 @@
 状态：首期实施基线  
 适用产品：萤火移动端 H5
 
-> 本文把首期支付边界收敛为移动端 H5 + 微信 H5 支付。小程序支付不是首期交付条件。
+> 本文件只定义**微信直连 H5 适配器**，适用微信外手机浏览器。微信内网页用 wechat_jsapi；Stripe 是条件通道。完整路由、主体资格与开关见[16](16-payment-routing-and-stripe.md)。
 
-## 1. 目标与范围
+## 1. 范围与官方依据
 
-V1 只支持移动端 H5。用户可以在普通手机浏览器或微信内置浏览器完成：
+首期产品仍是H5；不做小程序、自动续费或按分钟计费。微信网页JSAPI不是小程序功能，不能放到V2才处理。用户支付返回只触发服务端查单。
 
-1. 登录；
-2. 创建TA、保存记忆和配置作品；
-3. 创建商品报价与订单；
-4. 通过微信 H5 支付完成付款；
-5. 回到订单结果页查看服务端核验状态；
-6. 通过作品库、订单列表和售后入口找回结果。
+- [微信网页JSAPI介绍](https://pay.wechatpay.cn/doc/v3/merchant/4012062524)
+- [JSAPI接入准备](https://pay.wechatpay.cn/doc/v3/merchant/4015423216)
+- [官方Java H5请求模型（协议参考）](https://github.com/wechatpay-apiv3/wechatpay-java/blob/main/service/src/main/java/com/wechat/pay/java/service/payments/h5/model/PrepayRequest.java)
 
-V1 不实现：
-
-- 小程序 code 登录、openid、wx.requestPayment；
-- 小程序 JSAPI 支付、Native 扫码支付；
-- 自动续费；
-- 按分钟计费；
-- 前端直接判断到账；
-- 以支付返回地址作为付款凭证。
-
-V2 只在 H5 真实转化、支付成功率、售后和内容安全数据达标后，再评估微信小程序迁移。届时新增 wechat_mini_program 适配器，不重写订单、权益、退款、对账和后台交易模块。
-
-官方参考：
-
-- [微信支付商户开发文档](https://pay.weixin.qq.com/doc/v3/merchant/4012062524)
-- [官方 Java SDK](https://github.com/wechatpay-apiv3/wechatpay-java)
-- [官方 H5 下单示例](https://github.com/wechatpay-apiv3/wechatpay-java/blob/main/service/src/example/java/com/wechat/pay/java/service/payments/h5/H5ServiceExample.java)
-- [H5 预支付请求模型](https://github.com/wechatpay-apiv3/wechatpay-java/blob/main/service/src/main/java/com/wechat/pay/java/service/payments/h5/model/PrepayRequest.java)
-- [H5 预支付响应模型](https://github.com/wechatpay-apiv3/wechatpay-java/blob/main/service/src/main/java/com/wechat/pay/java/service/payments/h5/model/PrepayResponse.java)
-- [官方账单下载服务](https://github.com/wechatpay-apiv3/wechatpay-java/tree/main/service/src/main/java/com/wechat/pay/java/service/billdownload)
-
-以上链接用于联调前核对当前字段和 SDK 行为；生产实现不得只依赖示例代码。
+本文件的h5_url和H5场景信息只用于微信外浏览器。Node实现锁定SDK/API版本后验证，不把Java示例当可直接使用的Node代码。
 
 ## 2. 商户配置清单
 
@@ -128,7 +105,7 @@ V2 只在 H5 真实转化、支付成功率、售后和内容安全数据达标�
 }
 ~~~
 
-实际字段以当前官方 API 和 SDK 返回为准。客户端只需要拿到 h5Url、订单号、结果页路径和过期时间，不应拿到签名私钥、APIv3 key、商户配置或内部回调地址。
+实际字段以当前官方 API 和 SDK 返回为准。客户端只需要拿到统一PaymentAction、订单号、结果页路径和过期时间，不应拿到签名私钥、APIv3 key、商户配置或内部回调地址。
 
 ## 5. 萤火 API 契约
 
@@ -159,7 +136,7 @@ V2 只在 H5 真实转化、支付成功率、售后和内容安全数据达标�
   "data": {
     "orderId": "<uuid>",
     "channel": "wechat_h5",
-    "h5Url": "https://pay.weixin.qq.com/...",
+    "action": {"type": "redirect", "url": "https://pay.weixin.qq.com/..."},
     "expiresAt": "<RFC3339>",
     "resultPath": "/pages/billing/result?orderId=<uuid>"
   },
@@ -333,7 +310,7 @@ P42/P43 订单列表和详情：
 ## 13. V1 上线验收清单
 
 - [ ] 普通手机浏览器完成创建订单和微信 H5 跳转；
-- [ ] 微信内置浏览器完成创建订单和微信 H5 跳转；
+- [ ] 微信内置浏览器使用已开通的网页JSAPI或已实测Stripe通道；不调用微信外H5适配器；
 - [ ] 正常支付、取消支付、支付页关闭、网络超时都能回到订单结果；
 - [ ] 回调验签/解密通过，伪造、篡改金额和重复回调被拒绝或幂等；
 - [ ] 回调与主动查单同时到达只发一次权益；
@@ -357,3 +334,6 @@ P42/P43 订单列表和详情：
 - 用独立的 V2 真机、审核和风控验收清单，不把 H5 已验收当作小程序已验收。
 
 小程序迁移的前提是 H5 已有可解释的支付转化、退款率、交付成功率和真实用户反馈。
+
+
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。

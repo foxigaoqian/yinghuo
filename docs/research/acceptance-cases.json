@@ -1,0 +1,254 @@
+[
+  {
+    "id": "V1-01",
+    "phase": "A",
+    "layer": "API",
+    "given": "A与B不同账号，A有TA甲",
+    "when": "B用甲的ID请求资料/素材/聊天",
+    "then": "均404，不返回正文、短链或对象存在细节",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-02",
+    "phase": "A",
+    "layer": "API",
+    "given": "A为TA甲owner，B为成员且有私人对话",
+    "when": "A请求B的conversationId",
+    "then": "404；owner权限不包含成员私聊",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-03",
+    "phase": "A",
+    "layer": "DB",
+    "given": "账号A未用免费资格",
+    "when": "两个并发POST /profiles",
+    "then": "仅一个免费active；另一个draft且requiresPlan=true",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-04",
+    "phase": "A",
+    "layer": "DB",
+    "given": "同一clientMessageId与Idempotency-Key",
+    "when": "断网后重复发送同一消息10次",
+    "then": "一条用户消息、一个当前generation；返回相同资源ID",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-05",
+    "phase": "A",
+    "layer": "API",
+    "given": "同一幂等键已用于body=X",
+    "when": "再用该键提交body=Y",
+    "then": "409 IDEMPOTENCY_CONFLICT，无新写入",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-06",
+    "phase": "A",
+    "layer": "AI",
+    "given": "记忆V1说喜欢面，用户更正V2喜欢饭",
+    "when": "下一次对话检索",
+    "then": "只使用V2，旧索引即使未删也不能命中",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-07",
+    "phase": "A",
+    "layer": "AI",
+    "given": "生成任务已检索一条授权记忆",
+    "when": "流式输出中撤销该记忆AI授权",
+    "then": "停止新delta及旧结果落库；不从旧回复补回事实",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-08",
+    "phase": "A",
+    "layer": "DB",
+    "given": "对话epoch=1有在途任务",
+    "when": "用户clear提交expectedEpoch=1后旧任务完成",
+    "then": "epoch=2；旧任务不能写回复活消息",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-09",
+    "phase": "A",
+    "layer": "DB",
+    "given": "空间剩余10MB",
+    "when": "两个并发上传各8MB",
+    "then": "只允许一个预留成功；过期上传释放预留",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-10",
+    "phase": "A",
+    "layer": "API",
+    "given": "家庭导出包已ready",
+    "when": "申请人被移除后请求download",
+    "then": "404；不生成新的可用下载链接",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-11",
+    "phase": "A",
+    "layer": "OPS",
+    "given": "用户资料已删除并写墓碑",
+    "when": "恢复旧备份再开放API",
+    "then": "先重放独立保存的删除墓碑；已删资料不可见",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-12",
+    "phase": "A",
+    "layer": "UI",
+    "given": "A登录后保存草稿再登出",
+    "when": "B登录并打开同一路由",
+    "then": "不能看到A草稿/私聊/上传参数",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-13",
+    "phase": "B",
+    "layer": "DB",
+    "given": "4人家庭上限5人",
+    "when": "两人并发接受邀请",
+    "then": "仅一个成功，另一个409 FAMILY_FULL",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-14",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "待付款订单，只有前端success_url返回",
+    "when": "访问支付结果页",
+    "then": "展示服务端实际pending，不发grant",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-15",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "同一渠道支付成功事件",
+    "when": "重复回调10次并同时查单",
+    "then": "一笔支付事实、一次grant、一次交付",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-16",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "Stripe Session completed但payment_status=unpaid",
+    "when": "接收Webhook",
+    "then": "不发权益；等待后续异步成功并核对金额",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-17",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "prod接收到test事件或金额/币种不符",
+    "when": "验签后业务校验",
+    "then": "拒绝入业务账，记异常；不发权益",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-18",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "Session创建超时且可能已受理",
+    "when": "用户切换到微信直连",
+    "then": "先恢复/查询旧attempt；未知时不创建第二通道尝试",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-19",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "本地订单已过期但渠道稍后确认付款",
+    "when": "接收可信成功回调",
+    "then": "资金事实不丢；重核后补交付或原渠道退款",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-20",
+    "phase": "B",
+    "layer": "DB",
+    "given": "实付9900分，无已退",
+    "when": "并发请求两笔各9900分退款",
+    "then": "只一笔占用可退额；成功和在途总额不超过9900",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-21",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "退款提交成功但渠道状态pending",
+    "when": "前端查看后收到refund.failed",
+    "then": "先展示处理中，失败后提供售后；不能提前显示到账",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-22",
+    "phase": "B",
+    "layer": "WORKER",
+    "given": "供应商提交超时但实际已接单",
+    "when": "Worker重试",
+    "then": "按submitKey/providerTaskId查询，不重复付费提交",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-23",
+    "phase": "B",
+    "layer": "WORKER",
+    "given": "旧worker租约过期，新worker拿到fencingToken+1",
+    "when": "旧worker返回成功",
+    "then": "旧token交付拒绝，唯一交付索引保持一份",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-24",
+    "phase": "B",
+    "layer": "WORKER",
+    "given": "4张样例任务仅交付2张（为后续扩展回归）",
+    "when": "执行补交付",
+    "then": "只补索引2和3，不再生成已成功0和1",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-25",
+    "phase": "B",
+    "layer": "ADMIN",
+    "given": "客服只有support.manage",
+    "when": "调用退款审批",
+    "then": "403；没有退款请求或权益修改",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-26",
+    "phase": "B",
+    "layer": "ADMIN",
+    "given": "工单没有附件授权",
+    "when": "客服索取私人assetId",
+    "then": "访问拒绝且有审计；不得扩大scope",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-27",
+    "phase": "B",
+    "layer": "PAYMENT",
+    "given": "启用的每个支付通道和四种移动端容器",
+    "when": "依次付款/取消/返回/关闭页面/退款",
+    "then": "记录真实查单、权益、退款和账单一致性；未通过组合保持关闭",
+    "status": "not_run"
+  },
+  {
+    "id": "V1-28",
+    "phase": "B",
+    "layer": "API",
+    "given": "支付商品未审批saleEnabled=false",
+    "when": "用户伪造商品码请求报价/下单",
+    "then": "422 PRODUCT_UNAVAILABLE，不能绕过前端隐藏",
+    "status": "not_run"
+  }
+]

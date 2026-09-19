@@ -12,17 +12,17 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 
 | 表 | 关键字段 | 约束/索引 |
 |---|---|---|
-| users | id, display_name, status, timezone, free_slot_consumed_at | 手机号不作主键；注销后登录拒绝 |
+| app_users | id, display_name, status, timezone, free_slot_consumed_at | 手机号不作主键；注销后登录拒绝 |
 | identities | user_id, provider, app_id, subject, verified_at, encrypted_phone | UNIQUE(provider,app_id,subject)；手机号索引用规范化值的安全摘要 |
 | auth_challenges | purpose, identity_hash, code_hash, expires_at, failures, consumed_at | 校验成功与consume同事务；避免双用 |
 | sessions | user_id, refresh_hash, expires_at, revoked_at, device_label | hash唯一，轮换旧token即撤销 |
-| profiles | id, creator_user_id, display_name, relationship, lifecycle, avatar_asset_id, status, version | status=draft/active/deleting/deleted；日期可空 |
+| profiles | id, creator_user_id, display_name, relationship, avatar_asset_id, status, version | status=draft/active/deleting/deleted；日期可空 |
 | profile_members | profile_id, user_id, role, status, joined_at, removed_at | UNIQUE(profile_id,user_id)；role=owner/editor/viewer；有效owner只有1个 |
 | profile_preferences | profile_id, user_id, call_me, reply_length, voice_enabled | UNIQUE(profile_id,user_id)，不是共享人物资料 |
 | invitations | profile_id, inviter_id, token_hash, intended_role, expires_at, accepted_by, status | token_hash唯一；一次性，默认7天，可撤销 |
 | consents | user_id, profile_id?, purpose, version, asset_scope, granted_at, revoked_at | 区分协议、AI使用、声音、公开发布和推送 |
 
-第二位TA先建draft，未付费不启用聊天/存储权益；支付开通与draft→active在同事务。首个免费资格通过锁users行发放，避免两个并发请求领两份。免费资格是否在用户主动删除后恢复尚待产品决定，默认不自动循环发放；开发不得静默改变这一规则。
+第二位TA先建draft，未付费不启用聊天/存储权益；支付开通与draft→active在同事务。首个免费资格通过锁app_users行发放，避免两个并发请求领两份。免费资格是否在用户主动删除后恢复尚待产品决定，默认不自动循环发放；开发不得静默改变这一规则。
 
 ## 3. 记忆、文件与聊天
 
@@ -53,7 +53,7 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 | quotes | actor_id, profile_id?, product_version_id, input_revision, price_breakdown, expires_at, status | 报价金额服务端计算；一般10分钟有效，未支付需重验 |
 | orders | buyer_id, profile_id?, quote_id, currency, payable_fen, status, fulfillment_status, expires_at, return_context | quote消费唯一；按(buyer_id,created_at,id)分页 |
 | order_items | order_id, product_version_id, spec_snapshot, gross_fen, discount_fen, credit_fen, payable_fen | 首发1单1商品也保留明细；快照不可改 |
-| payments | order_id, channel, out_trade_no, provider_trade_no, provider_state, currency, state, paid_fen, paid_at, payer_client_ip, h5_url_expires_at | V1 channel=wechat_h5；UNIQUE(channel,provider_trade_no)；可信回调或查单确认；不保存密钥 |
+| payments | order_id, channel, out_trade_no, provider_trade_no, provider_state, currency, state, paid_fen, paid_at, payer_client_ip, h5_url_expires_at | V1 channel=wechat_h5/wechat_jsapi/stripe_checkout（按资格启用）；UNIQUE(channel,provider_trade_no)；可信回调或查单确认；不保存密钥 |
 | payment_events | channel, event_id, event_type, provider_serial, payload_digest, verified_at, result | UNIQUE(channel,event_id)，原始请求体只按最小必要范围受控留存，严禁记录密钥 |
 | entitlement_grants | order_item_id, profile_id, beneficiary_user_id?, type, starts_at, ends_at, state, snapshot | 对每种权益UNIQUE(order_item_id,type)；共享能力与个人声音分开 |
 | entitlement_ledger | grant_id, event_type, delta, effective_at, source_id, revision | append-only；source事件唯一；停用/恢复都有流水 |
@@ -113,3 +113,7 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 删除整个TA需强确认，并说明对所有成员的共享访问和各自私聊的影响；提出导出选项但不能向创建者打包他人私聊。实施选择“成员各自导出窗口”或即时删除政策前，不开放一键不可逆全删。账号注销、TA删除和仅清空私聊是三个不同任务。
 
 财务留存周期、备份最长保留期和用户数据删除完成时限需在上线前确定，不在代码中随意使用“永久”或未核对的法定年限。恢复备份必须应用删除墓碑。
+
+
+
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。

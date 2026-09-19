@@ -1,0 +1,18 @@
+{
+  "status": "not_configured",
+  "text": {
+    "enabled": false, "provider": "mock", "baseUrl": null,
+    "model": null, "apiVersion": null, "secretEnvName": "TEXT_API_KEY",
+    "firstTokenTimeoutMs": 15000, "totalTimeoutMs": 90000, "maxRetries": 2,
+    "promptVersion": "chat-system-v1", "dataRegion": null,
+    "inputRetentionDays": null, "trainingUse": null,
+    "termsEvidenceReference": null, "evaluationEvidenceReference": null
+  },
+  "image": {
+    "enabled": false, "provider": "mock", "baseUrl": null,
+    "model": null, "secretEnvName": "IMAGE_API_KEY",
+    "taskDeadlineMs": 1800000, "supportsQuery": false,
+    "supportsDelete": false, "minimumLongEdge": 2048,
+    "costEvidenceReference": null, "evaluationEvidenceReference": null
+  }
+}

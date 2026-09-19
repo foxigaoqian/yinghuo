@@ -1,0 +1,735 @@
+{
+  "specVersion": "1.1.0",
+  "scope": "A/B including editorial P33",
+  "pages": [
+    {
+      "pageId": "P01",
+      "name": "首页",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_home",
+          "path": "/home",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_bootstrap",
+          "path": "/bootstrap",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P02",
+      "name": "登录",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_legal_type",
+          "path": "/legal/{type}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_auth_otp",
+          "path": "/auth/otp",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P03",
+      "name": "验证码",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "post_auth_otp_verify",
+          "path": "/auth/otp/verify",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P04",
+      "name": "协议阅读",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_legal_type",
+          "path": "/legal/{type}",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P05",
+      "name": "消息中心",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_notifications",
+          "path": "/notifications",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_notifications_read",
+          "path": "/notifications/read",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P06",
+      "name": "我的萤火",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_profiles",
+          "path": "/profiles",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P07",
+      "name": "快捷创建TA",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_bootstrap",
+          "path": "/bootstrap",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_profiles",
+          "path": "/profiles",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P08",
+      "name": "TA的萤火空间",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId",
+          "path": "/profiles/{profileId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_profiles_profileId_entitlements",
+          "path": "/profiles/{profileId}/entitlements",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P09",
+      "name": "人物资料",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId",
+          "path": "/profiles/{profileId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "patch_profiles_profileId",
+          "path": "/profiles/{profileId}",
+          "method": "PATCH"
+        }
+      ]
+    },
+    {
+      "pageId": "P10",
+      "name": "共同记录成员",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId_members",
+          "path": "/profiles/{profileId}/members",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_profiles_profileId_invitations",
+          "path": "/profiles/{profileId}/invitations",
+          "method": "POST"
+        },
+        {
+          "operationId": "delete_profiles_profileId_members_userId",
+          "path": "/profiles/{profileId}/members/{userId}",
+          "method": "DELETE"
+        }
+      ]
+    },
+    {
+      "pageId": "P11",
+      "name": "邀请详情",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_invitations_token",
+          "path": "/invitations/{token}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_invitations_token_accept",
+          "path": "/invitations/{token}/accept",
+          "method": "POST"
+        },
+        {
+          "operationId": "delete_invitations_invitationId",
+          "path": "/invitations/{invitationId}",
+          "method": "DELETE"
+        }
+      ]
+    },
+    {
+      "pageId": "P12",
+      "name": "权限管理",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId_members",
+          "path": "/profiles/{profileId}/members",
+          "method": "GET"
+        },
+        {
+          "operationId": "patch_profiles_profileId_members_userId",
+          "path": "/profiles/{profileId}/members/{userId}",
+          "method": "PATCH"
+        }
+      ]
+    },
+    {
+      "pageId": "P13",
+      "name": "记忆库",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId_memories",
+          "path": "/profiles/{profileId}/memories",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P14",
+      "name": "添加或编辑记忆",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_memories_memoryId",
+          "path": "/memories/{memoryId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_uploads",
+          "path": "/uploads",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_profiles_profileId_memories",
+          "path": "/profiles/{profileId}/memories",
+          "method": "POST"
+        },
+        {
+          "operationId": "patch_memories_memoryId",
+          "path": "/memories/{memoryId}",
+          "method": "PATCH"
+        }
+      ]
+    },
+    {
+      "pageId": "P15",
+      "name": "记忆详情",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_memories_memoryId",
+          "path": "/memories/{memoryId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "delete_memories_memoryId",
+          "path": "/memories/{memoryId}",
+          "method": "DELETE"
+        }
+      ]
+    },
+    {
+      "pageId": "P16",
+      "name": "照片查看器",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_assets_assetId_access",
+          "path": "/assets/{assetId}/access",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P17",
+      "name": "原始录音播放",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_assets_assetId_access",
+          "path": "/assets/{assetId}/access",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P18",
+      "name": "我的作品",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_works",
+          "path": "/works",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P19",
+      "name": "对话页",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_conversations_conversationId_messages",
+          "path": "/conversations/{conversationId}/messages",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_generations_generationId_events",
+          "path": "/generations/{generationId}/events",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_profiles_profileId_conversation",
+          "path": "/profiles/{profileId}/conversation",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_conversations_conversationId_messages",
+          "path": "/conversations/{conversationId}/messages",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P20",
+      "name": "对话设置",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_profiles_profileId_preferences",
+          "path": "/profiles/{profileId}/preferences",
+          "method": "GET"
+        },
+        {
+          "operationId": "patch_profiles_profileId_preferences",
+          "path": "/profiles/{profileId}/preferences",
+          "method": "PATCH"
+        },
+        {
+          "operationId": "post_conversations_conversationId_clear",
+          "path": "/conversations/{conversationId}/clear",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P21",
+      "name": "对话记录",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_conversations_conversationId_messages",
+          "path": "/conversations/{conversationId}/messages",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_exports",
+          "path": "/exports",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P27",
+      "name": "影像工具首页",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_tools",
+          "path": "/tools",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P30",
+      "name": "画质优化设置",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_products_code",
+          "path": "/products/{code}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_uploads",
+          "path": "/uploads",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_media_preflight",
+          "path": "/media/preflight",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P31",
+      "name": "影像生成任务详情",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_tasks_taskId",
+          "path": "/tasks/{taskId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_tasks_taskId_retry",
+          "path": "/tasks/{taskId}/retry",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P32",
+      "name": "作品结果",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_works_workId",
+          "path": "/works/{workId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_assets_assetId_access",
+          "path": "/assets/{assetId}/access",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_works_workId_save_to_profile",
+          "path": "/works/{workId}/save-to-profile",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P33",
+      "name": "萤火社区",
+      "phase": "A运营内容/C用户发布",
+      "operations": [
+        {
+          "operationId": "get_home",
+          "path": "/home",
+          "method": "GET"
+        }
+      ],
+      "scope": "A/B only authorized editorial content; user posts disabled until C2"
+    },
+    {
+      "pageId": "P38",
+      "name": "价格与权益",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_products",
+          "path": "/products",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_me_services",
+          "path": "/me/services",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P39",
+      "name": "套餐详情",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_products_code",
+          "path": "/products/{code}",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_profiles_profileId_entitlements",
+          "path": "/profiles/{profileId}/entitlements",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_quotes",
+          "path": "/quotes",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P40",
+      "name": "确认订单",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_orders_orderId",
+          "path": "/orders/{orderId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_quotes",
+          "path": "/quotes",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_orders",
+          "path": "/orders",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_orders_orderId_payment",
+          "path": "/orders/{orderId}/payment",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P41",
+      "name": "支付结果",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_orders_orderId",
+          "path": "/orders/{orderId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_orders_orderId_reconcile",
+          "path": "/orders/{orderId}/reconcile",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P42",
+      "name": "订单列表",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_orders",
+          "path": "/orders",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P43",
+      "name": "订单详情",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_orders_orderId",
+          "path": "/orders/{orderId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_orders_orderId_cancel",
+          "path": "/orders/{orderId}/cancel",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P44",
+      "name": "退款与售后申请",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_refunds_refundId",
+          "path": "/refunds/{refundId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_orders_orderId_refunds",
+          "path": "/orders/{orderId}/refunds",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P45",
+      "name": "服务与容量",
+      "phase": "B",
+      "operations": [
+        {
+          "operationId": "get_me_services",
+          "path": "/me/services",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_profiles_profileId_entitlements",
+          "path": "/profiles/{profileId}/entitlements",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P46",
+      "name": "我的",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_me",
+          "path": "/me",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_me_services",
+          "path": "/me/services",
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "pageId": "P47",
+      "name": "账号设置",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_me",
+          "path": "/me",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_me_sessions",
+          "path": "/me/sessions",
+          "method": "GET"
+        },
+        {
+          "operationId": "patch_me",
+          "path": "/me",
+          "method": "PATCH"
+        },
+        {
+          "operationId": "delete_me_sessions_sessionId",
+          "path": "/me/sessions/{sessionId}",
+          "method": "DELETE"
+        },
+        {
+          "operationId": "post_auth_logout",
+          "path": "/auth/logout",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P48",
+      "name": "隐私与数据",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_me_consents",
+          "path": "/me/consents",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_consents_consentId_revoke",
+          "path": "/consents/{consentId}/revoke",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_exports",
+          "path": "/exports",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_me_deletion_requests",
+          "path": "/me/deletion-requests",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_profiles_profileId_deletion_requests",
+          "path": "/profiles/{profileId}/deletion-requests",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P49",
+      "name": "导出记录",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_exports",
+          "path": "/exports",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_exports_exportId",
+          "path": "/exports/{exportId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_exports_exportId_download",
+          "path": "/exports/{exportId}/download",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_exports",
+          "path": "/exports",
+          "method": "POST"
+        }
+      ]
+    },
+    {
+      "pageId": "P52",
+      "name": "帮助与反馈",
+      "phase": "A",
+      "operations": [
+        {
+          "operationId": "get_help",
+          "path": "/help",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_support_tickets",
+          "path": "/support-tickets",
+          "method": "GET"
+        },
+        {
+          "operationId": "get_support_tickets_ticketId",
+          "path": "/support-tickets/{ticketId}",
+          "method": "GET"
+        },
+        {
+          "operationId": "post_support_tickets",
+          "path": "/support-tickets",
+          "method": "POST"
+        },
+        {
+          "operationId": "post_support_tickets_ticketId_replies",
+          "path": "/support-tickets/{ticketId}/replies",
+          "method": "POST"
+        }
+      ]
+    }
+  ]
+}
