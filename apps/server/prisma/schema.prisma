@@ -1,0 +1,44 @@
+// Read-only integration scaffold: these map existing infra/migrations tables.
+// NOT a complete database schema. Never run prisma db push / migrate from this subset.
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+enum user_status {
+  active
+  suspended
+  deleting
+  deleted
+}
+enum profile_status {
+  draft
+  active
+  deleting
+  deleted
+}
+model AppUser {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  displayName String @default("") @map("display_name") @db.VarChar(80)
+  status user_status @default(active)
+  timezone String @default("Asia/Shanghai") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  @@map("app_users")
+}
+model Profile {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorUserId String @map("creator_user_id") @db.Uuid
+  displayName String @map("display_name") @db.VarChar(80)
+  relationship String? @db.VarChar(40)
+  status profile_status @default(draft)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  @@map("profiles")
+}
+

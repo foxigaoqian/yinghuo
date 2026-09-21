@@ -1,0 +1,24 @@
+# Optional local infrastructure ONLY. Application demo mode does not connect to these.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: yinghuo
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: yinghuo_dev
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yinghuo -d yinghuo_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+volumes:
+  postgres_dev:
+
