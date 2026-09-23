@@ -20,9 +20,10 @@
 ## 2. 迁移顺序
 
 ~~~text
-0001_baseline.sql    # 本文基础表
-0002_v1_gaps.sql     # A/B补充与统一支付
-../seed/0001_development.sql  # 仅开发环境，可选
+0001_baseline.sql              # 本文基础表
+0002_v1_gaps.sql               # A/B补充与统一支付
+0003_guest_first_identity.sql  # Guest-first匿名身份、恢复/合并与可恢复草稿
+../seed/0001_development.sql   # 仅开发环境，可选
 ~~~
 
 每个迁移必须：
