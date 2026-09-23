@@ -40,7 +40,7 @@ flowchart TD
 
 | 模块 | 输入与校验 | 产出/责任 |
 |---|---|---|
-| Auth | H5手机号验证码、可选H5平台身份绑定、已验证账号关联 | User、Identity、Session；V1不接小程序code，不在前端交换密钥 |
+| Auth | 首次访问匿名会话、手机号验证码保护/找回、可选H5平台身份绑定 | User、Identity、Session；guest 与绑定身份归一到同一 User；V1不接小程序code，不在前端交换密钥 |
 | Spaces | 当前账号、TA草稿、免费资格 | TA、成员、个人对话配置 |
 | Memory | 内容、来源、可见范围、AI授权 | 条目版本、候选确认、检索索引 |
 | Assets | 上传会话、字节数、归属与授权 | 私有对象、预检、转写、访问控制 |
@@ -63,7 +63,7 @@ JWT若使用短期access token，refresh token必须轮换、可撤销且服务�
 
 ## 5. 登录与跨端账号
 
-V1 H5 使用同站点 HttpOnly 安全会话 Cookie 并做 CSRF 防护，首期以手机号验证码登录为主；如V1启用微信内 H5 OAuth，身份仍通过(provider, app_id, subject)建立唯一Identity，不能把身份信息当支付凭证。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
+V1 H5 使用同站点 HttpOnly 安全会话 Cookie 并做 CSRF 防护。首次访问如果没有有效会话，由客户端无感请求 guest 会话；用户可以直接创建 TA 和聊天。手机号验证码主要用于“保护记录/跨设备找回”：号码未绑定时把已验证 phone Identity 追加到当前 User；号码已属于另一个 User 时进入显式恢复/合并流程，禁止静默覆盖。若V1启用微信内 H5 OAuth，身份仍通过(provider, app_id, subject)建立唯一Identity，不能把身份信息当支付凭证。登录后恢复的returnTo只能是内部白名单路由，防止开放跳转。
 
 V1 如启用微信内网页支付，补充公众号 OAuth 身份绑定，openid 必须属于配置的公众号 appid。V2 才接入小程序 code 与其身份；不同 appid 的 openid 不互换。
 
@@ -108,3 +108,16 @@ PostgreSQL事务是最终账本；缓存失效不得把过期权益变为有效�
 
 
 > V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
+
+
+## 9. V1.2 Guest-first 与状态连续性补充（2026-09-23）
+
+- **匿名用户也是正式 User 行**：第一次访问创建 app_users + session；guest 只表示身份验证强度，不创建第二套业务数据模型。
+- **匿名凭证只依赖服务端会话**：不要把 localStorage UUID 当作权限凭据。浏览器本地只保存非敏感 UI 状态/草稿索引。
+- **绑定手机号不迁移业务对象**：手机号首次绑定时把 phone Identity 追加到当前 User，原 profile/memory/conversation 保持原 user_id。
+- **找回旧账号需要显式合并**：若验证码对应另一个已存在 User，服务端返回 merge/recovery 状态；用户确认后在事务内迁移允许合并的 guest 资源并撤销旧 guest 会话，写审计日志。
+- **bootstrap/home 需要状态摘要**：最近 TA、最近 conversation、是否绑定身份、未完成草稿/任务、环境提示抑制状态均应有可计算来源，避免前端猜测。
+- **记忆候选仍是两阶段**：模型只能写 memory_candidates；confirm 后才创建/更新可用于长期检索的 memories。
+- **刷新与跨设备**：关键用户输入先本地草稿，再由服务端保存可恢复业务状态；支付/生成任务不依赖当前页面存活。
+
+前台交互基线见 21–23；OpenAPI 12 在真正编码 Guest-first 前需要重新生成并通过 check_specs。
