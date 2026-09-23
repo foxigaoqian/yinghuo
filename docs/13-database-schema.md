@@ -649,3 +649,19 @@ Outbox 事件在业务事务中产生；Worker 领取使用租约，供应商超
 [0001](../infra/migrations/0001_baseline.sql)与[0002](../infra/migrations/0002_v1_gaps.sql)按顺序执行。0002补齐请求幂等、OAuth、候选记忆、任务租约与fencing、作品归属、素材预检、支付账号/尝试/争议/对账、导出删除/墓碑、消息工单、后台身份/审计/发布审批。列名统一status，API使用camelCase映射；同一作品一个deliveryIndex一个outputAssetId。基线旧result_asset_ids只作兼容列，V1新增交付以output_asset_id为准。C/D的credits、voice_profiles、package_slots、posts、reminders不在首发迁移，相关能力不得提前启用。
 
 补偿grant必须有compensationId、工单、原因和审批人；一般grant有orderItemId。两种来源互斥，不能无来源人工开会员。删除墓碑须另存不可变恢复日志，不能只和被恢复数据库同一时间点回滚；恢复开放前追平墓碑水位。
+
+
+## V1.2 Guest-first 数据库实施补充（2026-09-23）
+
+当前 0001/0002 的 `app_users`、`identities`、`sessions`、`memory_candidates` 已能承载大部分 Guest-first 逻辑，因此**不要为了游客模式再建一套 guest_users 表**。
+
+推荐实现：
+
+- 首次访问：创建 `app_users` + `sessions`；可选创建 `identities(provider='guest', app_id='h5', subject=<随机公开标识>)`。认证凭据仍是安全会话 Cookie，不把 subject 当登录秘密。
+- 手机号首次绑定：向当前 `app_users.id` 增加/更新 phone identity 与 phone_hash，不迁移 profile/memory/conversation 主体。
+- 手机号已属于旧账号：进入显式 recovery/merge 流程；合并必须事务化，并在 `audit_logs` 记录 source_user、target_user、对象数量和 traceId。
+- guest 合并后：撤销其全部 session，避免两个账户继续同时写入同一家庭空间。
+- `memory_candidates` 继续作为 suggested/confirmed/rejected 两阶段入口；只有 confirmed 结果能创建或更新长期 `memories`。
+- 本地草稿不进入数据库权威状态；需要跨设备恢复的草稿可后续增加独立 `drafts` 表或版本化草稿实体，不能塞入 memory 正式表冒充事实。
+
+如果实现需要 `merged_into_user_id`、`account_kind`、跨设备草稿或环境提示偏好字段，应新增 `0003_*` 迁移，不修改已发布的 0001/0002。迁移上线前必须补回填、回滚、并发合并与重复绑定测试。
