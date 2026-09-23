@@ -12,8 +12,8 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 
 | 表 | 关键字段 | 约束/索引 |
 |---|---|---|
-| app_users | id, display_name, status, timezone, free_slot_consumed_at | 手机号不作主键；注销后登录拒绝 |
-| identities | user_id, provider, app_id, subject, verified_at, encrypted_phone | UNIQUE(provider,app_id,subject)；手机号索引用规范化值的安全摘要 |
+| app_users | id, display_name, status, timezone, free_slot_consumed_at | 匿名用户也使用正式User行；手机号不作主键；注销后登录拒绝 |
+| identities | user_id, provider, app_id, subject, verified_at, encrypted_phone | provider 可为 guest/phone/wechat_official；UNIQUE(provider,app_id,subject)；手机号索引用规范化值的安全摘要 |
 | auth_challenges | purpose, identity_hash, code_hash, expires_at, failures, consumed_at | 校验成功与consume同事务；避免双用 |
 | sessions | user_id, refresh_hash, expires_at, revoked_at, device_label | hash唯一，轮换旧token即撤销 |
 | profiles | id, creator_user_id, display_name, relationship, avatar_asset_id, status, version | status=draft/active/deleting/deleted；日期可空 |
@@ -117,3 +117,17 @@ TA层是共享空间；用户层是私人对话。不能只用`ta_id`实现“�
 
 
 > V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
+
+
+## 8. V1.2 匿名身份、绑定与恢复规则（2026-09-23）
+
+1. **匿名身份不建第二套表**：首次访问直接创建 `app_users` 行和有效 `sessions`；可选写入 `identities(provider='guest', app_id='h5', subject=<随机公开标识>)` 用于审计/客服定位，但权限凭据仍是服务端会话。
+2. **手机号绑定到当前 User**：验证码验证成功且手机号未归属其他用户时，向当前 user 增加 phone identity / phone_hash；不得重新创建新 User 导致人物和记忆断裂。
+3. **手机号已属于旧 User**：不得自动覆盖。返回 recovery/merge required；用户确认后再执行资源合并。合并过程至少处理 profiles、profile_members、preferences、memories、conversations、assets、invitations、orders/works 的归属或引用，并写 audit_logs。
+4. **guest 合并后**：撤销旧 guest sessions；旧 guest User 进入 merged/deactivated 等不可继续登录状态（具体字段在实现迁移时定），并保留最小审计映射，避免重复恢复。
+5. **家庭编号**：仅作为客服定位/辅助找回标识，不作为单因素身份凭证；高风险恢复仍需手机号验证码或其他强验证。
+6. **候选记忆**：`memory_candidates.state=suggested` 不能被长期检索；只有 confirm 后生成或更新 `memories.confirmation_state=confirmed`。
+7. **家庭贡献来源**：受邀 guest 可先贡献允许内容，但每条内容必须保留 actor/user 与来源；创建者确认不等于覆盖原始贡献版本。
+8. **本地草稿不是权威账本**：浏览器草稿用于恢复输入；长期人物、记忆、订单和权限必须以服务端数据为准。
+
+如需要新增 `merged_into_user_id`、guest 标识或恢复事务辅助字段，应通过新的递增迁移实现，不改写 0001/0002 已发布迁移。
