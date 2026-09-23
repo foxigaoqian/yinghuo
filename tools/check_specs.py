@@ -33,7 +33,7 @@ def main():
  walk(spec)
  def norm(p):return re.sub(r'\{[^}]+\}','{id}',p.split('?')[0])
  methods={'get','post','put','patch','delete'}; ops={};ids=set()
- public={('/bootstrap','get'),('/home','get'),('/legal/{type}','get'),('/auth/otp','post'),('/auth/otp/verify','post'),('/invitations/{token}','get'),('/tools','get'),('/products','get'),('/products/{code}','get'),('/help','get'),('/payment-capabilities','get'),('/auth/wechat/callback','get'),('/admin/auth/authorize','get'),('/admin/auth/callback','get')}
+ public={('/bootstrap','get'),('/home','get'),('/legal/{type}','get'),('/auth/guest','post'),('/auth/otp','post'),('/auth/otp/verify','post'),('/invitations/{token}','get'),('/tools','get'),('/products','get'),('/products/{code}','get'),('/help','get'),('/payment-capabilities','get'),('/auth/wechat/callback','get'),('/admin/auth/authorize','get'),('/admin/auth/callback','get')}
  require(spec.get('security')==[{'sessionCookie':[]}],'Missing default session security')
  for path,item in spec['paths'].items():
   for m,op in item.items():
