@@ -18,7 +18,7 @@
 | 域 | 接口 | 核心输入/返回 |
 |---|---|---|
 | 公共 | GET /bootstrap；GET /home；GET /legal/{type} | 能力开关、当前商品版本/协议版本、首页状态 |
-| 登录 | POST /auth/otp；POST /auth/otp/verify | phone+purpose；challengeId+code，建立会话 |
+| 登录 | POST /auth/guest；POST /auth/otp；POST /auth/otp/verify | 首次无感建立 guest 会话；phone+purpose；challengeId+code 用于绑定/找回稳定身份 |
 | 平台身份（按通道启用） | GET /auth/wechat/authorize；GET /auth/wechat/callback | V1仅在wechat_jsapi启用时实现公众号OAuth；小程序登录V2 |
 | 会话 | POST /auth/refresh；POST /auth/logout；GET /me/sessions；DELETE /me/sessions/{id} | 轮换、撤销本人会话 |
 | 账号 | GET/PATCH /me | 个人昵称/公开简介/时区/字号；手机号变更另验证 |
@@ -170,3 +170,44 @@ GET entitlements返回`{profileId,asOf,capabilities,storage:{usedBytes,reservedB
 
 
 > V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
+
+
+## 6. V1.2 Guest-first API 契约增量（2026-09-23）
+
+### POST /auth/guest
+
+无请求体。仅在当前请求没有有效会话时创建匿名 User + Session，并通过 HttpOnly Cookie 建立会话；已有有效会话时幂等返回当前用户摘要。前端首次加载可无感调用，不能把它包装成“注册”。
+
+建议返回：
+
+```json
+{"data":{"userId":"<uuid>","accountState":"guest","familyCode":"<public-code>","boundPhone":false},"traceId":"<trace>"}
+```
+
+`familyCode` 只用于展示/客服定位，不是认证凭据。
+
+### POST /auth/otp + POST /auth/otp/verify
+
+V1.2 的 `purpose` 至少区分 `protect_records`、`recover_account`、`change_phone`。在已有 guest 会话中验证未被占用的手机号时，把 phone identity 绑定到**当前** User，不创建新业务账户。
+
+如果手机号已经属于另一个 User，verify 不得静默切换或覆盖，返回 409，例如：
+
+```json
+{"error":{"code":"ACCOUNT_RECOVERY_REQUIRED","message":"该手机号已有记录，需要确认找回或合并。","retryable":false},"traceId":"<trace>"}
+```
+
+后续实现可增加显式 recovery/merge 接口；在合并契约完成前不得自动搬迁付费订单或私人聊天。
+
+### Bootstrap / Home
+
+V1.2 前端需要服务端提供或可组合得到：`accountState`、`boundPhone`、`personCount`、`recentProfileId`、`recentConversationId`、`hasRecoverableDraft`、`pendingTaskCount`。环境识别（wechat/safari/pwa）主要由客户端完成，但“是否已经关闭过提示”可作为非敏感偏好跨端同步。
+
+### 邀请贡献
+
+邀请落地页允许 guest 会话查看最小邀请预览，并在权限允许的情况下先提交一条故事/照片贡献。接受正式成员关系、查看更多家庭内容或执行高风险操作仍按 invitation 权限与身份强度校验。
+
+### 记忆候选
+
+现有 `memory-candidates` 接口继续作为唯一 AI 候选入口。模型不得直接 POST 已确认 memory；confirm/reject 必须由当前用户显式触发或通过等价、可审计的确认动作触发。
+
+> **OpenAPI 同步要求**：`docs/12-openapi.yaml` 当前仍是 V1.1 生成契约。Guest-first 编码前必须把上述增量写入 OpenAPI、重新生成 traceability，并运行 `python tools/check_specs.py --check`。在这一步完成之前，不应把 12 宣称为 V1.2 Guest-first 已完成契约。
