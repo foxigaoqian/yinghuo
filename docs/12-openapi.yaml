@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: 萤火 V1 H5 API
-  version: 1.1.0
-  description: 移动端H5首发A/B契约。微信网页JSAPI与Stripe为按账号资格开放的条件通道；小程序、C/D功能另行实施。业务默认见17，后台权限见18。
+  title: 萤火 V1.2 H5 API
+  version: 1.2.0
+  description: 移动端H5首发A/B契约。V1.2加入Guest-first匿名会话、手机号保护/找回和状态恢复；微信网页JSAPI与Stripe为按账号资格开放的条件通道；小程序、C/D功能另行实施。业务默认见17，UX基线见21-23，后台权限见18。
 servers:
 - url: https://staging-api.example.com/api/v1
   description: 替换为实际 staging API 域名
@@ -36,6 +36,39 @@ paths:
       x-phase: A
       parameters: []
       description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /auth/guest:
+    post:
+      tags:
+      - Auth
+      summary: 首次访问无感建立或复用匿名 H5 会话
+      security: []
+      responses:
+        '200':
+          description: 已存在有效会话时返回当前会话摘要
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestSessionResponse'
+        '201':
+          description: 已创建匿名用户并通过 HttpOnly Cookie 建立会话
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestSessionResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+      operationId: post_auth_guest
+      x-phase: A
+      parameters: []
+      description: 首次访问自动调用；已有有效会话必须幂等复用。familyCode仅用于展示/客服定位，不是认证凭据。
   /auth/otp:
     post:
       tags:
@@ -87,7 +120,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserResponse'
+                $ref: '#/components/schemas/AuthResolutionResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -98,6 +131,40 @@ paths:
       x-phase: A
       parameters: []
       description: 依17的幂等、权限及状态规则执行；私有对象越权返回404。
+  /auth/recovery/merge:
+    post:
+      tags:
+      - Auth
+      summary: 将当前匿名账户显式合并到已验证的历史账户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoveryMergeRequest'
+      responses:
+        '200':
+          description: 合并完成并切换为目标账户会话
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResolutionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      operationId: post_auth_recovery_merge
+      x-phase: A
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/CsrfToken'
+      description: 仅接受OTP验证后签发的短期mergeTicket；不得静默覆盖当前guest数据或重复迁移付费订单。
   /auth/logout:
     post:
       tags:
@@ -3595,6 +3662,19 @@ components:
           - suspended
           - deleting
           - deleted
+        accountState:
+          type: string
+          enum:
+          - guest
+          - bound
+          - merged
+        boundPhone:
+          type: boolean
+        familyCode:
+          type: string
+          nullable: true
+          maxLength: 24
+          description: 公开辅助编号，仅用于展示和客服定位，不是认证凭据
     UserResponse:
       allOf:
       - $ref: '#/components/schemas/BaseResponse'
@@ -3602,6 +3682,85 @@ components:
         properties:
           data:
             $ref: '#/components/schemas/User'
+    GuestSession:
+      type: object
+      required:
+      - userId
+      - accountState
+      - boundPhone
+      properties:
+        userId:
+          type: string
+          format: uuid
+        accountState:
+          type: string
+          enum:
+          - guest
+          - bound
+        boundPhone:
+          type: boolean
+        familyCode:
+          type: string
+          nullable: true
+          maxLength: 24
+    GuestSessionResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/GuestSession'
+    AuthResolution:
+      type: object
+      required:
+      - mode
+      properties:
+        mode:
+          type: string
+          enum:
+          - bound_current
+          - recovered
+          - merge_required
+        user:
+          $ref: '#/components/schemas/User'
+        mergeTicket:
+          type: string
+          nullable: true
+          maxLength: 256
+          description: 仅merge_required时返回的短期一次性凭据
+        targetSummary:
+          type: object
+          nullable: true
+          properties:
+            profileCount:
+              type: integer
+              minimum: 0
+            memoryCount:
+              type: integer
+              minimum: 0
+            hasPaidOrders:
+              type: boolean
+    AuthResolutionResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseResponse'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/AuthResolution'
+    RecoveryMergeRequest:
+      type: object
+      required:
+      - mergeTicket
+      - strategy
+      properties:
+        mergeTicket:
+          type: string
+          minLength: 16
+          maxLength: 256
+        strategy:
+          type: string
+          enum:
+          - merge_guest_into_recovered
     OtpRequest:
       type: object
       required:
@@ -3615,6 +3774,8 @@ components:
           type: string
           enum:
           - login
+          - protect_records
+          - recover_account
           - change_phone
     OtpVerifyRequest:
       type: object
@@ -3704,6 +3865,31 @@ components:
                   $ref: '#/components/schemas/PaymentCapability'
               canCreateFreeProfile: &id003
                 type: boolean
+              accountState:
+                type: string
+                enum:
+                - guest
+                - bound
+                nullable: true
+              boundPhone:
+                type: boolean
+                nullable: true
+              personCount:
+                type: integer
+                minimum: 0
+              recentProfileId:
+                type: string
+                format: uuid
+                nullable: true
+              recentConversationId:
+                type: string
+                format: uuid
+                nullable: true
+              hasRecoverableDraft:
+                type: boolean
+              pendingTaskCount:
+                type: integer
+                minimum: 0
     ProductVersion:
       type: object
       required:
