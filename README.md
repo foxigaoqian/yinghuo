@@ -33,6 +33,7 @@
 | [MVP 产品体验优化 V2](docs/21-mvp-ux-v2.md) | 匿名账号、渐进式创建、状态恢复、家庭共建、主动消息与付费体验 |
 | [全站页面文案与交互文案](docs/22-copy-and-microcopy.md) | 首页、创建、聊天、记忆、空状态、支付、异常与微文案统一标准 |
 | [全站页面结构与交互原型](docs/23-page-structure-and-interaction.md) | 移动端信息架构、用户状态机、页面结构、交互规则与 P0/P1/P2 优先级 |
+| [P0 开发实施计划](docs/24-p0-implementation-plan.md) | Guest-first 纵向闭环的开发顺序、接口、状态、测试矩阵与第一版演示路径 |
 | [决策记录与待办](docs/10-decisions.md) | 已有方向、此次技术建议和仍需实测的事项 |
 
 产品伙伴先读 01、21、22、23、06、09、15；前端先读 21–23，再读 02、05、12；后端读 03–07、12–14，并用 21/23 校验匿名账号、状态恢复和记忆确认链路；准备采用开源代码时先读 08。若旧页面规格与 21–23 的用户体验基线冲突，产品交互与文案以 21–23 为准，接口/权限/交易契约仍以 05、12–20 为准。
@@ -66,7 +67,7 @@
 
 - 支付：微信外H5、微信内网页JSAPI、Stripe Checkout三个条件通道；只开放实际资格及实测通过的通道，未声明任何账号已开通。
 - 首发接口：12覆盖A/B页面和后台；C/D另行实施。
-- 数据库：[新库迁移](infra/migrations/0001_baseline.sql)及[补充迁移](infra/migrations/0002_v1_gaps.sql)，不是已执行的生产变更。
+- 数据库：[新库迁移](infra/migrations/0001_baseline.sql)、[补充迁移](infra/migrations/0002_v1_gaps.sql)及 [Guest-first 迁移](infra/migrations/0003_guest_first_identity.sql)，不是已执行的生产变更。
 - 检查：`python -m pip install -r tools/spec-requirements.txt`，然后`python tools/check_specs.py --check`。
 - [逐页追踪](docs/research/v1-traceability.json)、[28个验收场景](docs/research/acceptance-cases.json)、[12个AI起始用例](docs/research/ai-eval-cases.json)；业务测试状态均为not_run。
 - 接入与发布仍需真实账号、供应商评测、正式条款、数据库及支付联调；不把文档静态检查说成应用验收完成。
@@ -81,4 +82,4 @@
 - “我的”改为 **我的家庭空间**，重点展示已经留下的记忆资产、继续动作、家庭共建和数据保护，而不是账户字段。
 - 微信环境、PWA/桌面入口、断网、刷新、支付失败、跨设备找回等均纳入状态连续性验收。
 - P0 先保证匿名账号、恢复、聊天、记忆确认、草稿、找回和删除；高级声音、视频、公开社区后置。
-- **契约状态**：05/13 已补 Guest-first 实施增量；OpenAPI 12 仍是 V1.1 生成契约，正式编码前必须同步 guest 会话/绑定恢复接口并重新运行 `check_specs --check`。
+- **契约状态**：OpenAPI 12 已升级为 V1.2，加入 guest 会话、手机号保护/恢复与显式 merge；0003 已补 Guest-first 数据迁移。仍需在实际测试库运行迁移并重新生成 traceability/执行 `check_specs --check`。
