@@ -388,9 +388,19 @@ API进入只读或维护页；不接受新的收费、退款和删除请求，�
 V2 新增小程序身份、wx.requestPayment 和原生媒体能力；网页JSAPI和H5真机验收在V1完成；订单、权益、退款、对账和后台交易核心保持不变。
 
 
-> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql)。C/D仍按阶段评审。
+> V1.1实施对齐（2026-09-19）：首发范围与开发默认值见[17](17-v1-contract-completion.md)，支付见[16](16-payment-routing-and-stripe.md)，后台见[18](18-admin-api-and-operations.md)，AI落地见[19](19-ai-provider-and-evaluation.md)，验收见[20](20-acceptance-matrix.md)。A/B接口以[12](12-openapi.yaml)为准；新增数据库定义见[补充迁移](../infra/migrations/0002_v1_gaps.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/migrations/0003_guest_first_identity.sql)。C/D仍按阶段评审。
 
 
 ### V1.1增加的服务端配置
 
 PAYMENT_CHANNELS、STRIPE_SECRET_KEY、STRIPE_WEBHOOK_SECRET、STRIPE_ACCOUNT_ID、STRIPE_API_VERSION、STRIPE_CHECKOUT_ENABLED=false；WECHAT_JSAPI_ENABLED=false、WECHAT_OFFICIAL_APPID、WECHAT_OFFICIAL_SECRET、WECHAT_OAUTH_CALLBACK；ADMIN_OIDC_ISSUER、ADMIN_OIDC_CLIENT_ID、ADMIN_OIDC_CLIENT_SECRET、ADMIN_OIDC_REDIRECT_URI。生产密钥不写入本文件。管理端与用户端Cookie隔离；统一API路径见12。
+
+
+## V1.2 Guest-first 上线前检查
+
+- 新浏览器首次打开应先建立 guest Session，再进入创建流程；手机号不作为首次价值前置门槛。
+- 0003 必须在全新测试库按 0001→0002→0003 顺序执行，并验证恢复 ticket、family_code 唯一索引与 drafts 表。
+- protect_records 绑定不能改变已有 TA/记忆的 user_id；recover_account 遇到当前 guest 已有资产时必须走显式 merge。
+- merge 后旧 guest session 必须全部撤销，并保留 audit log。
+- OpenAPI 1.2、page traceability 与 check_specs 必须同步通过后才开始依赖新接口的前端联调。
