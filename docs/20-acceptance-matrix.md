@@ -30,11 +30,13 @@ python tools/check_specs.py
 
 ## 3. 数据库启动验证
 
-仅在全新测试库按0001、0002顺序执行；这不是已有线上库升级脚本。未来任何已发布迁移不得直接改写，另写递增迁移。
+仅在全新隔离测试库按0001、0002顺序执行。Supabase 测试库再执行 0003；它会撤销 anon/authenticated 对应用表的访问并创建/锁定私有媒体桶。这不是已有线上库升级脚本。未来任何已发布迁移不得直接改写，另写递增迁移。
 
 ```sh
 psql "$SPEC_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/migrations/0001_baseline.sql
 psql "$SPEC_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/migrations/0002_v1_gaps.sql
+# Supabase-only; run against an isolated Supabase test project after 0001 + 0002.
+psql "$SPEC_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f infra/migrations/0003_supabase_lockdown.sql
 ```
 
 SPEC_TEST_DATABASE_URL只能指向隔离测试库。安装后检查约束、触发器/业务事务、并发锁、回滚和删除墓碑恢复。0002对新列SET NOT NULL基于空库成立；有数据的库须单独回填方案，不能直接套用。

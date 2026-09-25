@@ -22,6 +22,7 @@
 ~~~text
 0001_baseline.sql    # 本文基础表
 0002_v1_gaps.sql     # A/B补充与统一支付
+0003_supabase_lockdown.sql  # Supabase新安装的Data API/RLS和私有Storage默认锁定
 ../seed/0001_development.sql  # 仅开发环境，可选
 ~~~
 
@@ -646,6 +647,6 @@ Outbox 事件在业务事务中产生；Worker 领取使用租约，供应商超
 
 ## V1.1新增表与执行口径
 
-[0001](../infra/migrations/0001_baseline.sql)与[0002](../infra/migrations/0002_v1_gaps.sql)按顺序执行。0002补齐请求幂等、OAuth、候选记忆、任务租约与fencing、作品归属、素材预检、支付账号/尝试/争议/对账、导出删除/墓碑、消息工单、后台身份/审计/发布审批。列名统一status，API使用camelCase映射；同一作品一个deliveryIndex一个outputAssetId。基线旧result_asset_ids只作兼容列，V1新增交付以output_asset_id为准。C/D的credits、voice_profiles、package_slots、posts、reminders不在首发迁移，相关能力不得提前启用。
+[0001](../infra/migrations/0001_baseline.sql)与[0002](../infra/migrations/0002_v1_gaps.sql)按顺序执行。Supabase 新安装再执行[0003 Supabase 安全锁定](../infra/migrations/0003_supabase_lockdown.sql)：应用表启用RLS并撤销 anon/authenticated 表权限，Storage的 `private-memories` 桶设为私有；因此首发所有读写必须通过服务器鉴权的萤火 API，H5不得直连这些表。0002补齐请求幂等、OAuth、候选记忆、任务租约与fencing、作品归属、素材预检、支付账号/尝试/争议/对账、导出删除/墓碑、消息工单、后台身份/审计/发布审批。列名统一status，API使用camelCase映射；同一作品一个deliveryIndex一个outputAssetId。基线旧result_asset_ids只作兼容列，V1新增交付以output_asset_id为准。C/D的credits、voice_profiles、package_slots、posts、reminders不在首发迁移，相关能力不得提前启用。
 
 补偿grant必须有compensationId、工单、原因和审批人；一般grant有orderItemId。两种来源互斥，不能无来源人工开会员。删除墓碑须另存不可变恢复日志，不能只和被恢复数据库同一时间点回滚；恢复开放前追平墓碑水位。

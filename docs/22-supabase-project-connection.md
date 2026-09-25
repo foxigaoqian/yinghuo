@@ -60,7 +60,7 @@ SUPABASE_STORAGE_BUCKET=private-memories
 1. **先轮换刚才暴露的密钥**，并确认旧密钥已失效。新密钥保存在本地 `.env` /部署密钥管理器，不回贴到聊天。
 2. 在 Supabase Dashboard 的 **Connect** 面板复制 PostgreSQL 连接信息：运行中的 API 优先用 direct connection；IPv4-only 环境使用 Session Pooler（端口 5432）；Prisma 迁移单独用 direct connection。分别填到受控环境的 `DATABASE_URL`、`DIRECT_URL`。特殊字符密码须 URL encode。参考[数据库连接说明](https://supabase.com/docs/guides/database/connecting-to-postgres)。
 3. 先只读检查目标项目当前 schema、迁移记录、RLS、Storage bucket 和项目地区/网络连通性。将现有线上 schema 与仓库 `0001`、`0002` 做差异比较；有数据时先备份并制定回滚步骤。
-4. 将迁移整理成 Supabase CLI 管理的版本化迁移，明确这是“空库初始化”还是“已有项目增量迁移”。先在 Supabase development branch 或独立测试项目应用，再跑 schema、RLS、Storage 与数据隔离检查。
+4. 将迁移整理成 Supabase CLI 管理的版本化迁移，明确这是“空库初始化”还是“已有项目增量迁移”。`0003_supabase_lockdown.sql` 会锁住应用表的直接 Data API 访问，并把 `private-memories` bucket 设为私有；它只适用于经过核对的新安装/迁移，不应未经审查直接套用到已有项目。先在 Supabase development branch 或独立测试项目应用，再跑 schema、RLS、Storage 与数据隔离检查。
 5. 补齐完整 Prisma schema / repository，把 `DemoStore` 和 mock session 替换为 PostgreSQL 实现；所有查询由服务端会话推导用户 ID，并强制校验 TA/家庭成员关系。演示模式继续保留，避免开发期间误连生产库。
 6. 建立私有 Storage bucket、大小/MIME 限制、短时签名上传下载、删除流程和孤儿文件清理；验证未授权用户无法读写别人的对象。
 7. 增加 staging 环境集成测试、迁移前后备份、恢复演练、日志脱敏和最小权限配置。通过验收后再配置生产环境。

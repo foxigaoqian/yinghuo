@@ -19,7 +19,7 @@ H5 MVP 的可运行框架已经搭建完成，当前可以在本地体验完整�
 | 异步任务 | `apps/worker` | BullMQ 接口骨架，未连接 Redis 时只做自检 |
 | 管理端 | `apps/admin` | 最小开发控制台，可查看演示概览 |
 | 共享契约 | `packages/contracts` | Zod 输入校验、产品、用户、订单和消息类型 |
-| 数据库规格 | `infra/migrations`、`apps/server/prisma` | Supabase/Postgres 迁移和 Prisma 映射已保留，尚未连接真实项目 |
+| 数据库规格 | `infra/migrations`、`apps/server/prisma` | Postgres 新库迁移、Supabase API/RLS 默认锁定和部分 Prisma 映射已保留，尚未连接真实项目 |
 | 本地环境 | `.env.example` | API、存储、短信、AI、图片、审核、微信支付、Stripe 均为占位 |
 
 ## H5 页面范围
@@ -108,7 +108,7 @@ E2E 覆盖 15 个页面、IP 展示、375px 手机宽度、横屏、创建资料
 
 不要同时替换所有 provider。建议按下面顺序逐项替换，并保留 mock 开关：
 
-1. 先建 Supabase 项目，执行迁移，验证 RLS、Storage 私有桶和签名 URL。
+1. 先只读检查目标 Supabase schema；新库按 0001、0002、0003 顺序迁移，验证 Data API/RLS 锁定、Storage 私有桶和签名 URL。已有项目不得照抄新库迁移。
 2. 接入短信服务，完成登录、验证码频控、注销和账号删除测试。
 3. 接入 AI 文本服务，先跑固定评测用例，再开放真实对话。
 4. 接入对象存储和图片/音频任务，所有大文件走后台任务，不阻塞 H5 请求。
