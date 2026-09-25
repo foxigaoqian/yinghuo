@@ -7,7 +7,9 @@ export function validateEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const mode = env.APP_MODE || 'demo';
   if (!['demo', 'supabase'].includes(mode)) throw new Error('APP_MODE must be demo or supabase');
   if (env.NODE_ENV === 'production')
-    throw new Error('Production launch is blocked until real AI, SMS, media and payment providers pass acceptance tests.');
+    throw new Error(
+      'Production launch is blocked until real AI, SMS, media and payment providers pass acceptance tests.',
+    );
   if (mode === 'supabase') {
     if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY)
       throw new Error('Supabase mode requires SUPABASE_URL and SUPABASE_SECRET_KEY on the server.');

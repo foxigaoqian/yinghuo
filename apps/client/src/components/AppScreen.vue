@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
+import { onHide, onShow } from '@dcloudio/uni-app';
 import { useAppStore } from '../stores/app';
-import { api } from '../services/api';
+import { api, requestKey } from '../services/api';
 import AppShell from './AppShell.vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ page: string; title: string; query?: Record<string, string> }>();
@@ -19,16 +19,23 @@ const form = reactive({
   publicConsent: false,
 });
 const chatText = ref('');
+const chatClientMessageId = ref('');
+const createStep = ref(1);
 const squareView = ref('精选');
 const preview = ref('');
+let restoringDraft = false;
+let chatDraftTimer: ReturnType<typeof setTimeout> | undefined;
 const selectedMemory = computed(() => app.memories.find((m) => m.id === props.query?.id));
 const selectedPost = computed(() => app.posts.find((p) => p.id === props.query?.id));
 const editing = computed(() => props.query?.edit === '1');
 onShow(() => {
   void app.run(async () => {
     await app.refresh();
+    restoreProfileDraft();
+    restoreChatDraft();
   });
 });
+onHide(() => saveChatDraft());
 watch(
   () => app.current,
   (p) => {
@@ -62,8 +69,21 @@ function create() {
       { name: form.name, callMe: form.callMe, story: form.story, aiConsent: form.aiConsent },
       editing.value,
     );
-    go('space');
+    if (!editing.value && app.session.userId)
+      uni.removeStorageSync('yinghuo.profileDraft.' + app.session.userId);
+    go(editing.value ? 'space' : 'chat');
   });
+}
+function nextCreateStep() {
+  if (createStep.value === 1 && !form.name.trim()) {
+    app.error = '先选择或填写 TA 的称呼。';
+    return;
+  }
+  app.error = '';
+  createStep.value = Math.min(3, createStep.value + 1);
+}
+function previousCreateStep() {
+  createStep.value = Math.max(1, createStep.value - 1);
 }
 function memorySave() {
   void app.run(async () => {
@@ -73,11 +93,108 @@ function memorySave() {
 }
 function send() {
   if (!chatText.value.trim()) return;
+  const text = chatText.value.trim();
+  const clientMessageId = chatClientMessageId.value || requestKey();
   void app.run(async () => {
-    await app.send(chatText.value);
+    await app.send(text, clientMessageId);
     chatText.value = '';
+    chatClientMessageId.value = '';
+    saveChatDraft();
   });
 }
+
+function restoreProfileDraft() {
+  const userId = app.session.userId;
+  if (props.page !== 'create' || editing.value || !userId) return;
+  if (form.name || form.callMe || form.story) return;
+  const draft = uni.getStorageSync('yinghuo.profileDraft.' + userId) as
+    | { step?: number; name?: string; callMe?: string; story?: string }
+    | undefined;
+  if (!draft || typeof draft !== 'object') return;
+  restoringDraft = true;
+  form.name = typeof draft.name === 'string' ? draft.name : '';
+  form.callMe = typeof draft.callMe === 'string' ? draft.callMe : '';
+  form.story = typeof draft.story === 'string' ? draft.story : '';
+  createStep.value = Math.min(3, Math.max(1, Number(draft.step) || 1));
+  restoringDraft = false;
+  app.status = '已恢复你刚才填写的内容。';
+}
+
+function saveProfileDraft() {
+  const userId = app.session.userId;
+  if (restoringDraft || props.page !== 'create' || editing.value || !userId) return;
+  const key = 'yinghuo.profileDraft.' + userId;
+  if (!form.name && !form.callMe && !form.story && createStep.value === 1) {
+    uni.removeStorageSync(key);
+    return;
+  }
+  uni.setStorageSync(key, {
+    step: createStep.value,
+    name: form.name,
+    callMe: form.callMe,
+    story: form.story,
+  });
+}
+
+watch(
+  () => [
+    props.page,
+    app.session.userId,
+    editing.value,
+    createStep.value,
+    form.name,
+    form.callMe,
+    form.story,
+  ],
+  saveProfileDraft,
+  { flush: 'sync' },
+);
+
+function chatDraftKey() {
+  return app.session.userId && app.currentId
+    ? 'yinghuo.chatDraft.' + app.session.userId + '.' + app.currentId
+    : '';
+}
+
+function restoreChatDraft() {
+  if (props.page !== 'chat' || !app.session.userId || !app.currentId || chatText.value) return;
+  const draft = uni.getStorageSync(chatDraftKey()) as
+    | { text?: string; clientMessageId?: string }
+    | undefined;
+  if (!draft || typeof draft.text !== 'string' || !draft.text) return;
+  restoringDraft = true;
+  chatText.value = draft.text;
+  chatClientMessageId.value =
+    typeof draft.clientMessageId === 'string' ? draft.clientMessageId : requestKey();
+  restoringDraft = false;
+  app.status = '已恢复未发送的内容。';
+}
+
+function saveChatDraft() {
+  if (chatDraftTimer) clearTimeout(chatDraftTimer);
+  chatDraftTimer = undefined;
+  if (props.page !== 'chat') return;
+  const key = chatDraftKey();
+  if (!key) return;
+  if (!chatText.value.trim()) {
+    uni.removeStorageSync(key);
+    chatClientMessageId.value = '';
+    return;
+  }
+  if (!chatClientMessageId.value) chatClientMessageId.value = requestKey();
+  uni.setStorageSync(key, { text: chatText.value, clientMessageId: chatClientMessageId.value });
+}
+
+watch(
+  chatText,
+  (value, previous) => {
+    if (restoringDraft || props.page !== 'chat') return;
+    if (value !== previous) chatClientMessageId.value = requestKey();
+    if (chatDraftTimer) clearTimeout(chatDraftTimer);
+    chatDraftTimer = setTimeout(saveChatDraft, 600);
+  },
+  { flush: 'sync' },
+);
 function buy(productId: 'memory-year' | 'photo-restore') {
   if (!app.current) {
     needProfile('plans');
@@ -218,34 +335,25 @@ function info(title: string, content: string) {
       >
     </template>
     <template v-else-if="page === 'create'">
-      <h1>{{ editing ? '补充 TA 的故事' : '你想为谁，留下一束光？' }}</h1>
-      <p class="caption">只填一个称呼，就能开始。</p>
+      <h1>{{ editing ? '补充 TA 的故事' : '为重要的人，留下一束光' }}</h1>
+      <p class="caption">
+        {{ editing ? '修改记忆空间资料。' : '不用一次准备齐全，三步就能开始。' }}
+      </p>
       <view v-if="!app.session.userId" class="card"
         ><p>请先进入演示账号。</p>
         <button class="btn" @click="go('login')">去登录</button></view
       >
-      <template v-else
-        ><label class="field"
+      <template v-else-if="editing">
+        <label class="field"
           ><text>你怎么称呼 TA？</text
           ><input v-model="form.name" maxlength="80" placeholder="例如：妈妈"
         /></label>
-        <view class="chips"
-          ><button
-            v-for="r in ['妈妈', '爸爸', '爷爷', '奶奶', '爱人', '朋友']"
-            :key="r"
-            class="chip"
-            :class="{ active: form.name === r }"
-            @click="form.name = r"
-          >
-            {{ r }}
-          </button></view
-        >
         <label class="field"
           ><text>TA 怎么称呼你？（选填）</text
           ><input v-model="form.callMe" maxlength="40" placeholder="例如：小雨"
         /></label>
         <label class="field"
-          ><text>想先留下一件什么事？（选填）</text
+          ><text>关于 TA 的故事（选填）</text
           ><textarea
             v-model="form.story"
             maxlength="1000"
@@ -263,9 +371,77 @@ function info(title: string, content: string) {
           :disabled="app.busy || !form.aiConsent || !form.name.trim()"
           @click="create"
         >
-          {{ editing ? '保存资料' : '创建并开始' }}
-        </button></template
-      >
+          保存资料
+        </button>
+      </template>
+      <template v-else>
+        <view class="create-progress">
+          <text class="badge">第 {{ createStep }} 步 · 共 3 步</text>
+          <view class="progress-track"
+            ><view class="progress-value" :style="{ width: (createStep / 3) * 100 + '%' }"
+          /></view>
+        </view>
+        <template v-if="createStep === 1">
+          <h2>你想为谁留下这束光？</h2>
+          <p class="caption">先选一个称呼，也可以自己填写。</p>
+          <view class="chips">
+            <button
+              v-for="r in ['爸爸', '妈妈', '爷爷', '奶奶', '外公', '外婆', '爱人', '朋友']"
+              :key="r"
+              class="chip"
+              :class="{ active: form.name === r }"
+              @click="form.name = r"
+            >
+              {{ r }}
+            </button>
+          </view>
+          <label class="field"
+            ><text>其他称呼</text
+            ><input v-model="form.name" maxlength="80" placeholder="例如：姥姥、叔叔"
+          /></label>
+          <button class="btn" :disabled="!form.name.trim()" @click="nextCreateStep">继续</button>
+        </template>
+        <template v-else-if="createStep === 2">
+          <h2>TA 平时怎么称呼你？</h2>
+          <p class="caption">这个称呼会帮助对话更贴近你们的相处方式，可以稍后补充。</p>
+          <label class="field"
+            ><text>TA 对你的称呼（选填）</text
+            ><input v-model="form.callMe" maxlength="40" placeholder="例如：小雨、宝贝"
+          /></label>
+          <view class="step-actions"
+            ><button class="btn secondary" @click="previousCreateStep">上一步</button
+            ><button class="btn" @click="nextCreateStep">继续</button></view
+          >
+        </template>
+        <template v-else>
+          <h2>分享一点关于 TA 的记忆</h2>
+          <p class="caption">一句常说的话、一个小习惯，或一个你想记住的瞬间。选填。</p>
+          <label class="field"
+            ><text>关于 {{ form.name }} 的一件小事</text
+            ><textarea
+              v-model="form.story"
+              maxlength="1000"
+              placeholder="例如：每次出门前，TA都会提醒我带伞…"
+            />
+          </label>
+          <checkbox-group @change="toggle('aiConsent', $event)"
+            ><label class="check"
+              ><checkbox value="yes" :checked="form.aiConsent" />我理解对话由 AI
+              生成，不代表本人。</label
+            ></checkbox-group
+          >
+          <view class="step-actions"
+            ><button class="btn secondary" @click="previousCreateStep">上一步</button
+            ><button
+              class="btn"
+              :disabled="app.busy || !form.aiConsent || !form.name.trim()"
+              @click="create"
+            >
+              创建并开始聊天
+            </button></view
+          >
+        </template>
+      </template>
     </template>
     <template v-else-if="page === 'space'">
       <template v-if="app.current"

@@ -31,6 +31,7 @@ import {
   PRODUCTS,
   idParam,
 } from '@yinghuo/contracts';
+import type { BootstrapState } from '@yinghuo/contracts';
 import { DemoStore } from './demo-store';
 import { DemoAuth, SessionGuard, type UserRequest } from './auth';
 import { MockChatProvider } from './providers';
@@ -49,7 +50,10 @@ const idem = (key?: string) => {
 };
 @Controller()
 export class PublicController {
-  constructor(@Inject(DemoAuth) private auth: DemoAuth) {}
+  constructor(
+    @Inject(DemoAuth) private auth: DemoAuth,
+    @Inject(DemoStore) private db: DemoStore,
+  ) {}
   @Get('health') health() {
     return { status: 'ok', mode: 'demo', persistence: 'local-json', liveServices: false };
   }
@@ -62,6 +66,46 @@ export class PublicController {
       storage: 'not-connected',
       restoration: 'not-connected',
       moderation: 'pending-only',
+    };
+  }
+  @Get('bootstrap') bootstrap(@Req() req: Request): BootstrapState {
+    const session = this.auth.read(req);
+    const ownedProfiles = session
+      ? this.db.state.profiles.filter((profile) => profile.ownerId === session.userId)
+      : [];
+    const recentMessage = session
+      ? this.db.state.messages
+          .filter((message) => message.ownerId === session.userId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+      : undefined;
+    const recentProfile = recentMessage
+      ? ownedProfiles.find((profile) => profile.id === recentMessage.profileId)
+      : [...ownedProfiles].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return {
+      appVersion: '0.1.0',
+      phase: 'A',
+      features: {
+        guestSession: true,
+        profiles: true,
+        textChat: true,
+        manualMemories: true,
+        memoryCandidates: false,
+        phoneRecovery: false,
+        photoUpload: false,
+        payment: false,
+        publicSquare: false,
+      },
+      products: [],
+      terms: { aiDisclosure: 'ai-disclosure-v1' },
+      csrfToken: session?.csrfToken || null,
+      paymentCapabilities: [],
+      canCreateFreeProfile: Boolean(session && ownedProfiles.length === 0),
+      accountState: session ? 'guest' : null,
+      boundPhone: null,
+      profileCount: ownedProfiles.length,
+      recentProfileId: recentProfile?.id || null,
+      recentConversationId: null,
+      pendingTaskCount: 0,
     };
   }
   @Get('products') products() {

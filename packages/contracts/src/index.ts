@@ -17,7 +17,10 @@ export const memoryInput = z
   })
   .strict();
 export const chatInput = z
-  .object({ text: z.string().trim().min(1).max(2000), clientMessageId: z.string().uuid().optional() })
+  .object({
+    text: z.string().trim().min(1).max(2000),
+    clientMessageId: z.string().uuid().optional(),
+  })
   .strict();
 export const postInput = z
   .object({
@@ -96,6 +99,22 @@ export type SessionInfo = {
   familyCode?: string | null;
   csrfToken: string | null;
   mock: boolean;
+};
+export type BootstrapState = {
+  appVersion: string;
+  phase: 'A' | 'B';
+  features: Record<string, boolean>;
+  products: unknown[];
+  terms: Record<string, string>;
+  csrfToken: string | null;
+  paymentCapabilities: unknown[];
+  canCreateFreeProfile: boolean;
+  accountState: 'guest' | 'bound' | null;
+  boundPhone: string | null;
+  profileCount: number;
+  recentProfileId: string | null;
+  recentConversationId: string | null;
+  pendingTaskCount: number;
 };
 export type ApiError = { error: { code: string; message: string }; requestId: string };
 export const PRODUCTS: readonly Product[] = [

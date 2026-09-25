@@ -38,9 +38,17 @@ test('create → remember → chat → reload → mock payment', async ({ page }
   // uni-app's H5 placeholder is rendered as a sibling hint rather than a
   // native placeholder attribute in some browser builds.
   await page.locator('input').first().fill('演示妈妈');
+  await page.getByText('继续', { exact: true }).click();
+  await page.locator('input').first().fill('小宇');
+  await page.getByText('继续', { exact: true }).click();
+  await page.locator('textarea').first().fill('每周末做番茄鸡蛋面。');
+  await page.reload();
+  await expect(page.getByText('分享一点关于 TA 的记忆', { exact: true })).toBeVisible();
+  await expect(page.locator('textarea').first()).toHaveValue('每周末做番茄鸡蛋面。');
   await page.getByText('我理解对话由 AI 生成，不代表本人。', { exact: true }).click();
-  await page.getByText('创建并开始', { exact: true }).click();
+  await page.getByText('创建并开始聊天', { exact: true }).click();
   await expect(page.getByText('演示妈妈的萤火', { exact: true })).toBeVisible();
+  await page.goto('/#/pages/space/index');
   await page.getByText('记录一段记忆', { exact: true }).click();
   await page.locator('input').first().fill('周末的面');
   await page.locator('textarea').first().fill('每周末做番茄鸡蛋面。');
@@ -50,6 +58,9 @@ test('create → remember → chat → reload → mock payment', async ({ page }
   await expect(page.getByText('周末的面', { exact: true })).toBeVisible();
   await page.goto('/#/pages/chat/index');
   await page.locator('.chat-input input').fill('今天工作有点累');
+  await page.waitForTimeout(700);
+  await page.reload();
+  await expect(page.locator('.chat-input input')).toHaveValue('今天工作有点累');
   await page.locator('.chat-input input').press('Enter');
   await expect(
     page.locator('.bubble').filter({ hasText: '【AI 演示回复，并非本人】' }),

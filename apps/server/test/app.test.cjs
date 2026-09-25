@@ -36,6 +36,17 @@ describe('local demo API', () => {
     assert.match(r.headers['set-cookie'][0], /HttpOnly/);
     assert.match(r.headers['set-cookie'][0], /SameSite=Strict/);
   });
+  it('bootstraps the signed-in guest and reports first-profile eligibility', async () => {
+    const r = await a.get('/api/v1/bootstrap').expect(200);
+    assert.equal(r.body.phase, 'A');
+    assert.equal(r.body.accountState, 'guest');
+    assert.equal(r.body.csrfToken, csrf);
+    assert.equal(r.body.canCreateFreeProfile, true);
+    assert.equal(r.body.profileCount, 0);
+    assert.equal(r.body.features.textChat, true);
+    assert.equal(r.body.features.payment, false);
+    assert.equal(r.body.recentProfileId, null);
+  });
   it('rejects cross-origin login and missing CSRF', async () => {
     await request(server)
       .post('/api/v1/dev/session')
@@ -65,6 +76,10 @@ describe('local demo API', () => {
     profile = r.body;
     assert.equal(profile.callMe, '');
     assert.ok(profile.id);
+    const bootstrap = await a.get('/api/v1/bootstrap').expect(200);
+    assert.equal(bootstrap.body.canCreateFreeProfile, false);
+    assert.equal(bootstrap.body.profileCount, 1);
+    assert.equal(bootstrap.body.recentProfileId, profile.id);
   });
   it('isolates profiles and memories between users', async () => {
     await b.get('/api/v1/profiles/' + profile.id).expect(404);

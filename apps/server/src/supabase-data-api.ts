@@ -39,7 +39,13 @@ export class SupabaseDataApi {
   }
 
   upsert<T>(table: string, value: unknown, conflict: string): Promise<T> {
-    return this.request<T>(table, 'POST', { on_conflict: conflict }, value, 'resolution=merge-duplicates,return=representation');
+    return this.request<T>(
+      table,
+      'POST',
+      { on_conflict: conflict },
+      value,
+      'resolution=merge-duplicates,return=representation',
+    );
   }
 
   patch<T>(table: string, query: SupabaseQuery, value: unknown): Promise<T> {
@@ -88,7 +94,8 @@ export class SupabaseDataApi {
       let code = 'SUPABASE_REQUEST_FAILED';
       try {
         const parsed = JSON.parse(text) as { code?: unknown };
-        if (typeof parsed.code === 'string' && /^[A-Z0-9]{4,8}$/.test(parsed.code)) code = parsed.code;
+        if (typeof parsed.code === 'string' && /^[A-Z0-9]{4,8}$/.test(parsed.code))
+          code = parsed.code;
       } catch {
         // Keep provider error bodies out of logs and user-facing messages.
       }

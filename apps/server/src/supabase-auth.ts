@@ -35,7 +35,8 @@ export class SupabaseGuestAuth {
     private readonly sessionSecret: string,
     private readonly secureCookie: boolean,
   ) {
-    if (sessionSecret.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters');
+    if (sessionSecret.length < 32)
+      throw new Error('SESSION_SECRET must contain at least 32 characters');
   }
 
   async open(req: Request, res: Response) {
@@ -97,7 +98,12 @@ export class SupabaseGuestAuth {
         p_refresh_hash: '\\x' + this.hash(token),
       });
     }
-    res.clearCookie(cookieName, { path: '/', httpOnly: true, sameSite: 'strict', secure: this.secureCookie });
+    res.clearCookie(cookieName, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: this.secureCookie,
+    });
   }
 
   publicSession(session: GuestSession) {
@@ -144,7 +150,8 @@ export class SupabaseSessionGuard implements CanActivate {
     if (!session) throw new UnauthorizedException('会话已失效，请重新进入');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
       const csrf = req.header('x-csrf-token') || '';
-      if (!this.auth.verifyCsrf(session, csrf)) throw new ForbiddenException('请求校验失败，请刷新后重试');
+      if (!this.auth.verifyCsrf(session, csrf))
+        throw new ForbiddenException('请求校验失败，请刷新后重试');
     }
     req.demoSession = {
       userId: session.userId,

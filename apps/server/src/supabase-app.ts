@@ -30,7 +30,7 @@ import {
   postInput,
   profileInput,
 } from '@yinghuo/contracts';
-import type { Memory, Profile } from '@yinghuo/contracts';
+import type { BootstrapState, Memory, Profile } from '@yinghuo/contracts';
 import type { UserRequest } from './auth';
 import { MockChatProvider } from './providers';
 import { SupabaseGuestAuth, SupabaseSessionGuard } from './supabase-auth';
@@ -60,6 +60,11 @@ type ProfileRow = {
 };
 type PreferenceRow = { profile_id: string; call_me: string | null };
 type ConsentRow = { profile_id: string; revoked_at: string | null };
+type BootstrapUserRow = {
+  account_kind: 'guest' | 'bound' | 'merged';
+  free_slot_consumed_at: string | null;
+};
+type ConversationHeadRow = { id: string; profile_id: string; last_message_at: string | null };
 type MemoryRow = {
   id: string;
   profile_id: string;
@@ -83,10 +88,18 @@ type MessageRow = {
 
 @Controller()
 export class SupabasePublicController {
-  constructor(@Inject(SupabaseGuestAuth) private readonly auth: SupabaseGuestAuth) {}
+  constructor(
+    @Inject(SupabaseGuestAuth) private readonly auth: SupabaseGuestAuth,
+    @Inject(SupabaseDataApi) private readonly db: SupabaseDataApi,
+  ) {}
 
   @Get('health') health() {
-    return { status: 'ok', mode: 'supabase', persistence: 'supabase-postgrest', liveServices: false };
+    return {
+      status: 'ok',
+      mode: 'supabase',
+      persistence: 'supabase-postgrest',
+      liveServices: false,
+    };
   }
 
   @Get('capabilities') capabilities() {
@@ -103,6 +116,46 @@ export class SupabasePublicController {
     };
   }
 
+  @Get('bootstrap') async bootstrap(@Req() req: Request): Promise<BootstrapState> {
+    const session = await this.auth.read(req);
+    if (!session) return this.emptyBootstrap(null);
+
+    const [users, profiles, conversations] = await Promise.all([
+      this.db.select<BootstrapUserRow[]>('app_users', {
+        select: 'account_kind,free_slot_consumed_at',
+        id: eq(session.userId),
+        deleted_at: 'is.null',
+        limit: 1,
+      }),
+      this.db.select<ProfileRow[]>('profiles', {
+        select: 'id,creator_user_id,display_name,relationship,status,created_at',
+        creator_user_id: eq(session.userId),
+        deleted_at: 'is.null',
+        order: 'created_at.desc',
+        limit: 100,
+      }),
+      this.db.select<ConversationHeadRow[]>('conversations', {
+        select: 'id,profile_id,last_message_at',
+        user_id: eq(session.userId),
+        order: 'last_message_at.desc.nullslast,created_at.desc',
+        limit: 1,
+      }),
+    ]);
+    const validConversation =
+      conversations[0] && profiles.some((p) => p.id === conversations[0].profile_id)
+        ? conversations[0]
+        : undefined;
+    const user = users[0];
+    return {
+      ...this.emptyBootstrap(session.csrfToken),
+      accountState: user?.account_kind === 'bound' ? 'bound' : 'guest',
+      canCreateFreeProfile: Boolean(user && !user.free_slot_consumed_at),
+      profileCount: profiles.length,
+      recentProfileId: validConversation?.profile_id || profiles[0]?.id || null,
+      recentConversationId: validConversation?.id || null,
+    };
+  }
+
   @Get('products') products() {
     return { items: PRODUCTS, mock: true, pricesFinal: false, purchasable: false };
   }
@@ -116,6 +169,35 @@ export class SupabasePublicController {
 
   @Post('auth/guest') guest(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.auth.open(req, res);
+  }
+
+  private emptyBootstrap(csrfToken: string | null): BootstrapState {
+    return {
+      appVersion: '0.1.0',
+      phase: 'A',
+      features: {
+        guestSession: true,
+        profiles: true,
+        textChat: true,
+        manualMemories: true,
+        memoryCandidates: false,
+        phoneRecovery: false,
+        photoUpload: false,
+        payment: false,
+        publicSquare: false,
+      },
+      products: [],
+      terms: { aiDisclosure: 'ai-disclosure-v1' },
+      csrfToken,
+      paymentCapabilities: [],
+      canCreateFreeProfile: false,
+      accountState: null,
+      boundPhone: null,
+      profileCount: 0,
+      recentProfileId: null,
+      recentConversationId: null,
+      pendingTaskCount: 0,
+    };
   }
 
   @Post('auth/logout')
@@ -173,17 +255,25 @@ export class SupabaseProfilesController {
     const ownerId = req.demoSession.userId;
     await this.requireProfile(ownerId, profileId);
     const data = read(profileInput, body);
-    await this.db.patch<ProfileRow[]>('profiles', {
-      id: eq(profileId),
-      creator_user_id: eq(ownerId),
-      deleted_at: 'is.null',
-    }, { display_name: data.name, updated_at: new Date().toISOString() });
-    await this.db.upsert<PreferenceRow[]>('profile_preferences', {
-      profile_id: profileId,
-      user_id: ownerId,
-      call_me: data.callMe || null,
-      updated_at: new Date().toISOString(),
-    }, 'profile_id,user_id');
+    await this.db.patch<ProfileRow[]>(
+      'profiles',
+      {
+        id: eq(profileId),
+        creator_user_id: eq(ownerId),
+        deleted_at: 'is.null',
+      },
+      { display_name: data.name, updated_at: new Date().toISOString() },
+    );
+    await this.db.upsert<PreferenceRow[]>(
+      'profile_preferences',
+      {
+        profile_id: profileId,
+        user_id: ownerId,
+        call_me: data.callMe || null,
+        updated_at: new Date().toISOString(),
+      },
+      'profile_id,user_id',
+    );
     await this.saveProfileStory(ownerId, profileId, data.story);
     return this.loadProfile(ownerId, profileId);
   }
@@ -229,11 +319,15 @@ export class SupabaseProfilesController {
 
   @Delete('memories/:id') async removeMemory(@Req() req: UserRequest, @Param('id') id: string) {
     const memoryId = uuid(id);
-    const rows = await this.db.patch<MemoryRow[]>('memories', {
-      id: eq(memoryId),
-      owner_user_id: eq(req.demoSession.userId),
-      deleted_at: 'is.null',
-    }, { deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    const rows = await this.db.patch<MemoryRow[]>(
+      'memories',
+      {
+        id: eq(memoryId),
+        owner_user_id: eq(req.demoSession.userId),
+        deleted_at: 'is.null',
+      },
+      { deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    );
     if (!rows?.length) throw new NotFoundException('记忆不存在或不可访问');
     return { ok: true };
   }
@@ -278,7 +372,8 @@ export class SupabaseProfilesController {
           generation_id: eq(previous[0].generation_id),
           order: 'created_at.asc,id.asc',
         });
-        if (pair.length) return { items: pair.map((row) => this.mapMessage(row, ownerId, profileId)) };
+        if (pair.length)
+          return { items: pair.map((row) => this.mapMessage(row, ownerId, profileId)) };
       }
     }
 
@@ -320,10 +415,14 @@ export class SupabaseProfilesController {
         created_at: new Date(createdAt.getTime() + 1).toISOString(),
       },
     ]);
-    await this.db.patch('conversations', {
-      id: eq(conversation.id),
-      user_id: eq(ownerId),
-    }, { last_message_at: new Date().toISOString() });
+    await this.db.patch(
+      'conversations',
+      {
+        id: eq(conversation.id),
+        user_id: eq(ownerId),
+      },
+      { last_message_at: new Date().toISOString() },
+    );
     return { items: rows.map((row) => this.mapMessage(row, ownerId, profileId)) };
   }
 
@@ -335,7 +434,8 @@ export class SupabaseProfilesController {
       deleted_at: 'is.null',
       limit: 1,
     });
-    if (!rows?.[0] || rows[0].status !== 'active') throw new NotFoundException('空间不存在或不可访问');
+    if (!rows?.[0] || rows[0].status !== 'active')
+      throw new NotFoundException('空间不存在或不可访问');
     return rows[0];
   }
 
@@ -350,15 +450,23 @@ export class SupabaseProfilesController {
     const filter = inList(ids);
     const [preferences, stories, consents] = await Promise.all([
       this.db.select<PreferenceRow[]>('profile_preferences', {
-        select: 'profile_id,call_me', user_id: eq(ownerId), profile_id: filter,
+        select: 'profile_id,call_me',
+        user_id: eq(ownerId),
+        profile_id: filter,
       }),
       this.db.select<MemoryRow[]>('memories', {
         select: 'id,profile_id,owner_user_id,title,body,use_for_ai,source_type,created_at',
-        owner_user_id: eq(ownerId), profile_id: filter, source_type: eq('profile_story'), deleted_at: 'is.null',
+        owner_user_id: eq(ownerId),
+        profile_id: filter,
+        source_type: eq('profile_story'),
+        deleted_at: 'is.null',
       }),
       this.db.select<ConsentRow[]>('consents', {
-        select: 'profile_id,revoked_at', user_id: eq(ownerId), profile_id: filter,
-        purpose: eq('ai_persona_simulation'), revoked_at: 'is.null',
+        select: 'profile_id,revoked_at',
+        user_id: eq(ownerId),
+        profile_id: filter,
+        purpose: eq('ai_persona_simulation'),
+        revoked_at: 'is.null',
       }),
     ]);
     const prefById = new Map(preferences.map((row) => [row.profile_id, row]));
@@ -378,36 +486,64 @@ export class SupabaseProfilesController {
   private async saveProfileStory(ownerId: string, profileId: string, story: string) {
     const current = await this.db.select<MemoryRow[]>('memories', {
       select: 'id,profile_id,owner_user_id,title,body,use_for_ai,source_type,created_at',
-      profile_id: eq(profileId), owner_user_id: eq(ownerId), source_type: eq('profile_story'),
-      deleted_at: 'is.null', limit: 1,
+      profile_id: eq(profileId),
+      owner_user_id: eq(ownerId),
+      source_type: eq('profile_story'),
+      deleted_at: 'is.null',
+      limit: 1,
     });
     const now = new Date().toISOString();
     if (!story.trim()) {
-      if (current[0]) await this.db.patch('memories', { id: eq(current[0].id), owner_user_id: eq(ownerId) }, { deleted_at: now, updated_at: now });
+      if (current[0])
+        await this.db.patch(
+          'memories',
+          { id: eq(current[0].id), owner_user_id: eq(ownerId) },
+          { deleted_at: now, updated_at: now },
+        );
       return;
     }
     if (current[0]) {
-      await this.db.patch('memories', { id: eq(current[0].id), owner_user_id: eq(ownerId) }, { body: story, updated_at: now });
+      await this.db.patch(
+        'memories',
+        { id: eq(current[0].id), owner_user_id: eq(ownerId) },
+        { body: story, updated_at: now },
+      );
     } else {
       await this.db.insert('memories', {
-        profile_id: profileId, owner_user_id: ownerId, title: '关于TA', body: story,
-        visibility: 'private', use_for_ai: false, source_type: 'profile_story',
-        confirmation_state: 'confirmed', active_for_basic: true,
+        profile_id: profileId,
+        owner_user_id: ownerId,
+        title: '关于TA',
+        body: story,
+        visibility: 'private',
+        use_for_ai: false,
+        source_type: 'profile_story',
+        confirmation_state: 'confirmed',
+        active_for_basic: true,
       });
     }
   }
 
   private async findConversation(ownerId: string, profileId: string) {
     const rows = await this.db.select<ConversationRow[]>('conversations', {
-      select: 'id,profile_id,user_id,epoch', profile_id: eq(profileId), user_id: eq(ownerId), limit: 1,
+      select: 'id,profile_id,user_id,epoch',
+      profile_id: eq(profileId),
+      user_id: eq(ownerId),
+      limit: 1,
     });
     return rows[0];
   }
 
   private async ensureConversation(ownerId: string, profileId: string) {
-    const rows = await this.db.upsert<ConversationRow[]>('conversations', {
-      profile_id: profileId, user_id: ownerId, status: 'active', epoch: 0,
-    }, 'profile_id,user_id');
+    const rows = await this.db.upsert<ConversationRow[]>(
+      'conversations',
+      {
+        profile_id: profileId,
+        user_id: ownerId,
+        status: 'active',
+        epoch: 0,
+      },
+      'profile_id,user_id',
+    );
     if (!rows?.[0]?.id) throw new Error('Conversation creation did not return a conversation');
     return rows[0];
   }
@@ -429,7 +565,7 @@ export class SupabaseProfilesController {
       id: row.id,
       profileId,
       ownerId,
-      role: row.role === 'assistant' ? 'assistant' as const : 'user' as const,
+      role: row.role === 'assistant' ? ('assistant' as const) : ('user' as const),
       text: row.text || '',
       createdAt: row.created_at,
       mock: true,
@@ -440,16 +576,26 @@ export class SupabaseProfilesController {
 @Controller('orders')
 @UseGuards(SupabaseSessionGuard)
 class SupabaseOrdersUnavailableController {
-  @Get() list() { return { items: [], purchasable: false }; }
-  @Post() create() { throw new ServiceUnavailableException('支付通道尚未完成真实联调，暂不可下单'); }
-  @Post(':id/dev-pay') pay() { throw new ServiceUnavailableException('演示支付不会在 Supabase 模式下开放'); }
-  @Post(':id/dev-refund') refund() { throw new ServiceUnavailableException('退款通道尚未接入'); }
+  @Get() list() {
+    return { items: [], purchasable: false };
+  }
+  @Post() create() {
+    throw new ServiceUnavailableException('支付通道尚未完成真实联调，暂不可下单');
+  }
+  @Post(':id/dev-pay') pay() {
+    throw new ServiceUnavailableException('演示支付不会在 Supabase 模式下开放');
+  }
+  @Post(':id/dev-refund') refund() {
+    throw new ServiceUnavailableException('退款通道尚未接入');
+  }
 }
 
 @Controller('square')
 @UseGuards(SupabaseSessionGuard)
 class SupabaseSquareUnavailableController {
-  @Get() list(@Query('view') _view?: string) { return { items: [], available: false }; }
+  @Get() list(@Query('view') _view?: string) {
+    return { items: [], available: false };
+  }
   @Post() create(@Body() _body: unknown) {
     read(postInput, _body);
     throw new ServiceUnavailableException('广场审核能力尚未接入，内容暂不发布');
@@ -468,16 +614,18 @@ class SupabaseSquareUnavailableController {
     MockChatProvider,
     {
       provide: SupabaseDataApi,
-      useFactory: () => new SupabaseDataApi(process.env.SUPABASE_URL || '', process.env.SUPABASE_SECRET_KEY || ''),
+      useFactory: () =>
+        new SupabaseDataApi(process.env.SUPABASE_URL || '', process.env.SUPABASE_SECRET_KEY || ''),
     },
     {
       provide: SupabaseGuestAuth,
       inject: [SupabaseDataApi],
-      useFactory: (db: SupabaseDataApi) => new SupabaseGuestAuth(
-        db,
-        process.env.SESSION_SECRET || '',
-        !['development', 'test'].includes(process.env.NODE_ENV || ''),
-      ),
+      useFactory: (db: SupabaseDataApi) =>
+        new SupabaseGuestAuth(
+          db,
+          process.env.SESSION_SECRET || '',
+          !['development', 'test'].includes(process.env.NODE_ENV || ''),
+        ),
     },
   ],
 })
