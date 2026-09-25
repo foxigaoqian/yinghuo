@@ -24,6 +24,7 @@ const createStep = ref(1);
 const squareView = ref('精选');
 const preview = ref('');
 let restoringDraft = false;
+let profileDraftOwner = '';
 let chatDraftTimer: ReturnType<typeof setTimeout> | undefined;
 const selectedMemory = computed(() => app.memories.find((m) => m.id === props.query?.id));
 const selectedPost = computed(() => app.posts.find((p) => p.id === props.query?.id));
@@ -105,7 +106,26 @@ function send() {
 
 function restoreProfileDraft() {
   const userId = app.session.userId;
-  if (props.page !== 'create' || editing.value || !userId) return;
+  if (props.page !== 'create' || editing.value) return;
+  if (!userId) {
+    if (profileDraftOwner) {
+      form.name = '';
+      form.callMe = '';
+      form.story = '';
+      form.aiConsent = false;
+      createStep.value = 1;
+    }
+    profileDraftOwner = '';
+    return;
+  }
+  if (profileDraftOwner && profileDraftOwner !== userId) {
+    form.name = '';
+    form.callMe = '';
+    form.story = '';
+    form.aiConsent = false;
+    createStep.value = 1;
+  }
+  profileDraftOwner = userId;
   if (form.name || form.callMe || form.story) return;
   const draft = uni.getStorageSync('yinghuo.profileDraft.' + userId) as
     | { step?: number; name?: string; callMe?: string; story?: string }
@@ -122,7 +142,14 @@ function restoreProfileDraft() {
 
 function saveProfileDraft() {
   const userId = app.session.userId;
-  if (restoringDraft || props.page !== 'create' || editing.value || !userId) return;
+  if (
+    restoringDraft ||
+    props.page !== 'create' ||
+    editing.value ||
+    !userId ||
+    profileDraftOwner !== userId
+  )
+    return;
   const key = 'yinghuo.profileDraft.' + userId;
   if (!form.name && !form.callMe && !form.story && createStep.value === 1) {
     uni.removeStorageSync(key);
