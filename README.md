@@ -5,7 +5,7 @@
 面向国内家庭的移动优先记忆产品：记录重要的人的照片、声音和故事，在明确的 AI 标识下进行对话，并支持家人共同记录。
 首期采用移动端 H5 验证真实转化，确认需求后再迁移微信小程序。
 
-**当前状态：可运行的 H5 MVP 工程框架已纳入仓库。** 默认 demo 模式可本地演示；Guest-first 身份与核心档案、记忆、聊天已接入 Supabase 服务端路径（需应用迁移 0005 并配置服务端密钥）。AI 仍为模拟服务，支付、短信、媒体处理、内容审核和生产部署尚未接通，当前不是可直接商用版本。
+**当前状态：可运行的 H5 MVP 工程框架已纳入仓库。** 默认 demo 模式可本地演示；Guest-first 身份与核心档案、记忆、聊天已接入 Supabase 服务端路径（当前项目的 0001–0005 数据库迁移已应用；运行 API 仍需配置服务端密钥）。AI 仍为模拟服务，支付、短信、媒体处理、内容审核和生产部署尚未接通，当前不是可直接商用版本。
 
 ## 从这里开始
 
@@ -53,7 +53,7 @@
 
 - Node.js 24、pnpm 11；先运行 `pnpm install`。
 - 复制 `.env.example` 为 `.env`，默认 `APP_MODE=demo`；运行 `pnpm dev` 后用 H5 与本地 API 演示 Guest-first 主流程。
-- 接真实 Supabase 前先应用 `infra/migrations/0005_supabase_guest_api.sql`，再仅在服务端配置 `APP_MODE=supabase`、`SUPABASE_URL`、`SUPABASE_SECRET_KEY` 和至少 32 位的 `SESSION_SECRET`。不要把 Secret Key 配到 H5 构建变量或提交到仓库。
+- 当前项目已按序应用 `infra/migrations/0001`–`0005`；新环境按序执行迁移，再仅在服务端配置 `APP_MODE=supabase`、`SUPABASE_URL`、`SUPABASE_SECRET_KEY` 和至少 32 位的 `SESSION_SECRET`。不要把 Secret Key 配到 H5 构建变量或提交到仓库。
 - 代码检查：`pnpm test` 与 `pnpm build`。Supabase 接入明细和当前限制见 [接入说明](docs/25-supabase-h5-integration.md)。
 
 ## 版本与约定
