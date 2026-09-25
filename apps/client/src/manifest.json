@@ -1,0 +1,15 @@
+{
+  "name": "萤火",
+  "appid": "",
+  "description": "移动端记忆空间 H5 开发框架",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "uniStatistics": { "enable": false },
+  "h5": {
+    "title": "萤火",
+    "router": {
+      "mode": "hash"
+    }
+  }
+}

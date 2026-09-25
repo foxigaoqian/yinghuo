@@ -1,0 +1,18 @@
+{
+  "name": "@yinghuo/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm build && node dist/main.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test test/*.test.cjs"
+  },
+  "dependencies": {
+    "bullmq": "5.63.0",
+    "dotenv": "17.2.3"
+  },
+  "devDependencies": {
+    "tsx": "4.20.6"
+  }
+}

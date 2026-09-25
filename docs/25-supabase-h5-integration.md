@@ -1,0 +1,38 @@
+# Supabase H5 接入状态
+
+更新时间：2026-09-25
+
+## 已实现的服务端路径
+
+- `APP_MODE=supabase` 时加载独立 API 模块；默认 `APP_MODE=demo` 仍运行本地演示。
+- 首次 H5 访问无感创建 Guest 用户和服务端会话；Cookie 使用 HttpOnly、SameSite Strict，服务端只保存随机会话令牌的 SHA-256 哈希。
+- CSRF token 由服务端 HMAC 派生并逐请求校验；退出会撤销 Supabase `sessions` 行。
+- TA 档案、AI 告知同意、初始故事、手动记忆、AI 对话消息和对话均写入 Supabase；每次查询按当前服务端会话的 `user_id` 限定。
+- 会话、档案和聊天通过 Supabase Data API 的服务端凭据操作。密钥只存在后端环境变量，不进入 H5。
+- Supabase 模式明确报告 AI 回复仍为模拟；订单、支付、媒体存储和广场发布保持关闭，不返回虚假支付或处理成功。
+
+## 数据库迁移
+
+`infra/migrations/0005_supabase_guest_api.sql` 增加 Guest 会话创建/查询/撤销与原子创建档案函数。函数使用 `SECURITY INVOKER`，并仅授予 `service_role` 执行；匿名和普通用户角色无权调用。
+
+先前的 `0001`–`0004` 迁移在 Supabase 项目已应用。新增 `0005` 应先在目标项目应用并验证函数权限，再运行 API。
+
+## 服务端配置
+
+```dotenv
+APP_MODE=supabase
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
+SESSION_SECRET=<至少32个随机字符>
+```
+
+这些变量只配置在 API 服务器或部署平台的 Secret 环境中。不要使用 `VITE_`、`NEXT_PUBLIC_` 等会暴露到浏览器的前缀；不要把密钥写入 Git、H5 静态资源、截图或聊天。
+
+本地需要在轮换已暴露的旧密钥后，把新 Secret Key 写到被 `.gitignore` 忽略的 `.env`。生产环境密钥应在托管平台控制台配置。`APP_MODE=supabase` 的 H5 使用服务端 Guest 会话；演示模式仍可用原本的 `/dev/session`。
+
+## 尚未达到上线条件
+
+- 真实模型、记忆候选确认 UI、短信找回、私有 Storage 上传、图片处理、内容审核和支付尚未接入。
+- 生产启动继续被配置检查阻止，直到供应商和业务验收完成。
+- 当前接入需在轮换后的 Secret Key 环境中做一次真实 Supabase 集成验收：Guest 创建/恢复/撤销、档案创建、记忆写入读取、聊天刷新恢复、用户隔离、CSRF 与密钥不出现在浏览器。
+- 本迁移仅覆盖 Guest-first MVP 所需的数据库函数；后续迁移继续使用单调递增版本号，不能改写已应用的 `0001`–`0004`。

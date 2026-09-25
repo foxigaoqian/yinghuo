@@ -1,0 +1,113 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "首页",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/create/index",
+      "style": {
+        "navigationBarTitleText": "创建 TA",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/space/index",
+      "style": {
+        "navigationBarTitleText": "TA 的萤火",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/memories/index",
+      "style": {
+        "navigationBarTitleText": "记忆库",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/memory-edit/index",
+      "style": {
+        "navigationBarTitleText": "记录记忆",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/memory/index",
+      "style": {
+        "navigationBarTitleText": "记忆详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/chat/index",
+      "style": {
+        "navigationBarTitleText": "AI 记忆对话",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/restore/index",
+      "style": {
+        "navigationBarTitleText": "老照片修复",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/plans/index",
+      "style": {
+        "navigationBarTitleText": "价格与权益",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/orders/index",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/square/index",
+      "style": {
+        "navigationBarTitleText": "广场",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/story/index",
+      "style": {
+        "navigationBarTitleText": "故事详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/compose/index",
+      "style": {
+        "navigationBarTitleText": "写故事",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#f7f5f0"
+  }
+}

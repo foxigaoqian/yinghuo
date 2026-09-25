@@ -1,0 +1,31 @@
+{
+  "name": "yinghuo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @yinghuo/contracts build && concurrently -k -n api,h5 \"pnpm dev:server\" \"pnpm dev:client:h5\"",
+    "dev:server": "pnpm --filter @yinghuo/server dev",
+    "dev:client:h5": "pnpm --filter @yinghuo/client dev:h5",
+    "dev:admin": "pnpm --filter @yinghuo/admin dev",
+    "dev:worker": "pnpm --filter @yinghuo/worker dev",
+    "build": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/server build && pnpm --filter @yinghuo/worker build && pnpm --filter @yinghuo/client build:h5 && pnpm --filter @yinghuo/admin build",
+    "typecheck": "pnpm --filter @yinghuo/contracts build && pnpm -r --if-present typecheck",
+    "test": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/server test && pnpm --filter @yinghuo/worker test",
+    "test:e2e": "playwright test",
+    "db:validate": "pnpm --filter @yinghuo/server db:validate",
+    "db:generate": "pnpm --filter @yinghuo/server db:generate",
+    "format:check": "prettier --check apps packages scripts .github",
+    "env:check": "node scripts/check-env.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "concurrently": "9.2.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "@types/node": "24.10.1"
+  }
+}
