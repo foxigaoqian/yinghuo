@@ -66,7 +66,10 @@ test('create → remember → chat → reload → mock payment', async ({ page }
     page.locator('.bubble').filter({ hasText: '【AI 演示回复，并非本人】' }),
   ).toBeVisible();
   await page.goto('/#/pages/plans/index');
-  await page.getByText('选择年费 · 模拟下单', { exact: true }).click();
+  const planButton = page.getByText('选择年费 · 模拟下单', { exact: true });
+  await expect(planButton).not.toHaveAttribute('disabled', 'true');
+  await planButton.click();
+  await expect(page).toHaveURL(/orders/);
   await expect(page.getByText('待模拟支付', { exact: true })).toBeVisible();
   await page.getByText('继续模拟支付', { exact: true }).click();
   await page.getByText('OK', { exact: true }).click();
