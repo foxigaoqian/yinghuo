@@ -7,6 +7,8 @@
 
 **当前状态：H5 MVP 本地框架已搭建，可运行演示核心流程。** 真实短信、Supabase、AI、媒体处理、审核、微信支付和 Stripe 仍未接入；默认 provider 全部为 mock，不可用于生产。当前记录见 [H5 MVP 框架记录](docs/21-local-mvp-scaffold-status.md)。
 
+Supabase 当前仅有占位配置与部分 Prisma 映射，尚未连接数据库。接入步骤、密钥边界和待办见 [Supabase 项目接入说明](docs/22-supabase-project-connection.md)。
+
 ## 从这里开始
 
 | 文档 | 解决什么问题 |

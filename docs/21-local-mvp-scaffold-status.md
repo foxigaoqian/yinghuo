@@ -119,6 +119,7 @@ E2E 覆盖 15 个页面、IP 展示、375px 手机宽度、横屏、创建资料
 ## 重要边界
 
 - 不要把 Supabase `service_role`、微信支付私钥、Stripe Secret Key 或第三方 API Key 放进 H5 环境变量。
+- Supabase 接入现状、凭据轮换要求和下一步操作见 [Supabase 项目接入说明](22-supabase-project-connection.md)。
 - H5 只拿公开配置和短期访问令牌；供应商密钥只在服务端/Worker 使用。
 - 不要上传真实家庭照片、声音、手机号、聊天记录或支付证书到 GitHub。
 - 在短信、AI、媒体、审核和支付全部通过真实联调前，当前版本只适合内部演示和开发验收。
