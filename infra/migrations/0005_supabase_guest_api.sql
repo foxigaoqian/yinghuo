@@ -100,9 +100,6 @@ AS $$
 DECLARE
   v_profile_id uuid;
 BEGIN
-  IF p_ai_consent IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'AI consent is required' USING ERRCODE = '22023';
-  END IF;
   IF pg_catalog.length(pg_catalog.btrim(coalesce(p_display_name, ''))) < 1
      OR pg_catalog.length(p_display_name) > 80
      OR pg_catalog.length(coalesce(p_call_me, '')) > 40
@@ -120,16 +117,18 @@ BEGIN
   INSERT INTO public.profile_preferences (profile_id, user_id, call_me)
   VALUES (v_profile_id, p_user_id, nullif(pg_catalog.btrim(coalesce(p_call_me, '')), ''));
 
-  INSERT INTO public.consents (user_id, profile_id, purpose, subject_type, subject_id, version, asset_scope)
-  VALUES (
-    p_user_id,
-    v_profile_id,
-    'ai_persona_simulation',
-    'profile',
-    v_profile_id,
-    'ai-disclosure-v1',
-    '{"chat":true,"memory_retrieval":false}'::jsonb
-  );
+  IF p_ai_consent IS TRUE THEN
+    INSERT INTO public.consents (user_id, profile_id, purpose, subject_type, subject_id, version, asset_scope)
+    VALUES (
+      p_user_id,
+      v_profile_id,
+      'ai_persona_simulation',
+      'profile',
+      v_profile_id,
+      'ai-disclosure-v1',
+      '{"chat":true,"memory_retrieval":false}'::jsonb
+    );
+  END IF;
 
   IF nullif(pg_catalog.btrim(coalesce(p_story, '')), '') IS NOT NULL THEN
     INSERT INTO public.memories (

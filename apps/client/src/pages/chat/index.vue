@@ -7,4 +7,4 @@ onLoad((options) => {
   query.value = (options || {}) as Record<string, string>;
 });
 </script>
-<template><AppScreen page="chat" title="AI 记忆对话" :query="query" /></template>
+<template><AppScreen page="chat" title="记忆对话" :query="query" /></template>

@@ -7,4 +7,4 @@ onLoad((options) => {
   query.value = (options || {}) as Record<string, string>;
 });
 </script>
-<template><AppScreen page="orders" title="我的订单" :query="query" /></template>
+<template><AppScreen page="orders" title="订单" :query="query" /></template>

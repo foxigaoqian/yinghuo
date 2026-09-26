@@ -6,7 +6,7 @@ export const profileInput = z
     name: short,
     callMe: z.string().trim().max(40).default(''),
     story: z.string().trim().max(1000).default(''),
-    aiConsent: z.literal(true),
+    aiConsent: z.boolean().default(false),
   })
   .strict();
 export const memoryInput = z

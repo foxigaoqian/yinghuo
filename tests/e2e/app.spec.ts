@@ -28,6 +28,8 @@ test('15 page routes load, IP renders, no horizontal overflow', async ({ page })
   }
   await page.goto('/#/pages/home/index');
   await expect(page.locator('.hero-art .mascot')).toBeVisible();
+  await expect(page.getByText('开发演示 · 不发送短信、不真实扣款')).toHaveCount(0);
+  await expect(page.getByText('正在处理，请稍候…')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('first visit → first memory → private square story → planned price', async ({ page }) => {
@@ -44,7 +46,6 @@ test('first visit → first memory → private square story → planned price', 
   await page.reload();
   await expect(page.getByText('分享一点关于 TA 的记忆', { exact: true })).toBeVisible();
   await expect(page.locator('textarea').first()).toHaveValue('每周末做番茄鸡蛋面。');
-  await page.getByText('我理解未来的演示对话由 AI 生成，不代表本人。', { exact: true }).click();
   await page.getByText('保存并进入 TA 的空间', { exact: true }).click();
   await expect(page).toHaveURL(/space/);
   await expect(page.getByText('演示妈妈的萤火', { exact: true })).toBeVisible();
@@ -65,12 +66,8 @@ test('first visit → first memory → private square story → planned price', 
   await expect(page).toHaveURL(/view=mine/);
   await expect(page.getByText('窗边的下午', { exact: true })).toBeVisible();
   await page.goto('/#/pages/chat/index');
-  await page.locator('.chat-input input').fill('今天工作有点累');
-  await page.waitForTimeout(700);
-  await page.reload();
-  await expect(page.locator('.chat-input input')).toHaveValue('今天工作有点累');
-  await page.locator('.chat-input input').press('Enter');
-  await expect(page.locator('.bubble').filter({ hasText: '【AI 演示，并非本人】' })).toBeVisible();
+  await expect(page.getByText('对话功能正在准备')).toBeVisible();
+  await expect(page.locator('.chat-input input')).toHaveCount(0);
   await page.goto('/#/pages/plans/index');
   await expect(page.getByText('¥99')).toBeVisible();
   await expect(page.getByText('选择年费 · 模拟下单')).toHaveCount(0);

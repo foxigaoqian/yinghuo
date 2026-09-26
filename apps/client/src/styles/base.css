@@ -96,12 +96,38 @@ small,
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23948167' filter='url(%23n)' opacity='.04' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
   opacity: 0.45;
 }
-.demo-strip {
-  padding: 7px 16px;
-  background: #ece6da;
-  color: #6f6354;
-  text-align: center;
-  font-size: 12px;
+.loading-state {
+  padding: 34px 0;
+  min-height: 320px;
+}
+.loading-line {
+  height: 18px;
+  width: 60%;
+  margin: 20px 0;
+  border-radius: 8px;
+  background: #eae3d7;
+  animation: loading-breathe 1.4s ease-in-out infinite alternate;
+}
+.loading-line.short {
+  width: 38%;
+}
+.loading-block {
+  height: 175px;
+  margin-top: 36px;
+  border-radius: 22px;
+  background: #eee9df;
+  animation: loading-breathe 1.4s ease-in-out infinite alternate;
+}
+@keyframes loading-breathe {
+  to {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-line,
+  .loading-block {
+    animation: none;
+  }
 }
 .topbar {
   position: sticky;

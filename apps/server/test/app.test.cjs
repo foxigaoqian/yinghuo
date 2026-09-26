@@ -55,11 +55,11 @@ describe('local demo API', () => {
       .expect(403);
     await a.post('/api/v1/profiles').send({ name: '妈妈', aiConsent: true }).expect(403);
   });
-  it('validates consent and rejects client owner injection', async () => {
+  it('rejects invalid consent and client owner injection', async () => {
     await a
       .post('/api/v1/profiles')
       .set('x-csrf-token', csrf)
-      .send({ name: '妈妈', aiConsent: false })
+      .send({ name: '妈妈', aiConsent: 'yes' })
       .expect(400);
     await a
       .post('/api/v1/profiles')
@@ -71,10 +71,11 @@ describe('local demo API', () => {
     const r = await a
       .post('/api/v1/profiles')
       .set('x-csrf-token', csrf)
-      .send({ name: '演示妈妈', story: '每周末一起做番茄鸡蛋面。', aiConsent: true })
+      .send({ name: '演示妈妈', story: '每周末一起做番茄鸡蛋面。', aiConsent: false })
       .expect(201);
     profile = r.body;
     assert.equal(profile.callMe, '');
+    assert.equal(profile.aiConsent, false);
     assert.ok(profile.id);
     const firstMemories = await a.get('/api/v1/profiles/' + profile.id + '/memories').expect(200);
     assert.equal(firstMemories.body.items.length, 1);

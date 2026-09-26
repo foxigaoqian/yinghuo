@@ -18,7 +18,6 @@ function back() {
 </script>
 <template>
   <view class="app-shell">
-    <view class="demo-strip">开发演示 · 不发送短信、不真实扣款</view>
     <view class="topbar">
       <view v-if="page === 'home'" class="topbar-spacer" />
       <button v-else class="icon-button" aria-label="返回上一页" @click="back">

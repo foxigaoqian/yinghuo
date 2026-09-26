@@ -29,7 +29,7 @@ export async function api<T>(
     return body as T;
   } catch (error) {
     if (error instanceof TypeError || (error instanceof Error && error.name === 'AbortError'))
-      throw new Error('暂时连接不上服务，请确认后端已启动，再试一次。');
+      throw new Error('暂时无法连接，请检查网络后重试。');
     throw error;
   } finally {
     clearTimeout(timeout);

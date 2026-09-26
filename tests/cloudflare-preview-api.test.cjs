@@ -75,9 +75,10 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
     name: '阿树',
     callMe: '小宇',
     story: '虚构的演示人物',
-    aiConsent: true,
+    aiConsent: false,
   });
   assert.equal(created.status, 200);
+  assert.equal(created.body.aiConsent, false);
   assert.equal((await client.request('GET', '/profiles')).body.items[0].name, '阿树');
   const firstMemories = await client.request('GET', '/profiles/' + created.body.id + '/memories');
   assert.equal(firstMemories.body.items.length, 1);
