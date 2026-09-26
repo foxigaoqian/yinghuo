@@ -71,11 +71,15 @@ describe('local demo API', () => {
     const r = await a
       .post('/api/v1/profiles')
       .set('x-csrf-token', csrf)
-      .send({ name: '演示妈妈', aiConsent: true })
+      .send({ name: '演示妈妈', story: '每周末一起做番茄鸡蛋面。', aiConsent: true })
       .expect(201);
     profile = r.body;
     assert.equal(profile.callMe, '');
     assert.ok(profile.id);
+    const firstMemories = await a.get('/api/v1/profiles/' + profile.id + '/memories').expect(200);
+    assert.equal(firstMemories.body.items.length, 1);
+    assert.equal(firstMemories.body.items[0].body, '每周末一起做番茄鸡蛋面。');
+    assert.equal(firstMemories.body.items[0].useForAi, false);
     const bootstrap = await a.get('/api/v1/bootstrap').expect(200);
     assert.equal(bootstrap.body.canCreateFreeProfile, false);
     assert.equal(bootstrap.body.profileCount, 1);
@@ -99,7 +103,7 @@ describe('local demo API', () => {
     assert.equal(r.body.useForAi, false);
     assert.equal(
       (await a.get('/api/v1/profiles/' + profile.id + '/memories')).body.items.length,
-      1,
+      2,
     );
   });
   it('labels mock chat and excludes unconsented memories', async () => {
@@ -224,7 +228,7 @@ describe('configuration safety', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
-  it('only uses explicitly consented memory', async () => {
+  it('never pretends to retrieve memories in the interface-only chat demo', async () => {
     const result = await new MockChatProvider().reply({
       profile: {},
       text: '你好',
@@ -233,7 +237,8 @@ describe('configuration safety', () => {
         { title: 'consented', useForAi: true },
       ],
     });
-    assert.match(result.text, /consented/);
+    assert.match(result.text, /目前还不能根据记忆生成回复/);
+    assert.doesNotMatch(result.text, /consented/);
     assert.doesNotMatch(result.text, /secret/);
   });
 });

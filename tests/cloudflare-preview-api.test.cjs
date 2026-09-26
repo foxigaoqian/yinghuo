@@ -79,6 +79,10 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
   });
   assert.equal(created.status, 200);
   assert.equal((await client.request('GET', '/profiles')).body.items[0].name, '阿树');
+  const firstMemories = await client.request('GET', '/profiles/' + created.body.id + '/memories');
+  assert.equal(firstMemories.body.items.length, 1);
+  assert.equal(firstMemories.body.items[0].body, '虚构的演示人物');
+  assert.equal(firstMemories.body.items[0].useForAi, false);
 
   const memory = await client.request('POST', '/profiles/' + created.body.id + '/memories', {
     title: '窗边的花',

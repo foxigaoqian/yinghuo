@@ -255,6 +255,17 @@ async function handle(request, env) {
       createdAt: new Date().toISOString(),
     };
     session.data.profiles.push(profile);
+    if (input.story) {
+      session.data.memories.unshift({
+        id: crypto.randomUUID(),
+        profileId: profile.id,
+        ownerId: session.data.userId,
+        title: '关于' + profile.name,
+        body: input.story,
+        useForAi: false,
+        createdAt: profile.createdAt,
+      });
+    }
     await saveSession(env.DEMO_DATA, session);
     return json(profile);
   }
@@ -297,20 +308,14 @@ async function handle(request, env) {
           return json({ items: session.data.messages.filter((m) => replay.includes(m.id)) });
         if (session.data.messages.length >= MAX_MESSAGES)
           fail(409, 'PREVIEW_LIMIT', '演示对话已达上限');
-        const allowed = session.data.memories.find((m) => m.profileId === profile.id && m.useForAi);
-        const context = allowed
-          ? '你保存的「' + allowed.title + '」可以作为记忆线索。'
-          : '你可以慢慢补充一些愿意用于对话的记忆。';
         const user = makeMessage(session, profile.id, 'user', input.text);
         const assistant = makeMessage(
           session,
           profile.id,
           'assistant',
-          '【AI 演示回复，并非本人】我听到你说：“' +
-            input.text.slice(0, 80) +
-            '”。' +
-            context +
-            '当前还未连接真实模型。',
+          '【AI 演示，并非本人】这句话已保存在演示记录中。目前还不能根据记忆生成回复，你可以先在记忆空间继续记录关于' +
+            profile.name +
+            '的故事。',
         );
         session.data.messages.push(user, assistant);
         if (replayKey) session.data.chatReplay[replayKey] = [user.id, assistant.id];

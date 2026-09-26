@@ -21,17 +21,11 @@ export interface ModerationProvider {
 }
 export class MockChatProvider implements ChatProvider {
   async reply(input: { profile: Profile; text: string; memories: Memory[] }) {
-    const allowed = input.memories.filter((m) => m.useForAi);
-    const context = allowed.length
-      ? '你保存的「' + allowed[0].title + '」可以作为记忆线索。'
-      : '你可以慢慢补充一些愿意用于对话的记忆。';
     return {
       text:
-        '【AI 演示回复，并非本人】我听到你说：“' +
-        input.text.slice(0, 80) +
-        '”。' +
-        context +
-        '当前还未连接真实模型。',
+        '【AI 演示，并非本人】这句话已保存在演示记录中。目前还不能根据记忆生成回复，你可以先在记忆空间继续记录关于' +
+        (input.profile.name || 'TA') +
+        '的故事。',
       mock: true,
     };
   }

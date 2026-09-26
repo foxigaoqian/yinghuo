@@ -121,6 +121,10 @@ small,
   font-size: 17px;
   font-weight: 600;
 }
+.topbar-spacer {
+  width: 44px;
+  height: 44px;
+}
 .brand-small {
   font-size: 13px;
   color: #806846;
@@ -249,7 +253,7 @@ small,
   display: block;
 }
 .tile small {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 4px;
 }
 .sprite {
@@ -286,7 +290,7 @@ small,
   letter-spacing: 2px;
   color: #8c7251;
   display: block;
-  margin: 8px 0 20px;
+  margin: 8px 0 12px;
 }
 .hero h1 {
   font-size: 29px;
@@ -298,14 +302,14 @@ small,
   color: var(--muted);
 }
 .hero-art {
-  height: 230px;
+  height: 156px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse, #f5d77750, transparent 67%);
 }
 .hero-art .mascot {
-  width: 235px;
+  width: 176px;
 }
 .mascot.large {
   width: 200px;
@@ -505,6 +509,23 @@ small,
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.first-memory {
+  border-color: #e7c779;
+  background: linear-gradient(145deg, #fffdf7, #fbf0d8);
+}
+.first-memory h2 {
+  margin-top: 14px;
+}
+.first-memory .prose {
+  margin: 12px 0 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.story-excerpt {
+  margin: 12px 0 4px;
 }
 .empty {
   text-align: center;

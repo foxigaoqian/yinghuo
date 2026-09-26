@@ -144,6 +144,17 @@ export class ProfilesController {
       createdAt: this.db.now(),
     };
     this.db.state.profiles.push(p);
+    if (data.story) {
+      this.db.state.memories.unshift({
+        id: this.db.id(),
+        profileId: p.id,
+        ownerId: p.ownerId,
+        title: '关于' + p.name,
+        body: data.story,
+        useForAi: false,
+        createdAt: p.createdAt,
+      });
+    }
     this.db.save();
     return p;
   }

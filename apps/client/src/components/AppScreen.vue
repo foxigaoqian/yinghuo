@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { onHide, onShow } from '@dcloudio/uni-app';
 import { useAppStore } from '../stores/app';
-import { api, requestKey } from '../services/api';
+import { requestKey } from '../services/api';
 import AppShell from './AppShell.vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ page: string; title: string; query?: Record<string, string> }>();
@@ -30,6 +30,32 @@ let chatDraftTimer: ReturnType<typeof setTimeout> | undefined;
 const selectedMemory = computed(() => app.memories.find((m) => m.id === props.query?.id));
 const selectedPost = computed(() => app.posts.find((p) => p.id === props.query?.id));
 const editing = computed(() => props.query?.edit === '1');
+const nextAfterLogin = computed(() =>
+  ['create', 'compose', 'memories', 'memory-edit', 'space'].includes(props.query?.next || '')
+    ? props.query!.next!
+    : 'space',
+);
+const sampleStories = [
+  {
+    id: 'sample',
+    title: '妈妈窗边的那束花',
+    excerpt: '小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。',
+    body: '小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。如今，看到一束小雏菊，我也会记得给生活留一点明亮。',
+  },
+  {
+    id: 'sample-dad',
+    title: '爸爸留下的那把旧伞',
+    excerpt: '下雨天出门，他总把伞塞到我手里。现在我也会在门口提醒家人带伞。',
+    body: '下雨天出门，他总把伞塞到我手里，说天气变得快，别淋着了。后来我有了自己的家，也会在门口提醒家人带伞。那些小小的叮嘱，慢慢成了我的习惯。',
+  },
+  {
+    id: 'sample-grandma',
+    title: '外婆教我的第一道菜',
+    excerpt: '她说做菜没有标准答案，尝一口，觉得刚好，就是家的味道。',
+    body: '外婆教我做的第一道菜是番茄炒蛋。她从不说放几克盐，只让我尝一口，觉得刚好，就是家的味道。后来每次做这道菜，我都会想起厨房里那盏暖暖的灯。',
+  },
+];
+const selectedSample = computed(() => sampleStories.find((s) => s.id === props.query?.id));
 onShow(() => {
   void app.run(async () => {
     await app.refresh();
@@ -54,13 +80,31 @@ watch(
 function go(page: string, query = '') {
   uni.navigateTo({ url: '/pages/' + page + '/index' + query });
 }
+function replace(page: string, query = '') {
+  uni.redirectTo({ url: '/pages/' + page + '/index' + query });
+}
+function enter(next: 'create' | 'compose') {
+  if (app.session.userId) {
+    go(next);
+    return;
+  }
+  void app.run(async () => {
+    await app.login();
+    go(next);
+  });
+}
 function start() {
-  go(app.session.userId ? 'create' : 'login');
+  enter('create');
 }
 function needProfile(next: string) {
-  if (!app.session.userId) go('login');
-  else if (!app.current) go('create');
-  else go(next);
+  if (!app.session.userId) {
+    void app.run(async () => {
+      await app.login();
+      go(app.current ? next : 'create');
+    });
+    return;
+  }
+  go(app.current ? next : 'create');
 }
 function toggle(key: 'aiConsent' | 'useForAi' | 'public' | 'publicConsent', e: any) {
   form[key] = e.detail.value.length > 0;
@@ -73,7 +117,7 @@ function create() {
     );
     if (!editing.value && app.session.userId)
       uni.removeStorageSync('yinghuo.profileDraft.' + app.session.userId);
-    go(editing.value ? 'space' : 'chat');
+    replace('space');
   });
 }
 function nextCreateStep() {
@@ -223,31 +267,6 @@ watch(
   },
   { flush: 'sync' },
 );
-function buy(productId: 'memory-year' | 'photo-restore') {
-  if (!app.current) {
-    needProfile('plans');
-    return;
-  }
-  void app.run(async () => {
-    await app.buy(productId);
-    go('orders');
-  });
-}
-function payment(id: string, refund = false) {
-  uni.showModal({
-    title: refund ? '模拟退款' : '模拟支付',
-    content: '仅验证开发流程，不会发生真实扣款或退款。是否继续？',
-    success: (r) => {
-      if (r.confirm)
-        void app.run(async () => {
-          await api('/orders/' + id + (refund ? '/dev-refund' : '/dev-pay'), 'POST', {
-            confirmMock: true,
-          });
-          await app.refresh();
-        });
-    },
-  });
-}
 function publish() {
   const action = () =>
     app.run(async () => {
@@ -257,7 +276,7 @@ function publish() {
         visibility: form.public ? 'public' : 'private',
         publicConsent: form.publicConsent,
       });
-      go('square');
+      replace('square', '?view=mine');
     });
   if (form.public)
     uni.showModal({
@@ -279,6 +298,13 @@ function choosePhoto() {
   });
 }
 const currency = (fen: number) => (fen / 100).toFixed(2);
+watch(
+  () => props.query?.view,
+  (view) => {
+    if (props.page === 'square' && view === 'mine') squareView.value = '我的';
+  },
+  { immediate: true },
+);
 function info(title: string, content: string) {
   uni.showModal({ title, content, showCancel: false });
 }
@@ -295,22 +321,20 @@ function info(title: string, content: string) {
       <view class="hero"
         ><text class="wordmark">萤火</text><text class="eyebrow">FIREFLY · 珍藏每一点光</text>
         <h1>让想念，<br />有一个地方安放。</h1>
-        <p>为重要的人，保存照片、声音和故事。</p>
+        <p>无论 TA 是否在身边，都可以从一句话开始，珍藏你们的故事。</p>
         <view class="hero-art"
           ><view class="sprite mascot" role="img" aria-label="小萤，萤火记忆伙伴"
         /></view>
-        <button class="btn" @click="app.current ? go('chat') : start()">
-          {{ app.current ? '和 ' + app.current.name + ' 说说话' : '创建 TA 的萤火' }}
+        <button class="btn" :disabled="app.busy" @click="app.current ? go('memory-edit') : start()">
+          {{ app.current ? '再留下一段记忆' : '为 TA 建立记忆空间' }}
         </button>
         <button class="btn secondary" @click="go('square')">先读一段故事</button>
       </view>
-      <view class="grid3"
-        ><button class="tile" @click="go('restore')">
-          <AppIcon name="photo" /><text>老照片修复</text><small>让瞬间更清晰</small></button
-        ><button class="tile" @click="needProfile('memories')">
-          <AppIcon name="book" /><text>记忆相册</text><small>珍藏点滴时光</small></button
-        ><button class="tile" @click="go('memory-edit', '?type=audio')">
-          <AppIcon name="mic" /><text>保存声音</text><small>留住熟悉声音</small>
+      <view class="grid2"
+        ><button class="tile" :disabled="app.busy" @click="needProfile('memories')">
+          <AppIcon name="book" /><text>私密记忆</text><small>回看留下的每一件小事</small></button
+        ><button class="tile" @click="go('square')">
+          <AppIcon name="spark" /><text>广场故事</text><small>先读读别人的珍藏</small>
         </button></view
       >
       <view class="section"
@@ -319,7 +343,13 @@ function info(title: string, content: string) {
       >
       <view class="card"
         ><h3>{{ app.current ? app.current.name + '的萤火' : '第一束光，从你开始' }}</h3>
-        <p class="caption">不用准备齐全，可以慢慢留下。</p>
+        <p class="caption">
+          {{
+            app.current && app.memories.length
+              ? '已经留下 ' + app.memories.length + ' 段私密记忆。'
+              : '不用准备齐全，可以慢慢留下。'
+          }}
+        </p>
         <button class="btn secondary" @click="app.current ? go('space') : start()">
           打开记忆空间
         </button></view
@@ -337,16 +367,16 @@ function info(title: string, content: string) {
     <template v-else-if="page === 'login'">
       <view class="center"
         ><view class="sprite mascot large" role="img" aria-label="小萤" />
-        <h1>欢迎，把记忆慢慢留下。</h1>
-        <p class="caption">现在可以先用独立演示账号体验。</p></view
+        <h1>先从一段故事开始。</h1>
+        <p class="caption">临时演示空间，不需要手机号。</p></view
       >
       <view class="card"
-        ><h3>短信登录待接入</h3>
+        ><h3>继续体验</h3>
         <p class="caption">
           {{
             hostedPreview
-              ? '当前为在线演示，不收集手机号，也不发送验证码。请只用虚构资料体验。'
-              : '你正在申请 API，本阶段不收集手机号、不发送验证码。演示账号仅保存在当前浏览器会话中。'
+              ? '此账号仅用于当前浏览器的演示。请只填写虚构资料，暂不能跨设备找回。'
+              : '请只填写虚构资料。正式登录和跨设备找回尚未开放。'
           }}
         </p>
         <button
@@ -355,17 +385,17 @@ function info(title: string, content: string) {
           @click="
             app.run(async () => {
               await app.login();
-              go('space');
+              replace(nextAfterLogin);
             })
           "
         >
-          进入演示账号
+          进入临时演示空间
         </button></view
       >
       <view class="notice">{{
         hostedPreview
-          ? '演示资料会自动过期，不能用于保存真实内容。'
-          : '请使用虚构资料。后端重启后需要重新进入，旧演示空间不会自动重新绑定。'
+          ? '演示资料约 24 小时后过期，请勿保存真实家庭资料。'
+          : '请勿保存真实家庭资料；演示数据可能在后端重启后失效。'
       }}</view>
     </template>
     <template v-else-if="page === 'create'">
@@ -373,9 +403,12 @@ function info(title: string, content: string) {
       <p class="caption">
         {{ editing ? '修改记忆空间资料。' : '不用一次准备齐全，三步就能开始。' }}
       </p>
+      <view v-if="hostedPreview && !editing" class="notice"
+        >这是临时演示，资料约 24 小时后过期。请只用虚构人物和故事体验。</view
+      >
       <view v-if="!app.session.userId" class="card"
-        ><p>请先进入演示账号。</p>
-        <button class="btn" @click="go('login')">去登录</button></view
+        ><p>先进入临时演示空间，再继续填写。</p>
+        <button class="btn" @click="go('login', '?next=create')">继续体验</button></view
       >
       <template v-else-if="editing">
         <label class="field"
@@ -437,7 +470,7 @@ function info(title: string, content: string) {
         </template>
         <template v-else-if="createStep === 2">
           <h2>TA 平时怎么称呼你？</h2>
-          <p class="caption">这个称呼会帮助对话更贴近你们的相处方式，可以稍后补充。</p>
+          <p class="caption">先记下这个熟悉的称呼，也可以稍后补充。</p>
           <label class="field"
             ><text>TA 对你的称呼（选填）</text
             ><input v-model="form.callMe" maxlength="40" placeholder="例如：小雨、宝贝"
@@ -449,7 +482,9 @@ function info(title: string, content: string) {
         </template>
         <template v-else>
           <h2>分享一点关于 TA 的记忆</h2>
-          <p class="caption">一句常说的话、一个小习惯，或一个你想记住的瞬间。选填。</p>
+          <p class="caption">
+            一句常说的话，或一个小习惯。写下后就是 TA 的第一条私密记忆，也可以稍后再写。
+          </p>
           <label class="field"
             ><text>关于 {{ form.name }} 的一件小事</text
             ><textarea
@@ -460,7 +495,7 @@ function info(title: string, content: string) {
           </label>
           <checkbox-group @change="toggle('aiConsent', $event)"
             ><label class="check"
-              ><checkbox value="yes" :checked="form.aiConsent" />我理解对话由 AI
+              ><checkbox value="yes" :checked="form.aiConsent" />我理解未来的演示对话由 AI
               生成，不代表本人。</label
             ></checkbox-group
           >
@@ -471,7 +506,7 @@ function info(title: string, content: string) {
               :disabled="app.busy || !form.aiConsent || !form.name.trim()"
               @click="create"
             >
-              创建并开始聊天
+              保存并进入 TA 的空间
             </button></view
           >
         </template>
@@ -488,29 +523,40 @@ function info(title: string, content: string) {
         <view class="stats"
           ><view
             ><strong>{{ app.memories.length }}</strong
-            ><small>条文字记忆</small></view
+            ><small>条私密记忆</small></view
           ><view
-            ><strong>{{ app.messages.filter((m) => m.role === 'user').length }}</strong
-            ><small>次演示对话</small></view
+            ><strong>{{ app.profiles.length }}</strong
+            ><small>束萤火</small></view
           ></view
         >
-        <button class="btn" @click="go('chat')">和 TA 说说话<AppIcon name="arrow" /></button>
-        <p class="caption center">AI 根据你授权的记忆生成对话 · 当前为模拟</p>
+        <view v-if="app.memories[0]" class="card first-memory"
+          ><text class="badge">{{
+            app.memories.length === 1 ? '第一条记忆 · 仅自己可见' : '最近留下的记忆 · 仅自己可见'
+          }}</text>
+          <h2>{{ app.memories[0].title }}</h2>
+          <p class="prose">{{ app.memories[0].body }}</p>
+          <button class="text-button" @click="go('memories')">看看全部记忆 →</button></view
+        ><view v-else class="card empty"
+          ><h2>还没有记忆</h2>
+          <p>不用准备很多，先留下一句话就好。</p></view
+        >
+        <button class="btn" @click="go('memory-edit')">
+          再记录一段记忆<AppIcon name="arrow" />
+        </button>
         <view class="grid2 section"
           ><button class="tile" @click="go('memories')">
-            <AppIcon name="book" /><text>人生故事</text></button
-          ><button class="tile" @click="go('memory-edit', '?type=photo')">
-            <AppIcon name="photo" /><text>记忆照片</text></button
-          ><button class="tile" @click="go('memory-edit', '?type=audio')">
-            <AppIcon name="mic" /><text>原始声音</text></button
-          ><button class="tile" @click="go('memory-edit', '?type=video')">
-            <AppIcon name="photo" /><text>记忆视频</text>
+            <AppIcon name="book" /><text>回看记忆</text></button
+          ><button class="tile" @click="go('square')">
+            <AppIcon name="spark" /><text>看看广场</text>
           </button></view
         >
-        <button class="btn secondary" @click="go('memory-edit')">记录一段记忆</button>
+        <view class="notice"
+          >照片、声音与 AI 对话正在准备中。现在可以先用文字，慢慢留下 TA 的故事。</view
+        >
+        <button class="btn secondary" @click="go('chat')">查看对话界面演示</button>
         <view class="card"
           ><button class="row" @click="go('create', '?edit=1')">人物资料 →</button
-          ><button class="row" @click="go('plans')">价格与权益 →</button
+          ><button class="row" @click="go('plans')">了解未来价格 →</button
           ><button class="row" @click="go('create')">再创建一束萤火 →</button></view
         >
         <view v-if="app.profiles.length > 1" class="chips"
@@ -532,8 +578,8 @@ function info(title: string, content: string) {
       ><view v-else class="empty"
         ><view class="sprite mascot large" />
         <h1>第一束光，从你开始</h1>
-        <p>为重要的人，保存照片、声音和故事。</p>
-        <button class="btn" @click="start">创建 TA 的萤火</button></view
+        <p>为重要的人，先留下一段文字故事。</p>
+        <button class="btn" :disabled="app.busy" @click="start">创建 TA 的萤火</button></view
       >
     </template>
     <template v-else-if="page === 'memories'">
@@ -542,7 +588,7 @@ function info(title: string, content: string) {
         <button class="icon-button" aria-label="添加记忆" @click="needProfile('memory-edit')">
           <AppIcon name="plus" /></button
       ></view>
-      <p class="caption">当前已接通文字记录；照片、声音、视频待存储接口。</p>
+      <p class="caption">每一段文字都只属于你的私密空间。</p>
       <button
         v-for="m in app.memories"
         :key="m.id"
@@ -559,7 +605,7 @@ function info(title: string, content: string) {
     <template v-else-if="page === 'memory-edit'">
       <h1>把这一刻，慢慢留下。</h1>
       <view v-if="query?.type" class="notice"
-        >照片、原始声音与视频的上传接口已预留，当前尚未接入。可以先记录文字。</view
+        >照片、声音和视频稍后开放。现在可以先记下一段文字。</view
       >
       <template v-if="app.current"
         ><label class="field"
@@ -599,12 +645,12 @@ function info(title: string, content: string) {
       >
     </template>
     <template v-else-if="page === 'chat'">
-      <view class="notice">AI 记忆对话 · 当前为模拟回复，不代表本人。</view>
+      <view class="notice">这里仅演示对话界面。当前回复不会模仿 TA，也不会调用 TA 的记忆。</view>
       <template v-if="app.current"
         ><h2>{{ app.current.name }}的萤火</h2>
         <view v-if="!app.messages.length" class="empty"
           ><view class="sprite mascot large" />
-          <p>想说的话，慢慢说。</p></view
+          <p>想体验界面，可以先写一句话。真正的记忆对话尚未开放。</p></view
         >
         <view class="chat-list" aria-live="polite"
           ><view
@@ -619,7 +665,7 @@ function info(title: string, content: string) {
           ><input
             v-model="chatText"
             maxlength="2000"
-            placeholder="和 TA 说句话…"
+            placeholder="写一句话，预览对话界面…"
             @confirm="send" /><button
             class="icon-button"
             :disabled="app.busy || !chatText.trim()"
@@ -631,7 +677,7 @@ function info(title: string, content: string) {
     </template>
     <template v-else-if="page === 'restore'">
       <h1>让旧照片，重新清晰。</h1>
-      <p class="caption">先看看照片，再决定是否修复。</p>
+      <p class="caption">照片修复正在准备。现在只支持在本机预览一张照片。</p>
       <image
         v-if="preview"
         :src="preview"
@@ -639,38 +685,35 @@ function info(title: string, content: string) {
         mode="aspectFit"
         aria-label="本机照片预览"
       /><view v-else class="sprite mother photo" />
-      <button class="btn secondary" @click="choosePhoto">选择照片（仅本机预览）</button
-      ><view class="notice">修复 API 和云存储待接入。本页不会上传照片，也不会生成修复结果。</view>
-      <button class="btn" @click="buy('photo-restore')">体验模拟下单 · ¥2.90</button>
+      <button class="btn secondary" @click="choosePhoto">选择照片 · 仅本机查看</button
+      ><view class="notice">不会上传照片，也不会生成修复结果或产生费用。</view>
     </template>
     <template v-else-if="page === 'plans'">
-      <h1>保存更多记忆</h1>
-      <p class="caption">按需要选择，慢慢收藏。</p>
+      <h1>未来的价格与权益</h1>
+      <p class="caption">下面是计划价，目前仅供了解，不开放购买。</p>
       <view class="card"
         ><h2>基础空间</h2>
         <text class="price">¥0</text>
-        <p>1 个免费 TA · 20 条记忆 · 500MB</p>
-        <small>规划权益，当前开发模式不提供云空间。</small></view
+        <p>现在可体验：创建 TA、保存私密文字记忆、写故事。</p>
+        <small>演示资料会过期；正式账号和云空间尚未开放。</small></view
       >
       <view class="card highlight"
-        ><h2>记忆年费</h2>
-        <text class="price">¥99<small> / 365天 · 每位TA</small></text
+        ><text class="badge">规划中</text>
+        <h2>记忆年费</h2>
+        <text class="price">¥99<small> / 年 · 每位 TA</small></text
         ><view class="benefits"
-          ><p>所选 TA 的 5GB 素材空间</p>
-          <p>保存更多照片、声音、视频和故事</p>
-          <p>基础文字对话持续使用</p>
-          <p>照片修复会员价 ¥1.90 / 张（待实现）</p></view
-        ><button class="btn" :disabled="app.busy" @click="buy('memory-year')">
-          选择年费 · 模拟下单
-        </button></view
+          ><p>计划提供每位 TA 5GB 素材空间</p>
+          <p>计划支持照片、声音和更多家庭故事</p>
+          <p>以正式上线时展示的权益与价格为准</p></view
+        ><button class="btn secondary" @click="go('space')">先体验免费的文字记忆</button></view
       >
       <view class="notice"
-        >价格是方案展示价；不自动续费。模拟支付只验证订单状态，不开通真实付费权益。</view
+        >当前不收款。未来年费按每位 TA 计算，计划不自动续费；正式开售前会再次说明。</view
       >
     </template>
     <template v-else-if="page === 'orders'">
       <h1>我的订单</h1>
-      <p class="caption">所有金额都是开发演示，不真实扣款。</p>
+      <p class="caption">这里仅保留早期演示订单，不代表真实付款或已开通权益。</p>
       <view v-for="o in app.orders" :key="o.id" class="card"
         ><view class="section"
           ><h3>{{ o.productId === 'memory-year' ? '记忆年费' : '老照片修复' }}</h3>
@@ -678,32 +721,17 @@ function info(title: string, content: string) {
             { pending_payment: '待模拟支付', paid: '模拟已支付', refunded: '模拟已退款' }[o.status]
           }}</text></view
         ><text class="price">¥{{ currency(o.priceFen) }}</text
-        ><small class="block">订单 {{ o.id.slice(0, 8) }}</small
-        ><button
-          v-if="o.status === 'pending_payment'"
-          class="btn"
-          :disabled="app.busy"
-          @click="payment(o.id)"
-        >
-          继续模拟支付</button
-        ><button
-          v-if="o.status === 'paid'"
-          class="btn secondary"
-          :disabled="app.busy"
-          @click="payment(o.id, true)"
-        >
-          体验模拟退款
-        </button></view
+        ><small class="block">订单 {{ o.id.slice(0, 8) }}</small></view
       >
       <view v-if="!app.orders.length" class="empty"
-        ><p>还没有订单。</p>
-        <button class="btn secondary" @click="go('plans')">了解价格与权益</button></view
+        ><p>暂未开放购买，可以先体验免费的文字记忆。</p>
+        <button class="btn secondary" @click="go('plans')">了解未来价格</button></view
       >
     </template>
     <template v-else-if="page === 'square'">
       <view class="section"
         ><h1>广场</h1>
-        <button class="text-button" @click="app.session.userId ? go('compose') : go('login')">
+        <button class="text-button" :disabled="app.busy" @click="enter('compose')">
           写故事
         </button></view
       >
@@ -718,14 +746,20 @@ function info(title: string, content: string) {
           {{ v }}
         </button></view
       >
-      <view v-if="squareView === '精选'" class="card"
-        ><view class="sprite flowers photo" /><text class="badge">虚构示例故事</text>
-        <h2>妈妈窗边的那束花</h2>
-        <p class="prose">
-          小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。
-        </p>
-        <button class="text-button" @click="go('story', '?id=sample')">阅读全文 →</button></view
-      >
+      <view v-if="squareView === '精选'">
+        <view v-for="(story, index) in sampleStories" :key="story.id" class="card">
+          <view
+            v-if="index === 0"
+            class="sprite flowers photo"
+            role="img"
+            aria-label="窗边的小雏菊"
+          />
+          <text class="badge">虚构示例故事</text>
+          <h2>{{ story.title }}</h2>
+          <p class="prose story-excerpt">{{ story.excerpt }}</p>
+          <button class="text-button" @click="go('story', '?id=' + story.id)">读这个故事 →</button>
+        </view>
+      </view>
       <template v-else
         ><button
           v-for="p in app.posts"
@@ -742,15 +776,13 @@ function info(title: string, content: string) {
           ><p>还没有自己的故事，可以从一句话开始。</p></view
         ></template
       >
-      <view class="notice">内容审核尚未接入，公开投稿只进入待审核，不自动展示给其他人。</view>
+      <view class="notice">广场目前展示虚构示例；自己写的故事默认仅自己可见。</view>
     </template>
     <template v-else-if="page === 'story'">
-      <view v-if="query?.id === 'sample'"
+      <view v-if="selectedSample"
         ><view class="sprite flowers photo" /><text class="badge">虚构示例故事</text>
-        <h1>妈妈窗边的那束花</h1>
-        <p class="prose">
-          小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。如今，看到一束小雏菊，我也会记得给生活留一点明亮。
-        </p></view
+        <h1>{{ selectedSample.title }}</h1>
+        <p class="prose">{{ selectedSample.body }}</p></view
       >
       <view v-else-if="selectedPost"
         ><text class="badge">{{
@@ -759,11 +791,11 @@ function info(title: string, content: string) {
         <h1>{{ selectedPost.title }}</h1>
         <p class="prose">{{ selectedPost.body }}</p></view
       ><view v-else class="notice">故事不存在或当前账号不可访问。</view>
-      <p class="caption">喜欢、收藏、评论和举报接口将在下一阶段补齐。</p>
+      <button class="btn secondary" @click="go('square')">返回广场</button>
     </template>
     <template v-else-if="page === 'compose'">
-      <h1>分享一段故事</h1>
-      <p class="caption">只分享你愿意让别人看到的部分。</p>
+      <h1>写下一个故事</h1>
+      <p class="caption">先写给自己看，想说多少都可以。</p>
       <template v-if="app.session.userId">
         <label class="field"
           ><text>故事标题</text
@@ -776,7 +808,9 @@ function info(title: string, content: string) {
             placeholder="一句话、一件小事，都可以。"
           />
         </label>
-        <checkbox-group @change="toggle('public', $event)"
+        <checkbox-group
+          v-if="app.bootstrap?.features?.publicSquare"
+          @change="toggle('public', $event)"
           ><label class="check"
             ><checkbox value="yes" :checked="form.public" />提交到广场（不勾选则仅自己可见）</label
           ></checkbox-group
@@ -786,6 +820,7 @@ function info(title: string, content: string) {
             ><checkbox value="yes" :checked="form.publicConsent" />我确认有权公开这些内容。</label
           ></checkbox-group
         >
+        <view v-else class="notice">公开分享稍后开放；这段故事只会出现在「广场 · 我的」。</view>
         <button
           class="btn"
           :disabled="
@@ -798,29 +833,28 @@ function info(title: string, content: string) {
         >
           {{ form.public ? '确认并提交审核' : '保存给自己' }}
         </button></template
-      ><button v-else class="btn" @click="go('login')">先进入演示账号</button>
+      ><button v-else class="btn" @click="go('login', '?next=compose')">进入临时演示空间</button>
     </template>
     <template v-else-if="page === 'me'">
       <view class="section"
         ><view
           ><h1>{{ app.session.userId ? '你好，记忆收藏家' : '欢迎来到萤火' }}</h1>
           <p class="caption">
-            {{ app.session.userId ? '开发演示账号' : '把重要的人，慢慢记住。' }}
+            {{ app.session.userId ? '临时演示空间 · 仅供虚构资料体验' : '把重要的人，慢慢记住。' }}
           </p></view
         ><view class="sprite mascot mini"
       /></view>
-      <button v-if="!app.session.userId" class="btn" @click="go('login')">登录／注册</button>
-      <view class="grid3"
+      <button v-if="!app.session.userId" class="btn" @click="go('login')">进入临时演示空间</button>
+      <view class="grid2"
         ><button class="tile" @click="needProfile('memories')">
           <AppIcon name="book" /><text>我的记忆</text></button
-        ><button class="tile" @click="go('orders')">
-          <AppIcon name="card" /><text>我的订单</text></button
         ><button class="tile" @click="go('plans')">
-          <AppIcon name="spark" /><text>价格权益</text>
+          <AppIcon name="spark" /><text>未来价格</text>
         </button></view
       >
       <view class="card"
-        ><button class="row" @click="go('square')">我的广场故事 →</button
+        ><button class="row" @click="go('square', '?view=mine')">我的广场故事 →</button
+        ><button v-if="app.orders.length" class="row" @click="go('orders')">演示历史订单 →</button
         ><button
           class="row"
           @click="
@@ -838,7 +872,7 @@ function info(title: string, content: string) {
           @click="
             info(
               '帮助与反馈',
-              '这是开发框架。短信、支付、AI、图片修复和云存储均未接入，真实服务上线前会单独验收。',
+              '目前可以创建 TA、保存文字记忆和写私密故事。照片、声音、AI 对话与付款功能正在准备中。',
             )
           "
         >

@@ -30,11 +30,10 @@ test('15 page routes load, IP renders, no horizontal overflow', async ({ page })
   await expect(page.locator('.hero-art .mascot')).toBeVisible();
   expect(errors).toEqual([]);
 });
-test('create → remember → chat → reload → mock payment', async ({ page }) => {
-  await page.goto('/#/pages/login/index');
-  await page.getByText('进入演示账号', { exact: true }).click();
-  await expect(page).toHaveURL(/space/);
-  await page.getByText('创建 TA 的萤火', { exact: true }).click();
+test('first visit → first memory → private square story → planned price', async ({ page }) => {
+  await page.goto('/#/pages/home/index');
+  await page.getByText('为 TA 建立记忆空间', { exact: true }).click();
+  await expect(page).toHaveURL(/create/);
   // uni-app's H5 placeholder is rendered as a sibling hint rather than a
   // native placeholder attribute in some browser builds.
   await page.locator('input').first().fill('演示妈妈');
@@ -45,35 +44,36 @@ test('create → remember → chat → reload → mock payment', async ({ page }
   await page.reload();
   await expect(page.getByText('分享一点关于 TA 的记忆', { exact: true })).toBeVisible();
   await expect(page.locator('textarea').first()).toHaveValue('每周末做番茄鸡蛋面。');
-  await page.getByText('我理解对话由 AI 生成，不代表本人。', { exact: true }).click();
-  await page.getByText('创建并开始聊天', { exact: true }).click();
+  await page.getByText('我理解未来的演示对话由 AI 生成，不代表本人。', { exact: true }).click();
+  await page.getByText('保存并进入 TA 的空间', { exact: true }).click();
+  await expect(page).toHaveURL(/space/);
   await expect(page.getByText('演示妈妈的萤火', { exact: true })).toBeVisible();
-  await page.goto('/#/pages/space/index');
-  await page.getByText('记录一段记忆', { exact: true }).click();
+  await expect(page.getByText('每周末做番茄鸡蛋面。', { exact: true })).toBeVisible();
+  await expect(page.getByText('第一条记忆 · 仅自己可见', { exact: true })).toBeVisible();
+  await page.getByText('再记录一段记忆', { exact: true }).click();
   await page.locator('input').first().fill('周末的面');
   await page.locator('textarea').first().fill('每周末做番茄鸡蛋面。');
   await page.getByText('保存记忆', { exact: true }).click();
   await expect(page.getByText('周末的面', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText('周末的面', { exact: true })).toBeVisible();
+  await page.goto('/#/pages/square/index');
+  await page.getByText('写故事', { exact: true }).click();
+  await page.locator('input').first().fill('窗边的下午');
+  await page.locator('textarea').first().fill('她喜欢在窗台养花。');
+  await page.getByText('保存给自己', { exact: true }).click();
+  await expect(page).toHaveURL(/view=mine/);
+  await expect(page.getByText('窗边的下午', { exact: true })).toBeVisible();
   await page.goto('/#/pages/chat/index');
   await page.locator('.chat-input input').fill('今天工作有点累');
   await page.waitForTimeout(700);
   await page.reload();
   await expect(page.locator('.chat-input input')).toHaveValue('今天工作有点累');
   await page.locator('.chat-input input').press('Enter');
-  await expect(
-    page.locator('.bubble').filter({ hasText: '【AI 演示回复，并非本人】' }),
-  ).toBeVisible();
+  await expect(page.locator('.bubble').filter({ hasText: '【AI 演示，并非本人】' })).toBeVisible();
   await page.goto('/#/pages/plans/index');
-  const planButton = page.getByText('选择年费 · 模拟下单', { exact: true });
-  await expect(planButton).not.toHaveAttribute('disabled', 'true');
-  await planButton.click();
-  await expect(page).toHaveURL(/orders/);
-  await expect(page.getByText('待模拟支付', { exact: true })).toBeVisible();
-  await page.getByText('继续模拟支付', { exact: true }).click();
-  await page.getByText('OK', { exact: true }).click();
-  await expect(page.getByText('模拟已支付', { exact: true })).toBeVisible();
+  await expect(page.getByText('¥99')).toBeVisible();
+  await expect(page.getByText('选择年费 · 模拟下单')).toHaveCount(0);
 });
 test('small phone and landscape remain within viewport', async ({ page }) => {
   for (const viewport of [
