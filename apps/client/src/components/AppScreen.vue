@@ -7,6 +7,7 @@ import AppShell from './AppShell.vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ page: string; title: string; query?: Record<string, string> }>();
 const app = useAppStore();
+const hostedPreview = computed(() => Boolean(app.bootstrap?.features?.hostedPreview));
 const form = reactive({
   name: '',
   callMe: '',
@@ -342,7 +343,11 @@ function info(title: string, content: string) {
       <view class="card"
         ><h3>短信登录待接入</h3>
         <p class="caption">
-          你正在申请 API，本阶段不收集手机号、不发送验证码。演示账号仅保存在当前浏览器会话中。
+          {{
+            hostedPreview
+              ? '当前为在线演示，不收集手机号，也不发送验证码。请只用虚构资料体验。'
+              : '你正在申请 API，本阶段不收集手机号、不发送验证码。演示账号仅保存在当前浏览器会话中。'
+          }}
         </p>
         <button
           class="btn"
@@ -357,9 +362,11 @@ function info(title: string, content: string) {
           进入演示账号
         </button></view
       >
-      <view class="notice"
-        >请使用虚构资料。后端重启后需要重新进入，旧演示空间不会自动重新绑定。</view
-      >
+      <view class="notice">{{
+        hostedPreview
+          ? '演示资料会自动过期，不能用于保存真实内容。'
+          : '请使用虚构资料。后端重启后需要重新进入，旧演示空间不会自动重新绑定。'
+      }}</view>
     </template>
     <template v-else-if="page === 'create'">
       <h1>{{ editing ? '补充 TA 的故事' : '为重要的人，留下一束光' }}</h1>
@@ -819,7 +826,9 @@ function info(title: string, content: string) {
           @click="
             info(
               '隐私与数据',
-              '本版本仅供本地开发。请使用虚构资料；演示数据存储在本地后端 JSON，尚未连接 Supabase。正式的数据导出、删除和隐私条款待实现。',
+              hostedPreview
+                ? '在线演示请只提交虚构资料。内容暂存在 Cloudflare，最后一次保存约 24 小时后自动过期；正式的数据导出、删除和隐私条款待实现。'
+                : '本版本仅供本地开发。请使用虚构资料；演示数据存储在本地后端 JSON，尚未连接 Supabase。正式的数据导出、删除和隐私条款待实现。',
             )
           "
         >
