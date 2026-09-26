@@ -45,7 +45,7 @@ function errorResponse(error) {
     console.error('Yinghuo preview API failed:', error);
     return json(
       {
-        error: { code: 'PREVIEW_ERROR', message: '演示服务暂时不可用，请稍后重试' },
+        error: { code: 'PREVIEW_ERROR', message: '暂时无法打开，请稍后重试' },
         requestId: crypto.randomUUID(),
       },
       500,
@@ -106,7 +106,7 @@ async function saveSession(kv, session) {
 }
 
 function requireSession(session) {
-  if (!session) fail(401, 'UNAUTHORIZED', '请先进入演示账号');
+  if (!session) fail(401, 'UNAUTHORIZED', '请重新进入体验空间');
   return session;
 }
 
@@ -176,7 +176,7 @@ function makeMessage(session, profileId, role, text) {
 }
 
 async function handle(request, env) {
-  if (!env?.DEMO_DATA) fail(503, 'STORAGE_NOT_READY', '演示数据服务尚未配置');
+  if (!env?.DEMO_DATA) fail(503, 'STORAGE_NOT_READY', '暂时无法保存，请稍后重试');
   const url = new URL(request.url);
   const base = '/api/v1/';
   if (!url.pathname.startsWith(base)) fail(404, 'NOT_FOUND', '接口不存在');
@@ -247,7 +247,7 @@ async function handle(request, env) {
   if (method === 'POST' && route === 'profiles') {
     const input = validate(profileInput, await readBody(request));
     if (session.data.profiles.length >= MAX_PROFILES)
-      fail(409, 'PREVIEW_LIMIT', '演示账号最多创建 3 个记忆空间');
+      fail(409, 'PREVIEW_LIMIT', '当前最多可以创建 3 个记忆空间');
     const profile = {
       id: crypto.randomUUID(),
       ownerId: session.data.userId,
@@ -284,7 +284,7 @@ async function handle(request, env) {
       if (method === 'POST') {
         const input = validate(memoryInput, await readBody(request));
         if (session.data.memories.length >= MAX_MEMORIES)
-          fail(409, 'PREVIEW_LIMIT', '演示账号最多保存 20 条记忆');
+          fail(409, 'PREVIEW_LIMIT', '当前最多可以保存 20 条记忆');
         const memory = {
           id: crypto.randomUUID(),
           profileId: profile.id,
@@ -390,7 +390,7 @@ async function handle(request, env) {
   if (route === 'square' && method === 'POST') {
     const input = validate(postInput, await readBody(request));
     if (session.data.posts.length >= MAX_POSTS)
-      fail(409, 'PREVIEW_LIMIT', '演示账号最多保存 5 篇故事');
+      fail(409, 'PREVIEW_LIMIT', '当前最多可以保存 5 篇故事');
     const post = {
       id: crypto.randomUUID(),
       ownerId: session.data.userId,

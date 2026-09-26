@@ -233,7 +233,7 @@ function publish() {
   if (form.public)
     uni.showModal({
       title: '确认提交到广场？',
-      content: '故事将进入待审核；审核服务尚未接入，不会直接公开。请勿提交真实隐私。',
+      content: '故事将在审核通过后展示。请确认已获得相关人物的分享许可。',
       success: (r) => {
         if (r.confirm) void action();
       },
