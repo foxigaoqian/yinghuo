@@ -1,7 +1,12 @@
-import contracts from '../../../packages/contracts/dist/index.js';
-
-const { profileInput, memoryInput, chatInput, postInput, orderInput, idParam, PRODUCTS } =
-  contracts;
+import {
+  profileInput,
+  memoryInput,
+  chatInput,
+  postInput,
+  orderInput,
+  idParam,
+  PRODUCTS,
+} from '../../../packages/contracts/src/index.ts';
 
 const COOKIE = '__Host-yinghuo_demo';
 const SESSION_TTL = 24 * 60 * 60;
