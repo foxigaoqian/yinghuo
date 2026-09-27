@@ -32,7 +32,8 @@ import {
 } from '@yinghuo/contracts';
 import type { BootstrapState, Memory, Profile } from '@yinghuo/contracts';
 import type { UserRequest } from './auth';
-import { MockChatProvider } from './providers';
+import type { ChatProvider } from './providers';
+import { LiveChatProvider } from './live-chat';
 import { SupabaseGuestAuth, SupabaseSessionGuard } from './supabase-auth';
 import { SupabaseDataApi } from './supabase-data-api';
 
@@ -82,9 +83,13 @@ type MessageRow = {
   client_message_id: string | null;
   generation_id: string | null;
   role: 'user' | 'assistant' | 'system';
+  status: string;
   text: string | null;
   created_at: string;
 };
+
+const liveChatConfigured = () => process.env.AI_PROVIDER === 'openai_compatible';
+const messageColumns = 'id,conversation_id,client_message_id,generation_id,role,status,text,created_at';
 
 @Controller()
 export class SupabasePublicController {
@@ -107,7 +112,7 @@ export class SupabasePublicController {
       mode: 'supabase',
       database: 'supabase',
       auth: 'guest-session',
-      chat: 'mock',
+      chat: liveChatConfigured() ? 'live' : 'disabled',
       payment: 'disabled',
       sms: 'not-connected',
       storage: 'not-connected',
@@ -178,7 +183,7 @@ export class SupabasePublicController {
       features: {
         guestSession: true,
         profiles: true,
-        textChat: false,
+        textChat: liveChatConfigured(),
         manualMemories: true,
         memoryCandidates: false,
         phoneRecovery: false,
@@ -213,7 +218,7 @@ export class SupabasePublicController {
 export class SupabaseProfilesController {
   constructor(
     @Inject(SupabaseDataApi) private readonly db: SupabaseDataApi,
-    @Inject(MockChatProvider) private readonly chat: MockChatProvider,
+    @Inject('SUPABASE_CHAT_PROVIDER') private readonly chat: ChatProvider,
   ) {}
 
   @Get('profiles') async list(@Req() req: UserRequest) {
@@ -339,7 +344,7 @@ export class SupabaseProfilesController {
     const conversation = await this.findConversation(ownerId, profileId);
     if (!conversation) return { items: [] };
     const rows = await this.db.select<MessageRow[]>('messages', {
-      select: 'id,conversation_id,client_message_id,generation_id,role,text,created_at',
+      select: messageColumns,
       conversation_id: eq(conversation.id),
       order: 'created_at.asc,id.asc',
       limit: 500,
@@ -356,18 +361,21 @@ export class SupabaseProfilesController {
     const ownerId = req.demoSession.userId;
     const profile = await this.loadProfile(ownerId, profileId);
     const data = read(chatInput, body);
-    const conversation = await this.ensureConversation(ownerId, profileId);
+    if (!liveChatConfigured()) throw new ServiceUnavailableException('记忆对话尚未开放');
+    if (data.aiConsent !== true)
+      throw new ForbiddenException('请先确认了解 AI 对话的内容使用方式');
+    const conversation = await this.findConversation(ownerId, profileId);
 
-    if (data.clientMessageId) {
+    if (conversation && data.clientMessageId) {
       const previous = await this.db.select<MessageRow[]>('messages', {
-        select: 'id,conversation_id,client_message_id,generation_id,role,text,created_at',
+        select: messageColumns,
         conversation_id: eq(conversation.id),
         client_message_id: eq(data.clientMessageId),
         limit: 1,
       });
       if (previous?.[0]?.generation_id) {
         const pair = await this.db.select<MessageRow[]>('messages', {
-          select: 'id,conversation_id,client_message_id,generation_id,role,text,created_at',
+          select: messageColumns,
           conversation_id: eq(conversation.id),
           generation_id: eq(previous[0].generation_id),
           order: 'created_at.asc,id.asc',
@@ -377,48 +385,70 @@ export class SupabaseProfilesController {
       }
     }
 
-    const memories = await this.db.select<MemoryRow[]>('memories', {
-      select: 'id,profile_id,owner_user_id,title,body,use_for_ai,source_type,created_at',
-      profile_id: eq(profileId),
-      owner_user_id: eq(ownerId),
-      use_for_ai: 'eq.true',
-      confirmation_state: 'eq.confirmed',
-      deleted_at: 'is.null',
-      limit: 100,
-    });
+    const selectedIds = [...new Set(data.memoryIds || [])];
+    if (selectedIds.length !== (data.memoryIds || []).length)
+      throw new BadRequestException('选中的记忆不能重复');
+    // Only the memories explicitly checked for THIS message are sent to AI.
+    const memories = selectedIds.length
+      ? await this.db.select<MemoryRow[]>('memories', {
+          select: 'id,profile_id,owner_user_id,title,body,use_for_ai,source_type,created_at',
+          id: inList(selectedIds),
+          profile_id: eq(profileId),
+          owner_user_id: eq(ownerId),
+          confirmation_state: 'eq.confirmed',
+          deleted_at: 'is.null',
+          limit: 5,
+        })
+      : [];
+    if (memories.length !== selectedIds.length)
+      throw new BadRequestException('选中的记忆有变动，请刷新后重新选择');
+    const history = conversation
+      ? await this.db.select<MessageRow[]>('messages', {
+          select: messageColumns,
+          conversation_id: eq(conversation.id),
+          status: eq('live_completed'),
+          order: 'created_at.desc,id.desc',
+          limit: 6,
+        })
+      : [];
     const result = await this.chat.reply({
       profile,
       text: data.text,
       memories: memories.map((row) => this.mapMemory(row)),
+      history: history.reverse().map((row) => ({
+        role: row.role === 'assistant' ? 'assistant' : 'user',
+        text: row.text || '',
+      })),
     });
+    const targetConversation = conversation || (await this.ensureConversation(ownerId, profileId));
     const generationId = randomUUID();
     const clientMessageId = data.clientMessageId || randomUUID();
     const createdAt = new Date();
     const rows = await this.db.insert<MessageRow[]>('messages', [
       {
-        conversation_id: conversation.id,
+        conversation_id: targetConversation.id,
         client_message_id: clientMessageId,
         generation_id: generationId,
         role: 'user',
         text: data.text,
-        status: 'completed',
-        epoch: conversation.epoch,
+        status: 'live_completed',
+        epoch: targetConversation.epoch,
         created_at: createdAt.toISOString(),
       },
       {
-        conversation_id: conversation.id,
+        conversation_id: targetConversation.id,
         generation_id: generationId,
         role: 'assistant',
         text: result.text,
-        status: 'completed',
-        epoch: conversation.epoch,
+        status: 'live_completed',
+        epoch: targetConversation.epoch,
         created_at: new Date(createdAt.getTime() + 1).toISOString(),
       },
     ]);
     await this.db.patch(
       'conversations',
       {
-        id: eq(conversation.id),
+        id: eq(targetConversation.id),
         user_id: eq(ownerId),
       },
       { last_message_at: new Date().toISOString() },
@@ -568,7 +598,7 @@ export class SupabaseProfilesController {
       role: row.role === 'assistant' ? ('assistant' as const) : ('user' as const),
       text: row.text || '',
       createdAt: row.created_at,
-      mock: true,
+      mock: row.status !== 'live_completed',
     };
   }
 }
@@ -611,7 +641,17 @@ class SupabaseSquareUnavailableController {
   ],
   providers: [
     SupabaseSessionGuard,
-    MockChatProvider,
+    {
+      provide: 'SUPABASE_CHAT_PROVIDER',
+      useFactory: () =>
+        liveChatConfigured()
+          ? new LiveChatProvider(
+              process.env.AI_BASE_URL || '',
+              process.env.AI_API_KEY || '',
+              process.env.AI_MODEL || '',
+            )
+          : { reply: async () => { throw new ServiceUnavailableException('记忆对话尚未开放'); } },
+    },
     {
       provide: SupabaseDataApi,
       useFactory: () =>

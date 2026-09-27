@@ -5,6 +5,7 @@ export interface ChatProvider {
     profile: Profile;
     text: string;
     memories: Memory[];
+    history?: { role: 'user' | 'assistant'; text: string }[];
   }): Promise<{ text: string; mock: boolean }>;
 }
 export interface SmsProvider {
