@@ -21,6 +21,10 @@ const form = reactive({
 const createStep = ref(1);
 const squareView = ref('精选');
 const preview = ref('');
+const chatText = ref('');
+const chatConsent = ref(false);
+const selectedChatMemories = ref<string[]>([]);
+const chatAvailable = computed(() => Boolean(app.bootstrap?.features?.textChat));
 let restoringDraft = false;
 let profileDraftOwner = '';
 const selectedMemory = computed(() => app.memories.find((m) => m.id === props.query?.id));
@@ -58,6 +62,7 @@ function loadScreen() {
     .run(async () => {
       await app.refresh();
       restoreProfileDraft();
+      restoreChatDraft();
     })
     .finally(() => {
       loading.value = false;
@@ -143,6 +148,33 @@ function memorySave() {
   void app.run(async () => {
     await app.addMemory({ title: form.title, body: form.body, useForAi: false });
     go('memories');
+  });
+}
+
+function chatDraftKey() {
+  return app.session.userId && app.currentId
+    ? 'yinghuo.chatDraft.' + app.session.userId + '.' + app.currentId
+    : '';
+}
+function restoreChatDraft() {
+  if (props.page !== 'chat' || !chatDraftKey() || chatText.value) return;
+  chatText.value = (uni.getStorageSync(chatDraftKey()) as string) || '';
+}
+watch(chatText, (value) => {
+  if (props.page === 'chat' && chatDraftKey()) uni.setStorageSync(chatDraftKey(), value);
+});
+function toggleChatMemory(id: string) {
+  selectedChatMemories.value = selectedChatMemories.value.includes(id)
+    ? selectedChatMemories.value.filter((current) => current !== id)
+    : [...selectedChatMemories.value, id].slice(0, 5);
+}
+function sendChat() {
+  const text = chatText.value.trim();
+  if (!text || !chatConsent.value || app.busy) return;
+  void app.run(async () => {
+    await app.send(text, selectedChatMemories.value);
+    chatText.value = '';
+    uni.removeStorageSync(chatDraftKey());
   });
 }
 
@@ -297,9 +329,17 @@ function confirmLogout() {
           <button
             class="btn"
             :disabled="app.busy"
-            @click="app.current ? go('memory-edit') : start()"
+            @click="app.current ? go(chatAvailable ? 'chat' : 'memory-edit') : start()"
           >
-            {{ app.busy ? '正在打开…' : app.current ? '再留下一段记忆' : '为 TA 建立记忆空间' }}
+            {{
+              app.busy
+                ? '正在打开…'
+                : app.current
+                  ? chatAvailable
+                    ? '和 TA 的记忆说说话'
+                    : '再留下一段记忆'
+                  : '为 TA 建立记忆空间'
+            }}
           </button>
           <button class="btn secondary" @click="go('square')">先读一段故事</button>
         </view>
@@ -481,8 +521,11 @@ function confirmLogout() {
             ><h2>还没有记忆</h2>
             <p>不用准备很多，先留下一句话就好。</p></view
           >
-          <button class="btn" @click="go('memory-edit')">
-            再记录一段记忆<AppIcon name="arrow" />
+          <button v-if="chatAvailable" class="btn" @click="go('chat')">
+            和 TA 的记忆说说话<AppIcon name="arrow" />
+          </button>
+          <button class="btn" :class="{ secondary: chatAvailable }" @click="go('memory-edit')">
+            再记录一段记忆
           </button>
           <view class="grid2 section"
             ><button class="tile" @click="go('memories')">
@@ -573,10 +616,74 @@ function confirmLogout() {
         >
       </template>
       <template v-else-if="page === 'chat'">
-        <view class="empty">
+        <template v-if="chatAvailable && app.current">
+          <view class="chat-heading">
+            <view class="sprite mascot mini" role="img" aria-label="小萤" />
+            <view
+              ><h1>和 {{ app.current.name }} 的记忆说说话</h1>
+              <p>萤火会陪你聊聊留下的故事。</p></view
+            >
+          </view>
+          <view class="chat-disclosure"
+            >这是 AI 生成的回复，不代表 TA 本人的想法。你可以自己决定哪些记忆参与对话。</view
+          >
+          <view v-if="app.memories.length" class="chat-context">
+            <strong>这次想聊哪段记忆？</strong>
+            <p>可选，默认不发送记忆。最多选择 5 条。</p>
+            <view class="chips">
+              <button
+                v-for="memory in app.memories"
+                :key="memory.id"
+                class="chip"
+                :class="{ active: selectedChatMemories.includes(memory.id) }"
+                @click="toggleChatMemory(memory.id)"
+              >
+                {{ memory.title }}
+              </button>
+            </view>
+          </view>
+          <view v-if="!app.messages.some((item) => !item.mock)" class="empty chat-welcome">
+            <p>可以从一句话开始：“我想聊聊那次一起做饭的事。”</p>
+          </view>
+          <view class="chat-list" aria-live="polite">
+            <view
+              v-for="message in app.messages.filter((item) => !item.mock)"
+              :key="message.id"
+              class="bubble"
+              :class="{ user: message.role === 'user' }"
+            >
+              <small>{{ message.role === 'user' ? '我' : '萤火 AI' }}</small
+              ><text>{{ message.text }}</text>
+            </view>
+          </view>
+          <checkbox-group @change="chatConsent = $event.detail.value.length > 0">
+            <label class="check chat-consent"
+              ><checkbox value="agree" :checked="chatConsent" />我同意将这次对话和选中的记忆发给 AI
+              生成回复。</label
+            >
+          </checkbox-group>
+          <view class="chat-input">
+            <input
+              v-model="chatText"
+              maxlength="500"
+              placeholder="想说点什么…"
+              @confirm="sendChat"
+            />
+            <button
+              class="icon-button"
+              aria-label="发送消息"
+              :disabled="app.busy || !chatText.trim() || !chatConsent"
+              @click="sendChat"
+            >
+              <AppIcon name="arrow" />
+            </button>
+          </view>
+          <p v-if="app.busy" class="chat-wait">萤火正在认真听你说…</p>
+        </template>
+        <view v-else class="empty">
           <view class="sprite mascot large" role="img" aria-label="小萤" />
-          <h1>对话功能正在准备</h1>
-          <p>现在可以先留下关于 TA 的故事。开放对话前，我们会说明内容如何使用。</p>
+          <h1>记忆对话暂时无法使用</h1>
+          <p>现在可以先留下关于 TA 的故事，稍后再回来聊聊。</p>
           <button class="btn secondary" @click="go('space')">返回记忆空间</button>
         </view>
       </template>

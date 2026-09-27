@@ -105,10 +105,12 @@ export const useAppStore = defineStore('app', () => {
     await api('/profiles/' + currentId.value + '/memories', 'POST', input);
     await refresh();
   }
-  async function send(text: string, clientMessageId: string = requestKey()) {
+  async function send(text: string, memoryIds: string[], clientMessageId: string = requestKey()) {
     await api('/profiles/' + currentId.value + '/messages', 'POST', {
       text,
       clientMessageId,
+      memoryIds,
+      aiConsent: true,
     });
     await refresh();
   }

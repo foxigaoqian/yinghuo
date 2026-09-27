@@ -43,7 +43,7 @@ describe('local demo API', () => {
     assert.equal(r.body.csrfToken, csrf);
     assert.equal(r.body.canCreateFreeProfile, true);
     assert.equal(r.body.profileCount, 0);
-    assert.equal(r.body.features.textChat, true);
+    assert.equal(r.body.features.textChat, false);
     assert.equal(r.body.features.payment, false);
     assert.equal(r.body.recentProfileId, null);
   });

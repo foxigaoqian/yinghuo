@@ -1,0 +1,14 @@
+{
+  "name": "yinghuo-h5-preview",
+  "pages_build_output_dir": "./apps/client/dist/build/h5",
+  "compatibility_date": "2026-09-26",
+  "kv_namespaces": [
+    {
+      "binding": "DEMO_DATA",
+      "id": "f41acd0654e04d7084b935b7ce92f3ad",
+    },
+  ],
+  "ai": {
+    "binding": "AI",
+  },
+}

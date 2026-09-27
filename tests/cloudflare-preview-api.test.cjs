@@ -17,7 +17,7 @@ function fakeKV() {
   };
 }
 
-async function makeClient(kv) {
+async function makeClient(kv, ai) {
   const { onRequest } = await import('../functions/api/v1/[[path]].js');
   let cookie = '';
   let csrf = '';
@@ -33,7 +33,7 @@ async function makeClient(kv) {
         },
         ...(method === 'GET' ? {} : { body: JSON.stringify(input ?? {}) }),
       });
-      const response = await onRequest({ request, env: { DEMO_DATA: kv } });
+      const response = await onRequest({ request, env: { DEMO_DATA: kv, AI: ai } });
       if (response.headers.has('set-cookie'))
         cookie = response.headers.get('set-cookie').split(';')[0];
       const body = await response.json();
@@ -48,7 +48,13 @@ async function makeClient(kv) {
 
 test('Cloudflare H5 preview starts with JSON and walks through the demo flow', async () => {
   const kv = fakeKV();
-  const client = await makeClient(kv);
+  const prompts = [];
+  const client = await makeClient(kv, {
+    async run(model, options) {
+      prompts.push({ model, options });
+      return { response: '那段一起做饭的记忆很珍贵。你还记得厨房里有什么声音吗？' };
+    },
+  });
   const caps = await client.request('GET', '/capabilities');
   assert.equal(caps.status, 200);
   assert.equal(caps.body.mode, 'demo');
@@ -57,6 +63,7 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
   const anonymous = await client.request('GET', '/auth/session');
   assert.equal(anonymous.body.userId, null);
   assert.equal((await client.request('GET', '/bootstrap')).body.features.hostedPreview, true);
+  assert.equal((await client.request('GET', '/bootstrap')).body.features.textChat, true);
 
   const login = await client.request('POST', '/dev/session');
   assert.equal(login.status, 200);
@@ -93,17 +100,31 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
   assert.equal(memory.status, 200);
 
   const messageId = crypto.randomUUID();
+  const denied = await client.request('POST', '/profiles/' + created.body.id + '/messages', {
+    text: '今天过得好吗？',
+    clientMessageId: messageId,
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(prompts.length, 0);
   const sent = await client.request('POST', '/profiles/' + created.body.id + '/messages', {
     text: '今天过得好吗？',
     clientMessageId: messageId,
+    aiConsent: true,
+    memoryIds: [memory.body.id],
   });
   assert.equal(sent.status, 200);
   assert.equal(sent.body.items.length, 2);
-  assert.match(sent.body.items[1].text, /并非本人/);
+  assert.equal(sent.body.items[1].mock, false);
+  assert.match(sent.body.items[1].text, /一起做饭/);
+  assert.match(prompts[0].options.messages[0].content, /这是一段虚构记忆/);
+  assert.doesNotMatch(prompts[0].options.messages[0].content, /虚构的演示人物/);
   const retry = await client.request('POST', '/profiles/' + created.body.id + '/messages', {
     text: '今天过得好吗？',
     clientMessageId: messageId,
+    aiConsent: true,
+    memoryIds: [memory.body.id],
   });
+  assert.equal(prompts.length, 1);
   assert.deepEqual(
     retry.body.items.map((m) => m.id),
     sent.body.items.map((m) => m.id),
@@ -153,4 +174,20 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
   assert.equal((await client.request('GET', '/missing')).status, 404);
   assert.equal((await client.request('POST', '/auth/logout')).status, 200);
   assert.equal((await client.request('GET', '/auth/session')).body.userId, null);
+});
+
+test('chat does not accept messages or invent replies without a model binding', async () => {
+  const client = await makeClient(fakeKV());
+  assert.equal((await client.request('GET', '/bootstrap')).body.features.textChat, false);
+  await client.request('POST', '/dev/session');
+  const profile = await client.request('POST', '/profiles', { name: '虚构人物', aiConsent: false });
+  const result = await client.request('POST', '/profiles/' + profile.body.id + '/messages', {
+    text: '你好',
+    aiConsent: true,
+  });
+  assert.equal(result.status, 503);
+  assert.equal(
+    (await client.request('GET', '/profiles/' + profile.body.id + '/messages')).body.items.length,
+    0,
+  );
 });

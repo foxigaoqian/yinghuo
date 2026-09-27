@@ -87,7 +87,7 @@ export class PublicController {
       features: {
         guestSession: true,
         profiles: true,
-        textChat: true,
+        textChat: false,
         manualMemories: true,
         memoryCandidates: false,
         phoneRecovery: false,

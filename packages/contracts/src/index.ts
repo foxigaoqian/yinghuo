@@ -20,6 +20,8 @@ export const chatInput = z
   .object({
     text: z.string().trim().min(1).max(2000),
     clientMessageId: z.string().uuid().optional(),
+    aiConsent: z.boolean().optional(),
+    memoryIds: z.array(z.string().uuid()).max(5).optional(),
   })
   .strict();
 export const postInput = z
