@@ -194,7 +194,7 @@ function conversationPrompt(profile, memories) {
 
 async function generateReply(ai, profile, memories, history, text) {
   try {
-    const result = await ai.run('@cf/qwen/qwen3-30b-a3b-fp8', {
+    const result = await ai.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [
         { role: 'system', content: conversationPrompt(profile, memories) },
         ...history
@@ -205,7 +205,6 @@ async function generateReply(ai, profile, memories, history, text) {
       max_tokens: 280,
       temperature: 0.55,
       stream: false,
-      chat_template_kwargs: { enable_thinking: false },
     });
     const answer = result?.response || result?.choices?.[0]?.message?.content;
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('empty model response');

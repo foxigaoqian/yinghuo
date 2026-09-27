@@ -116,6 +116,7 @@ test('Cloudflare H5 preview starts with JSON and walks through the demo flow', a
   assert.equal(sent.body.items.length, 2);
   assert.equal(sent.body.items[1].mock, false);
   assert.match(sent.body.items[1].text, /一起做饭/);
+  assert.equal(prompts[0].model, '@cf/meta/llama-3.1-8b-instruct-fp8');
   assert.match(prompts[0].options.messages[0].content, /这是一段虚构记忆/);
   assert.doesNotMatch(prompts[0].options.messages[0].content, /虚构的演示人物/);
   const retry = await client.request('POST', '/profiles/' + created.body.id + '/messages', {
