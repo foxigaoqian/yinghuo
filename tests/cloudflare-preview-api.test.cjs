@@ -192,3 +192,22 @@ test('chat does not accept messages or invent replies without a model binding', 
     0,
   );
 });
+
+test('chat rejects a reply that claims to remember the person and saves neither turn', async () => {
+  const client = await makeClient(fakeKV(), {
+    async run() {
+      return { response: '我记得妈妈做的番茄鸡蛋面味道很好。' };
+    },
+  });
+  await client.request('POST', '/dev/session');
+  const profile = await client.request('POST', '/profiles', { name: '妈妈', aiConsent: false });
+  const reply = await client.request('POST', '/profiles/' + profile.body.id + '/messages', {
+    text: '你记得吗？',
+    aiConsent: true,
+  });
+  assert.equal(reply.status, 503);
+  assert.equal(
+    (await client.request('GET', '/profiles/' + profile.body.id + '/messages')).body.items.length,
+    0,
+  );
+});
