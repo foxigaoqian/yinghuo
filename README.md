@@ -26,6 +26,7 @@
 | [GitHub开源复用调研](docs/08-open-source.md)               | 哪些直接采用、哪些参考、许可证与维护证据         |
 | [开发任务与验收](docs/09-delivery-plan.md)                 | 依赖顺序、三人分工、测试、监控与发布门槛         |
 | [支付路由与Stripe](docs/16-payment-routing-and-stripe.md)  | 主体资格、H5/网页JSAPI/Stripe、Webhook和退款     |
+| [最新 H5 首发路线](docs/28-h5-launch-route-stripe.md)     | 国内用户访问、Supabase 区域、Stripe 单通道及上线门禁；优先于历史支付规划 |
 | [首发契约与规则](docs/17-v1-contract-completion.md)        | 阶段边界、开发默认规则、字段权威来源             |
 | [后台接口与操作](docs/18-admin-api-and-operations.md)      | 管理员认证、scope、退款和审计                    |
 | [AI适配与评测](docs/19-ai-provider-and-evaluation.md)      | 提示词、类型契约、虚构测试用例、供应商开关       |
@@ -61,7 +62,7 @@
 
 当前可运行工程的状态、启动方式、mock 边界和 API 接入顺序见 [H5 MVP 框架记录](docs/21-local-mvp-scaffold-status.md)。
 
-- 支付：微信外H5、微信内网页JSAPI、Stripe Checkout三个条件通道；只开放实际资格及实测通过的通道，未声明任何账号已开通。
+- 支付：首发选择 Stripe Checkout 一次性年度购买。微信直连 H5/网页JSAPI 暂缓；账号资格、国内手机体验和 webhook 联调完成前不开放购买。以[最新首发路线](docs/28-h5-launch-route-stripe.md)为准。
 - 首发接口：12覆盖A/B页面和后台；C/D另行实施。
 - 数据库：[新库迁移](infra/migrations/0001_baseline.sql)及[补充迁移](infra/migrations/0002_v1_gaps.sql)，不是已执行的生产变更。
 - 检查：`python -m pip install -r tools/spec-requirements.txt`，然后`python tools/check_specs.py --check`。
