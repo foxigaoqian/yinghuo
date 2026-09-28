@@ -60,6 +60,8 @@ test('first visit → first memory → private square story → planned price', 
   await expect(page.getByText('周末的面', { exact: true })).toBeVisible();
   await page.goto('/#/pages/square/index');
   await page.getByText('写故事', { exact: true }).click();
+  await expect(page, '写故事应进入编辑页，失败时先检查当前页面与提示').toHaveURL(/compose/, { timeout: 10000 });
+  console.log('compose state:', page.url(), (await page.locator('body').innerText()).slice(0, 650));
   await page.locator('input').first().fill('窗边的下午');
   await page.locator('textarea').first().fill('她喜欢在窗台养花。');
   await page.getByText('保存给自己', { exact: true }).click();
