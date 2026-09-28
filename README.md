@@ -27,6 +27,7 @@
 | [开发任务与验收](docs/09-delivery-plan.md)                 | 依赖顺序、三人分工、测试、监控与发布门槛         |
 | [支付路由与Stripe](docs/16-payment-routing-and-stripe.md)  | 主体资格、H5/网页JSAPI/Stripe、Webhook和退款     |
 | [最新 H5 首发路线](docs/28-h5-launch-route-stripe.md)     | 国内用户访问、Supabase 区域、Stripe 单通道及上线门禁；优先于历史支付规划 |
+| [Pages 正式 API 接入](docs/29-pages-supabase-api.md)      | 新加坡数据库已建、Pages Functions 正式路由、独立预发布配置与验收 |
 | [首发契约与规则](docs/17-v1-contract-completion.md)        | 阶段边界、开发默认规则、字段权威来源             |
 | [后台接口与操作](docs/18-admin-api-and-operations.md)      | 管理员认证、scope、退款和审计                    |
 | [AI适配与评测](docs/19-ai-provider-and-evaluation.md)      | 提示词、类型契约、虚构测试用例、供应商开关       |
@@ -64,7 +65,7 @@
 
 - 支付：首发选择 Stripe Checkout 一次性年度购买。微信直连 H5/网页JSAPI 暂缓；账号资格、国内手机体验和 webhook 联调完成前不开放购买。以[最新首发路线](docs/28-h5-launch-route-stripe.md)为准。
 - 首发接口：12覆盖A/B页面和后台；C/D另行实施。
-- 数据库：[新库迁移](infra/migrations/0001_baseline.sql)及[补充迁移](infra/migrations/0002_v1_gaps.sql)，不是已执行的生产变更。
+- 数据库：`0001` 至 `0005` 已在新加坡项目执行并核验访问控制；悉尼项目保持原状。Cloudflare 预览仍使用临时 KV，正式数据库路由须在独立 Pages 环境配置后才能运行。
 - 检查：`python -m pip install -r tools/spec-requirements.txt`，然后`python tools/check_specs.py --check`。
 - [逐页追踪](docs/research/v1-traceability.json)、[28个验收场景](docs/research/acceptance-cases.json)、[12个AI起始用例](docs/research/ai-eval-cases.json)；业务测试状态均为not_run。
 - 接入与发布仍需真实账号、供应商评测、正式条款、数据库及支付联调；不把文档静态检查说成应用验收完成。

@@ -7,6 +7,7 @@ import {
   idParam,
   PRODUCTS,
 } from '../../../packages/contracts/src/index.ts';
+import { onSupabaseRequest } from '../../../lib/pages-supabase-h5.js';
 
 const COOKIE = '__Host-yinghuo_demo';
 const SESSION_TTL = 24 * 60 * 60;
@@ -465,6 +466,7 @@ async function handle(request, env) {
 }
 
 export async function onRequest({ request, env }) {
+  if (env?.APP_BACKEND === 'supabase') return onSupabaseRequest({ request, env });
   try {
     return await handle(request, env);
   } catch (error) {
