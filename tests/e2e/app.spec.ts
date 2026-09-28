@@ -68,7 +68,7 @@ test('first visit → first memory → private square story → planned price', 
   await expect(page).toHaveURL(/view=mine/);
   await expect(page.getByText('窗边的下午', { exact: true })).toBeVisible();
   await page.goto('/#/pages/chat/index');
-  await expect(page.getByText('对话功能正在准备')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '记忆对话暂时无法使用' })).toBeVisible();
   await expect(page.locator('.chat-input input')).toHaveCount(0);
   await page.goto('/#/pages/plans/index');
   await expect(page.getByText('¥99')).toBeVisible();
