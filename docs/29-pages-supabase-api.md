@@ -6,8 +6,8 @@
 
 - `functions/api/v1/[[path]].js`：保持现有预览路由；只有 Cloudflare Pages 环境变量 `APP_BACKEND=supabase` 才把 API 切到 `lib/pages-supabase-h5.js`。此模块放在 `functions` 目录外，避免 Pages 将帮助代码识别成独立 URL 路由。
 - 新路由使用 Pages Functions 原生 Fetch/Web Crypto；将 Supabase Secret API key 仅放在服务器环境，浏览器不调用 Supabase Data API。
-- 已覆盖匿名访客、Cookie 会话、CSRF、资料创建/修改、文字记忆、当次选择记忆的 AI 文字聊天；订单和广场公开投稿继续关闭。预览 KV 路由不变。
-- 新加坡项目的五份数据库迁移已执行，RLS 与访客 RPC 权限经 SQL 实查；参考 [H5 首发路线](28-h5-launch-route-stripe.md)。
+- 已覆盖匿名访客、Cookie 会话、CSRF、资料创建/修改、文字记忆、私密故事、当次选择记忆的 AI 文字聊天；订单和广场公开投稿继续关闭。预览 KV 路由不变。
+- 新加坡项目的六份数据库迁移已执行，RLS 与访客 RPC 权限经 SQL 实查；参考 [H5 首发路线](28-h5-launch-route-stripe.md)。
 - Supabase 安全顾问返回 60 条 [`rls_enabled_no_policy` 信息提示](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)；这是本项目「前端不直连数据库、所有 public 表拒绝匿名/普通身份、仅后端密钥访问」设计的预期结果。若以后开放浏览器直连，需重新设计逐表 RLS 策略。
 
 ## 独立预发布环境所需配置
@@ -26,4 +26,4 @@
 
 ## 验收
 
-运行 `pnpm test`、`pnpm --filter @yinghuo/client build:h5`。单独预发布站确认 `/api/v1/capabilities` 为 `mode=supabase`，建立访客→建档→记忆→刷新后恢复→逐次勾选聊天记忆；另一访客无法读取资料；未同意 AI 时模型不调用；模型失败不保存消息。`/api/v1/orders` 不接受购买，广场公开投稿不开放。正式接收用户前还需账号找回、数据导出/删除、Stripe 到账与退款闭环、国内手机网络及正式域名验收。
+运行 `pnpm test`、`pnpm --filter @yinghuo/client build:h5`。单独预发布站确认 `/api/v1/capabilities` 为 `mode=supabase`，建立访客→建档→记忆→私密故事→刷新后恢复→逐次勾选聊天记忆；另一访客无法读取资料和故事；未同意 AI 时模型不调用；模型失败不保存消息。`/api/v1/orders` 不接受购买，广场公开投稿不开放。正式接收用户前还需账号找回、数据导出/删除、Stripe 到账与退款闭环、国内手机网络及正式域名验收。

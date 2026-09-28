@@ -17,6 +17,7 @@ function fakeSupabase() {
     messages,
     profile_preferences: [],
     consents: [],
+    private_stories: [],
   };
   const matches = (row, query) =>
     [...query.entries()].every(([key, value]) => {
@@ -222,6 +223,20 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.notEqual(another.data.userId, opened.data.userId);
     assert.equal((await b.request('GET', '/profiles/' + profile.data.id)).status, 404);
     assert.equal((await b.request('GET', '/profiles')).data.items.length, 0);
+    const privateStory = await a.request('POST', '/square', {
+      title: '窗边的下午',
+      body: '她喜欢在窗台养花。',
+      visibility: 'private',
+    });
+    assert.equal(privateStory.status, 200);
+    assert.equal(privateStory.data.moderation, 'private');
+    assert.equal((await a.request('GET', '/square?view=mine')).data.items[0].title, '窗边的下午');
+    assert.equal((await a.request('GET', '/square')).data.items.length, 0);
+    assert.equal((await b.request('GET', '/square?view=mine')).data.items.length, 0);
+    assert.equal(
+      (await a.request('POST', '/square', { title: '公开', body: '不可见', visibility: 'public', publicConsent: true })).status,
+      503,
+    );
     const foreign = await b.request('POST', '/profiles', { name: '朋友', aiConsent: false });
     const badMemory = await b.request('POST', '/profiles/' + foreign.data.id + '/messages', {
       text: '聊聊',
