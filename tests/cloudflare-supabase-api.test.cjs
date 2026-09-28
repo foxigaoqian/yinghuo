@@ -33,7 +33,7 @@ function fakeSupabase() {
       const address = new URL(url);
       assert.equal(address.hostname, 'sg.supabase.co');
       assert.equal(options.headers.apikey, 'test-server-only-key');
-      assert.equal(options.headers.authorization, 'Bearer test-server-only-key');
+      assert.equal(options.headers.authorization, undefined);
       const path = address.pathname.slice('/rest/v1/'.length);
       const input = options.body ? JSON.parse(options.body) : undefined;
       calls.push({ path, method: options.method, query: address.searchParams, input });
