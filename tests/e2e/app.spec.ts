@@ -60,7 +60,7 @@ test('first visit → first memory → private square story → planned price', 
   await expect(page.getByText('周末的面', { exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '广场' }).click();
   await expect(page).toHaveURL(/square/);
-  await page.getByText('写故事', { exact: true }).click();
+  await page.getByRole('button', { name: '写故事' }).click();
   await expect(page).toHaveURL(/compose/);
   await page.locator('input').first().fill('窗边的下午');
   await page.locator('textarea').first().fill('她喜欢在窗台养花。');
