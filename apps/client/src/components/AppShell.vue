@@ -31,6 +31,7 @@ function back() {
       <button
         v-for="[id, label, icon] in tabs"
         :key="id"
+        role="button"
         :class="{ active: props.page === id }"
         @click="go(id)"
       >

@@ -730,7 +730,7 @@ function confirmLogout() {
       <template v-else-if="page === 'square'">
         <view class="section"
           ><h1>广场</h1>
-          <button class="text-button" :disabled="app.busy" @click="enter('compose')">
+          <button role="button" class="text-button" :disabled="app.busy" @click="enter('compose')">
             写故事
           </button></view
         >
