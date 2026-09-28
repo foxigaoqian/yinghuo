@@ -24,6 +24,8 @@
 
 `APP_BACKEND` 未设置时默认运行原预览；设置了 `supabase` 却缺少服务端密钥时 API 明确返回 503。切勿把旧悉尼项目的密钥、在聊天中发过的密钥或 `.env` 文件提交到 GitHub。关闭浏览器 Cookie 会失去当前访客身份，账号找回尚未实现；本阶段仍限虚构人物测试，不收集真实家庭资料。
 
+配置人的操作：在新加坡 Supabase 项目的 **Settings → API Keys** 创建或复制 `sb_secret_...` 新式密钥；在新建的 Cloudflare Pages 预发布项目 **Settings → Environment variables** 把它填入 `SUPABASE_SECRET_KEY` 并选择加密 Secret 类型。`SESSION_SECRET` 在本地用随机生成器产生至少 32 个字符，按同样方式设置。`APP_BACKEND` 和 `SUPABASE_URL` 为普通变量。部署后用真实站点完成下文的验收，**不要把密钥发到聊天或仓库**。
+
 ## 验收
 
 运行 `pnpm test`、`pnpm --filter @yinghuo/client build:h5`。单独预发布站确认 `/api/v1/capabilities` 为 `mode=supabase`，建立访客→建档→记忆→私密故事→刷新后恢复→逐次勾选聊天记忆；另一访客无法读取资料和故事；未同意 AI 时模型不调用；模型失败不保存消息。`/api/v1/orders` 不接受购买，广场公开投稿不开放。正式接收用户前还需账号找回、数据导出/删除、Stripe 到账与退款闭环、国内手机网络及正式域名验收。
