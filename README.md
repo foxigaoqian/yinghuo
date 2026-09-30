@@ -65,7 +65,7 @@
 
 - 支付：首发选择 Stripe Checkout 一次性年度购买。微信直连 H5/网页JSAPI 暂缓；账号资格、国内手机体验和 webhook 联调完成前不开放购买。以[最新首发路线](docs/28-h5-launch-route-stripe.md)为准。
 - 首发接口：12覆盖A/B页面和后台；C/D另行实施。
-- 数据库：`0001` 至 `0005` 已在新加坡项目执行并核验访问控制；悉尼项目保持原状。Cloudflare 预览仍使用临时 KV，正式数据库路由须在独立 Pages 环境配置后才能运行。
+- 数据库：`0001` 至 `0006` 已在新加坡项目执行并核验访问控制；悉尼项目保持原状。Cloudflare 演示站使用临时 KV；独立的 [新加坡预发布项目](docs/29-pages-supabase-api.md)已创建，待配置新式 Supabase Secret key 后验收真实数据链路。
 - 检查：`python -m pip install -r tools/spec-requirements.txt`，然后`python tools/check_specs.py --check`。
 - [逐页追踪](docs/research/v1-traceability.json)、[28个验收场景](docs/research/acceptance-cases.json)、[12个AI起始用例](docs/research/ai-eval-cases.json)；业务测试状态均为not_run。
 - 接入与发布仍需真实账号、供应商评测、正式条款、数据库及支付联调；不把文档静态检查说成应用验收完成。

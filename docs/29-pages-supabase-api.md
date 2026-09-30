@@ -1,6 +1,6 @@
 # H5 Pages Functions 接入新加坡 Supabase（开发阶段）
 
-更新：2026-09-28。新加坡项目 `yinghuo-h5-singapore`，公开项目 URL `https://wabohmofgmgfffpmaorh.supabase.co`；现有悉尼项目不切换、不迁移数据。
+更新：2026-09-30。新加坡项目 `yinghuo-h5-singapore`，公开项目 URL `https://wabohmofgmgfffpmaorh.supabase.co`；现有悉尼项目不切换、不迁移数据。
 
 ## 代码与切换点
 
@@ -10,21 +10,21 @@
 - 新加坡项目的六份数据库迁移已执行，RLS 与访客 RPC 权限经 SQL 实查；参考 [H5 首发路线](28-h5-launch-route-stripe.md)。
 - Supabase 安全顾问返回 60 条 [`rls_enabled_no_policy` 信息提示](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)；这是本项目「前端不直连数据库、所有 public 表拒绝匿名/普通身份、仅后端密钥访问」设计的预期结果。若以后开放浏览器直连，需重新设计逐表 RLS 策略。
 
-## 独立预发布环境所需配置
+## 独立预发布环境
 
-在**单独的 Cloudflare Pages 项目**设置以下环境变量或 Secret，随后部署同一仓库和 H5 构建命令。不要直接修改 `yinghuo-h5-preview` 项目，以免正在使用的演示账号突然失效。
+已创建 Cloudflare Pages 项目 [`yinghuo-h5-sg-stage`](https://dash.cloudflare.com/?to=/:account/pages/view/yinghuo-h5-sg-stage)，域名 `https://yinghuo-h5-sg-stage.pages.dev`，绑定本仓库 `main`、H5 构建、Workers AI。原 `yinghuo-h5-preview` 继续运行临时 KV 演示，不切换现有访客。预发布环境缺少 Supabase Secret key 时主动返回 503，不接收真实用户数据。
 
-| 名称                  | 值与来源                                                      | 可公开 |
-| --------------------- | ------------------------------------------------------------- | ------ |
-| `APP_BACKEND`         | `supabase`                                                    | 是     |
-| `SUPABASE_URL`        | `https://wabohmofgmgfffpmaorh.supabase.co`                    | 是     |
-| `SUPABASE_SECRET_KEY` | 新加坡项目 Dashboard 的**新 Secret key**，仅设为 Pages Secret | 否     |
-| `SESSION_SECRET`      | 新生成的至少 32 个随机字符，设为 Pages Secret                 | 否     |
-| `AI`                  | Cloudflare Workers AI 绑定，须在这个 Pages 项目单独绑定       | 不适用 |
+| 名称                  | 状态                                                  | 可公开 |
+| --------------------- | ----------------------------------------------------- | ------ |
+| `APP_BACKEND`         | 已设置 `supabase`                                     | 是     |
+| `SUPABASE_URL`        | 已指向新加坡项目                                      | 是     |
+| `SUPABASE_SECRET_KEY` | **待填入新加坡项目的新式 Secret key**，须为 Pages Secret | 否     |
+| `SESSION_SECRET`      | 已生成并保存为 Pages Secret                           | 否     |
+| `AI`                  | 已绑定 Cloudflare Workers AI                          | 不适用 |
 
 `APP_BACKEND` 未设置时默认运行原预览；设置了 `supabase` 却缺少服务端密钥时 API 明确返回 503。切勿把旧悉尼项目的密钥、在聊天中发过的密钥或 `.env` 文件提交到 GitHub。关闭浏览器 Cookie 会失去当前访客身份，账号找回尚未实现；本阶段仍限虚构人物测试，不收集真实家庭资料。
 
-配置人的操作：在新加坡 Supabase 项目的 **Settings → API Keys** 创建或复制 `sb_secret_...` 新式密钥；在新建的 Cloudflare Pages 预发布项目 **Settings → Environment variables** 把它填入 `SUPABASE_SECRET_KEY` 并选择加密 Secret 类型。`SESSION_SECRET` 在本地用随机生成器产生至少 32 个字符，按同样方式设置。`APP_BACKEND` 和 `SUPABASE_URL` 为普通变量。部署后用真实站点完成下文的验收，**不要把密钥发到聊天或仓库**。
+仅剩的配置：在新加坡 Supabase 项目的 **Settings → API Keys** 创建或复制 `sb_secret_...` 新式密钥；在 Cloudflare Pages 项目 `yinghuo-h5-sg-stage` 的 **Settings → Environment variables → Production** 把它填入 `SUPABASE_SECRET_KEY`，选择加密 Secret 类型并重新部署。部署后用真实站点完成下文验收，**不要把密钥发到聊天或仓库**。
 
 ## 验收
 
