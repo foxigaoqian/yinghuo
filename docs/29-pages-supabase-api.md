@@ -1,3 +1,5 @@
+> 运行入口已迁移到 Cloudflare Worker；本文保留 Pages 阶段的历史实现说明。当前部署见 [30-worker-deployment.md](./30-worker-deployment.md)。
+
 # H5 Pages Functions 接入新加坡 Supabase（受限 Edge 网关）
 
 更新：2026-10-01。新加坡项目 `yinghuo-h5-singapore`，项目 URL `https://wabohmofgmgfffpmaorh.supabase.co`；悉尼项目不切换、不迁移数据。

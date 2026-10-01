@@ -14,12 +14,15 @@
     "dev:worker": "pnpm --filter @yinghuo/worker dev",
     "build": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/server build && pnpm --filter @yinghuo/worker build && pnpm --filter @yinghuo/client build:h5 && pnpm --filter @yinghuo/admin build",
     "typecheck": "pnpm --filter @yinghuo/contracts build && pnpm -r --if-present typecheck",
-    "test": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/server test && pnpm --filter @yinghuo/worker test && node --test tests/cloudflare-preview-api.test.cjs tests/cloudflare-supabase-api.test.cjs",
+    "test": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/server test && pnpm --filter @yinghuo/worker test && node --test tests/cloudflare-preview-api.test.cjs tests/cloudflare-supabase-api.test.cjs tests/cloudflare-worker-entry.test.cjs",
     "test:e2e": "playwright test",
     "db:validate": "pnpm --filter @yinghuo/server db:validate",
     "db:generate": "pnpm --filter @yinghuo/server db:generate",
     "format:check": "prettier --check apps packages scripts .github",
-    "env:check": "node scripts/check-env.mjs"
+    "env:check": "node scripts/check-env.mjs",
+    "build:worker": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/client build:h5 && pnpm dlx wrangler@4.145.0 deploy --config wrangler.worker.jsonc --dry-run",
+    "deploy:worker": "pnpm --filter @yinghuo/contracts build && pnpm --filter @yinghuo/client build:h5 && pnpm dlx wrangler@4.145.0 deploy --config wrangler.worker.jsonc",
+    "worker:types": "pnpm dlx wrangler@4.145.0 types --config wrangler.worker.jsonc"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

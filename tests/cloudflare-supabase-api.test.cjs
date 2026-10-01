@@ -311,8 +311,14 @@ test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a dat
     assert.equal(String(url), 'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway');
     assert.equal(options.headers['x-yinghuo-backend-token'], 'test-edge-token');
     assert.equal(options.headers.apikey, undefined);
-    assert.deepEqual(JSON.parse(options.body), { operation: 'health' });
-    return Response.json({ status: 'ok', database: 'connected' });
+    const payload = JSON.parse(options.body);
+    if (payload.operation === 'health') {
+      return Response.json({ status: 'ok', database: 'connected' });
+    }
+    assert.equal(payload.operation, 'database');
+    assert.equal(payload.resource, 'rpc/yinghuo_create_guest_session');
+    assert.equal(payload.method, 'POST');
+    return Response.json([{ user_id: crypto.randomUUID(), family_code: 'TEST1234' }]);
   };
   try {
     const response = await onRequest({
@@ -328,7 +334,25 @@ test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a dat
     assert.equal(data.mode, 'supabase');
     assert.equal(data.persistence, 'supabase-edge-gateway');
     assert.equal(data.databaseStatus, 'connected');
-    assert.equal(calls.length, 1);
+
+    const guest = await onRequest({
+      request: new Request('https://stage.example.com/api/v1/auth/guest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://stage.example.com',
+        },
+        body: '{}',
+      }),
+      env: {
+        SUPABASE_EDGE_SHARED_SECRET: 'test-edge-token',
+        SESSION_SECRET: 'x'.repeat(48),
+        AI: { run() {} },
+      },
+    });
+    assert.equal(guest.status, 200);
+    assert.equal(typeof (await guest.json()).userId, 'string');
+    assert.equal(calls.length, 2);
   } finally {
     global.fetch = previousFetch;
   }
