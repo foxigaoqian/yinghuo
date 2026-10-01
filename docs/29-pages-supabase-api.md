@@ -1,31 +1,41 @@
-# H5 Pages Functions 接入新加坡 Supabase（开发阶段）
+# H5 Pages Functions 接入新加坡 Supabase（受限 Edge 网关）
 
-更新：2026-09-30。新加坡项目 `yinghuo-h5-singapore`，公开项目 URL `https://wabohmofgmgfffpmaorh.supabase.co`；现有悉尼项目不切换、不迁移数据。
+更新：2026-10-01。新加坡项目 `yinghuo-h5-singapore`，项目 URL `https://wabohmofgmgfffpmaorh.supabase.co`；悉尼项目不切换、不迁移数据。
 
-## 代码与切换点
+## 为什么改成 Edge 网关
 
-- `functions/api/v1/[[path]].js`：保持现有预览路由；只有 Cloudflare Pages 环境变量 `APP_BACKEND=supabase` 才把 API 切到 `lib/pages-supabase-h5.js`。此模块放在 `functions` 目录外，避免 Pages 将帮助代码识别成独立 URL 路由。
-- 新路由使用 Pages Functions 原生 Fetch/Web Crypto；将 Supabase Secret API key 仅放在服务器环境，通过 `apikey` 请求头访问 Data API（新式密钥不是 JWT，不能作为 Bearer token），浏览器不调用 Supabase Data API。
-- 已覆盖匿名访客、Cookie 会话、CSRF、资料创建/修改、文字记忆、私密故事、当次选择记忆的 AI 文字聊天；订单和广场公开投稿继续关闭。预览 KV 路由不变。
-- 新加坡项目的六份数据库迁移已执行，RLS 与访客 RPC 权限经 SQL 实查；参考 [H5 首发路线](28-h5-launch-route-stripe.md)。
-- Supabase 安全顾问返回 60 条 [`rls_enabled_no_policy` 信息提示](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)；这是本项目「前端不直连数据库、所有 public 表拒绝匿名/普通身份、仅后端密钥访问」设计的预期结果。若以后开放浏览器直连，需重新设计逐表 RLS 策略。
+Supabase 连接插件可以部署 Edge Function 和管理数据库，但不会把 `sb_secret_...` 明文交给会话或 Cloudflare。预发布链路因此改为：
 
-## 独立预发布环境
+1. Cloudflare Pages Function 继续处理同域 Cookie、CSRF、业务路由和 Workers AI。
+2. Pages 只持有一枚随机、可轮换的 `SUPABASE_EDGE_SHARED_SECRET`，请求受限的 `yinghuo-data-gateway`。
+3. Supabase 只保存该令牌的 SHA-256 哈希；Edge Function 使用平台自动注入的 `SUPABASE_SECRET_KEYS` 访问 Data API。
+4. 网关只允许萤火当前需要的 8 张表、4 个 RPC 和 GET/POST/PATCH，不提供任意 SQL，也不把数据库 Secret key 传给 Cloudflare、浏览器、GitHub或聊天。
 
-已创建 Cloudflare Pages 项目 [`yinghuo-h5-sg-stage`](https://dash.cloudflare.com/?to=/:account/pages/view/yinghuo-h5-sg-stage)，域名 `https://yinghuo-h5-sg-stage.pages.dev`，绑定本仓库 `main`、H5 构建、Workers AI。原 `yinghuo-h5-preview` 继续运行临时 KV 演示，不切换现有访客。预发布环境缺少 Supabase Secret key 时主动返回 503，不接收真实用户数据。
+原 `yinghuo-h5-preview` 仍运行临时 KV 演示；只有独立项目 `yinghuo-h5-sg-stage` 设置 `APP_BACKEND=supabase` 后走新加坡数据库。
 
-| 名称                  | 状态                                                  | 可公开 |
-| --------------------- | ----------------------------------------------------- | ------ |
-| `APP_BACKEND`         | 已设置 `supabase`                                     | 是     |
-| `SUPABASE_URL`        | 已指向新加坡项目                                      | 是     |
-| `SUPABASE_SECRET_KEY` | **待填入新加坡项目的新式 Secret key**，须为 Pages Secret | 否     |
-| `SESSION_SECRET`      | 已生成并保存为 Pages Secret                           | 否     |
-| `AI`                  | 已绑定 Cloudflare Workers AI                          | 不适用 |
+## 代码与数据库
 
-`APP_BACKEND` 未设置时默认运行原预览；设置了 `supabase` 却缺少服务端密钥时 API 明确返回 503。切勿把旧悉尼项目的密钥、在聊天中发过的密钥或 `.env` 文件提交到 GitHub。关闭浏览器 Cookie 会失去当前访客身份，账号找回尚未实现；本阶段仍限虚构人物测试，不收集真实家庭资料。
+- `functions/api/v1/[[path]].js`：按 `APP_BACKEND` 在 KV 演示和 Supabase 模式间切换。
+- `lib/pages-supabase-h5.js`：优先调用 Edge 网关；保留直接 Secret key 模式作为本地/未来托管后端的兼容路径。
+- `supabase/functions/yinghuo-data-gateway/index.ts`：验证服务令牌哈希并执行严格白名单内的数据请求。
+- `infra/migrations/0007_edge_gateway_token.sql`：创建启用 RLS、无匿名策略的令牌哈希表。
+- `GET /api/v1/health` 在网关模式下执行真实鉴权和数据库连通检查，不写入测试数据。
 
-仅剩的配置：在新加坡 Supabase 项目的 **Settings → API Keys** 创建或复制 `sb_secret_...` 新式密钥；在 Cloudflare Pages 项目 `yinghuo-h5-sg-stage` 的 **Settings → Environment variables → Production** 把它填入 `SUPABASE_SECRET_KEY`，选择加密 Secret 类型并重新部署。部署后用真实站点完成下文验收，**不要把密钥发到聊天或仓库**。
+## Cloudflare 预发布变量
+
+| 名称 | 类型 | 用途 |
+| --- | --- | --- |
+| `APP_BACKEND=supabase` | 明文 | 仅切换独立预发布站 |
+| `SUPABASE_EDGE_GATEWAY_URL` | 明文 | Supabase Edge Function 地址 |
+| `SUPABASE_EDGE_SHARED_SECRET` | 加密 Secret | 专用服务令牌，只存在 Cloudflare |
+| `SESSION_SECRET` | 加密 Secret | Guest Cookie/CSRF 派生 |
+| `AI` | Workers AI 绑定 | 授权后的文字聊天 |
+
+不要把 `SUPABASE_SECRET_KEY`、共享令牌或 `.env` 提交到仓库。关闭浏览器 Cookie 会失去当前访客身份；账号找回尚未实现。本阶段仍只使用虚构人物资料。
 
 ## 验收
 
-运行 `pnpm test`、`pnpm --filter @yinghuo/client build:h5`。单独预发布站确认 `/api/v1/capabilities` 为 `mode=supabase`，建立访客→建档→记忆→私密故事→刷新后恢复→逐次勾选聊天记忆；另一访客无法读取资料和故事；未同意 AI 时模型不调用；模型失败不保存消息。`/api/v1/orders` 不接受购买，广场公开投稿不开放。正式接收用户前还需账号找回、数据导出/删除、Stripe 到账与退款闭环、国内手机网络及正式域名验收。
+- 单元测试必须覆盖：旧的直接 Data API 兼容路径、网关请求不携带数据库密钥、网关健康检查。
+- 线上 `/api/v1/health` 必须返回 `mode=supabase`、`persistence=supabase-edge-gateway`、`databaseStatus=connected`。
+- 再验证访客建档、记忆、私密故事、刷新恢复、逐次勾选记忆后聊天，以及另一访客的数据隔离。
+- 正式接收用户前仍需账号找回、数据导出/删除、Stripe 到账与退款闭环、国内手机网络、正式域名及法务文本验收。

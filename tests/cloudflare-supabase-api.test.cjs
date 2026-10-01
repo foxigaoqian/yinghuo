@@ -301,3 +301,39 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     global.fetch = previousFetch;
   }
 });
+
+
+test('Supabase H5 Pages adapter uses a scoped Edge gateway without a database key', async () => {
+  const { onRequest } = await import('../functions/api/v1/[[path]].js');
+  const previousFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    assert.equal(String(url), 'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway');
+    assert.equal(options.headers['x-yinghuo-backend-token'], 'test-edge-token');
+    assert.equal(options.headers.apikey, undefined);
+    assert.deepEqual(JSON.parse(options.body), { operation: 'health' });
+    return Response.json({ status: 'ok', database: 'connected' });
+  };
+  try {
+    const response = await onRequest({
+      request: new Request('https://stage.example.com/api/v1/health'),
+      env: {
+        APP_BACKEND: 'supabase',
+        SUPABASE_EDGE_GATEWAY_URL:
+          'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway',
+        SUPABASE_EDGE_SHARED_SECRET: 'test-edge-token',
+        SESSION_SECRET: 'x'.repeat(48),
+        AI: { run() {} },
+      },
+    });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.mode, 'supabase');
+    assert.equal(data.persistence, 'supabase-edge-gateway');
+    assert.equal(data.databaseStatus, 'connected');
+    assert.equal(calls.length, 1);
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
