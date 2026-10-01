@@ -466,7 +466,8 @@ async function handle(request, env) {
 }
 
 export async function onRequest({ request, env }) {
-  if (env?.APP_BACKEND === 'supabase') return onSupabaseRequest({ request, env });
+  if (env?.APP_BACKEND === 'supabase' || env?.SUPABASE_EDGE_SHARED_SECRET)
+    return onSupabaseRequest({ request, env });
   try {
     return await handle(request, env);
   } catch (error) {
