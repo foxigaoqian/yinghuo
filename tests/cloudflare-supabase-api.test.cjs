@@ -302,8 +302,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
   }
 });
 
-
-test('Supabase H5 Pages adapter uses a scoped Edge gateway without a database key', async () => {
+test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a database key', async () => {
   const { onRequest } = await import('../functions/api/v1/[[path]].js');
   const previousFetch = global.fetch;
   const calls = [];
@@ -319,9 +318,6 @@ test('Supabase H5 Pages adapter uses a scoped Edge gateway without a database ke
     const response = await onRequest({
       request: new Request('https://stage.example.com/api/v1/health'),
       env: {
-        APP_BACKEND: 'supabase',
-        SUPABASE_EDGE_GATEWAY_URL:
-          'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway',
         SUPABASE_EDGE_SHARED_SECRET: 'test-edge-token',
         SESSION_SECRET: 'x'.repeat(48),
         AI: { run() {} },

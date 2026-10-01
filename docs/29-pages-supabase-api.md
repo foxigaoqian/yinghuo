@@ -11,11 +11,11 @@ Supabase 连接插件可以部署 Edge Function 和管理数据库，但不会�
 3. Supabase 只保存该令牌的 SHA-256 哈希；Edge Function 使用平台自动注入的 `SUPABASE_SECRET_KEYS` 访问 Data API。
 4. 网关只允许萤火当前需要的 8 张表、4 个 RPC 和 GET/POST/PATCH，不提供任意 SQL，也不把数据库 Secret key 传给 Cloudflare、浏览器、GitHub或聊天。
 
-原 `yinghuo-h5-preview` 仍运行临时 KV 演示；只有独立项目 `yinghuo-h5-sg-stage` 设置 `APP_BACKEND=supabase` 后走新加坡数据库。
+原 `yinghuo-h5-preview` 没有网关 Secret，继续运行临时 KV 演示；独立项目 `yinghuo-h5-sg-stage` 检测到 `SUPABASE_EDGE_SHARED_SECRET` 后自动走新加坡数据库。这样不依赖会被根 `wrangler.jsonc` 在部署时覆盖的普通仪表盘变量。
 
 ## 代码与数据库
 
-- `functions/api/v1/[[path]].js`：按 `APP_BACKEND` 在 KV 演示和 Supabase 模式间切换。
+- `functions/api/v1/[[path]].js`：本地可用 `APP_BACKEND=supabase` 切换；Cloudflare 预发布按专用 Secret 自动切换。
 - `lib/pages-supabase-h5.js`：优先调用 Edge 网关；保留直接 Secret key 模式作为本地/未来托管后端的兼容路径。
 - `supabase/functions/yinghuo-data-gateway/index.ts`：验证服务令牌哈希并执行严格白名单内的数据请求。
 - `infra/migrations/0007_edge_gateway_token.sql`：创建启用 RLS、无匿名策略的令牌哈希表。
@@ -25,13 +25,11 @@ Supabase 连接插件可以部署 Edge Function 和管理数据库，但不会�
 
 | 名称 | 类型 | 用途 |
 | --- | --- | --- |
-| `APP_BACKEND=supabase` | 明文 | 仅切换独立预发布站 |
-| `SUPABASE_EDGE_GATEWAY_URL` | 明文 | Supabase Edge Function 地址 |
-| `SUPABASE_EDGE_SHARED_SECRET` | 加密 Secret | 专用服务令牌，只存在 Cloudflare |
+| `SUPABASE_EDGE_SHARED_SECRET` | 加密 Secret | 专用服务令牌，只存在 Cloudflare；同时作为预发布模式开关 |
 | `SESSION_SECRET` | 加密 Secret | Guest Cookie/CSRF 派生 |
 | `AI` | Workers AI 绑定 | 授权后的文字聊天 |
 
-不要把 `SUPABASE_SECRET_KEY`、共享令牌或 `.env` 提交到仓库。关闭浏览器 Cookie 会失去当前访客身份；账号找回尚未实现。本阶段仍只使用虚构人物资料。
+`SUPABASE_EDGE_GATEWAY_URL` 仅作为本地或未来环境的可选覆盖；新加坡网关公开地址已固定在服务端代码中。不要把 `SUPABASE_SECRET_KEY`、共享令牌或 `.env` 提交到仓库。关闭浏览器 Cookie 会失去当前访客身份；账号找回尚未实现。本阶段仍只使用虚构人物资料。
 
 ## 验收
 
