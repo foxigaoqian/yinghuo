@@ -29,7 +29,8 @@ pnpm deploy:worker
 ## 当前环境
 
 - Worker：`yinghuo-h5-sg-stage`
-- 入口：`https://yinghuo-h5-sg-stage.foxigaoqian-soocly.workers.dev`
+- 主入口：`https://yinghuo.soocly.com`
+- `workers.dev` 仅作为海外调试备用，不作为面向用户的访问地址
 - 数据：Supabase Singapore 项目 `yinghuo-h5-singapore`
 - Pages 项目 `yinghuo-h5-sg-stage` 暂时仅作回滚快照；完成观察期后再单独下线。
 
