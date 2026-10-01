@@ -54,5 +54,7 @@ test('Worker config sends API routes to code before SPA fallback', () => {
   assert.match(config, /"name": "yinghuo-h5-sg-stage"/);
   assert.match(config, /"not_found_handling": "single-page-application"/);
   assert.match(config, /"run_worker_first": \["\/api\/v1\/\*"\]/);
+  assert.match(config, /"pattern": "yinghuo\\.soocly\\.com"/);
+  assert.match(config, /"custom_domain": true/);
   assert.doesNotMatch(config, /SUPABASE_EDGE_SHARED_SECRET\s*":\s*"[^"]+"/);
 });
