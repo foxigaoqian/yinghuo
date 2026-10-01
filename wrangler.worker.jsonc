@@ -3,6 +3,12 @@
   "name": "yinghuo-h5-sg-stage",
   "main": "./worker/index.js",
   "compatibility_date": "2026-10-01",
+  "routes": [
+    {
+      "pattern": "yinghuo.soocly.com",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "APP_BACKEND": "supabase",
     "SUPABASE_EDGE_GATEWAY_URL": "https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway"
