@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "yinghuo-h5-sg-stage",
+  "main": "./worker/index.js",
+  "compatibility_date": "2026-10-01",
+  "vars": {
+    "APP_BACKEND": "supabase",
+    "SUPABASE_EDGE_GATEWAY_URL": "https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway"
+  },
+  "assets": {
+    "directory": "./apps/client/dist/build/h5",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/v1/*"]
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
