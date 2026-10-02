@@ -19,21 +19,22 @@ test('15 page routes load, IP renders, no horizontal overflow', async ({ page })
     'story',
     'compose',
   ]) {
-    await page.goto('/#/pages/' + route + '/index');
+    await page.goto('/pages/' + route + '/index');
     await expect(page.locator('.app-shell')).toBeVisible();
     await expect(page.locator('vite-error-overlay')).toHaveCount(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBeTruthy();
   }
-  await page.goto('/#/pages/home/index');
+  await page.goto('/');
   await expect(page.locator('.hero-art .mascot')).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('');
   await expect(page.getByText('开发演示 · 不发送短信、不真实扣款')).toHaveCount(0);
   await expect(page.getByText('正在处理，请稍候…')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('first visit → first memory → private square story → planned price', async ({ page }) => {
-  await page.goto('/#/pages/home/index');
+  await page.goto('/pages/home/index');
   await page.getByText('为 TA 建立记忆空间', { exact: true }).click();
   await expect(page).toHaveURL(/create/);
   // uni-app's H5 placeholder is rendered as a sibling hint rather than a
@@ -67,10 +68,10 @@ test('first visit → first memory → private square story → planned price', 
   await page.getByText('保存给自己', { exact: true }).click();
   await expect(page).toHaveURL(/view=mine/);
   await expect(page.getByText('窗边的下午', { exact: true })).toBeVisible();
-  await page.goto('/#/pages/chat/index');
+  await page.goto('/pages/chat/index');
   await expect(page.getByRole('heading', { name: '记忆对话暂时无法使用' })).toBeVisible();
   await expect(page.locator('.chat-input input')).toHaveCount(0);
-  await page.goto('/#/pages/plans/index');
+  await page.goto('/pages/plans/index');
   await expect(page.getByText('¥99')).toBeVisible();
   await expect(page.getByText('选择年费 · 模拟下单')).toHaveCount(0);
 });
@@ -81,7 +82,7 @@ test('small phone and landscape remain within viewport', async ({ page }) => {
   ]) {
     await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/#/pages/home/index');
+    await page.goto('/pages/home/index');
     await expect(page.locator('.wordmark')).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
