@@ -112,6 +112,16 @@ function fakeSupabase() {
         return Response.json(results);
       }
       if (options.method === 'POST') {
+        if (path === 'messages' && Array.isArray(input) && input.length > 1) {
+          const expectedKeys = Object.keys(input[0]).sort();
+          for (const row of input.slice(1)) {
+            assert.deepEqual(
+              Object.keys(row).sort(),
+              expectedKeys,
+              'PostgREST bulk inserts require every object to use the same keys',
+            );
+          }
+        }
         const entries = Array.isArray(input) ? input : [input];
         const saved = [];
         for (const row of entries) {
