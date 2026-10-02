@@ -395,9 +395,14 @@ test('AI router prefers SquareFace and falls back to Workers AI without exposing
     assert.doesNotMatch(requests[0].options.body, /test-squareface-secret/);
     assert.equal(fallbackCalls, 0);
 
-    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    global.fetch = async () =>
+      Response.json({ choices: [{ message: { content: '我记得你们一起做饭。' } }] });
     assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
     assert.equal(fallbackCalls, 1);
+
+    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
+    assert.equal(fallbackCalls, 2);
   } finally {
     global.fetch = previousFetch;
   }
