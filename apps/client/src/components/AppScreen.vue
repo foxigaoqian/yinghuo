@@ -56,19 +56,22 @@ const sampleStories = [
   },
 ];
 const selectedSample = computed(() => sampleStories.find((s) => s.id === props.query?.id));
-function loadScreen() {
+async function loadScreen() {
   if (!app.bootstrap) loading.value = true;
-  void app
-    .run(async () => {
-      await app.refresh();
-      restoreProfileDraft();
-      restoreChatDraft();
-    })
-    .finally(() => {
-      loading.value = false;
-    });
+  app.error = '';
+  try {
+    await app.refresh(props.page !== 'home');
+    restoreProfileDraft();
+    restoreChatDraft();
+  } catch (error) {
+    app.error = error instanceof Error ? error.message : '暂时无法完成，请重试';
+  } finally {
+    loading.value = false;
+  }
 }
-onShow(loadScreen);
+onShow(() => {
+  void loadScreen();
+});
 function onRetry() {
   loadScreen();
 }
@@ -333,7 +336,7 @@ function confirmLogout() {
           >
             {{
               app.busy
-                ? '正在打开…'
+                ? '正在进入…'
                 : app.current
                   ? chatAvailable
                     ? '和 TA 的记忆说说话'

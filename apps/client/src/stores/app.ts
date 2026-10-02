@@ -26,16 +26,23 @@ export const useAppStore = defineStore('app', () => {
   const error = ref('');
   const status = ref('');
   async function refresh(createGuest = true) {
-    const capabilities = await api<{ mode?: string }>('/capabilities');
-    let s = await api<SessionInfo>('/auth/session');
+    const [capabilities, initialSession] = await Promise.all([
+      api<{ mode?: string }>('/capabilities'),
+      api<SessionInfo>('/auth/session'),
+    ]);
+    let s = initialSession;
     if (!s.userId && createGuest && capabilities.mode === 'supabase') {
       s = await api<SessionInfo>('/auth/guest', 'POST', {});
     }
     session.value = s;
     setCsrf(s.csrfToken);
-    bootstrap.value = await api<BootstrapState>('/bootstrap');
-    if (bootstrap.value.csrfToken) setCsrf(bootstrap.value.csrfToken);
-    products.value = (await api<{ items: Product[] }>('/products')).items;
+    const [nextBootstrap, productResponse] = await Promise.all([
+      api<BootstrapState>('/bootstrap'),
+      api<{ items: Product[] }>('/products'),
+    ]);
+    bootstrap.value = nextBootstrap;
+    if (nextBootstrap.csrfToken) setCsrf(nextBootstrap.csrfToken);
+    products.value = productResponse.items;
     if (!s.userId) {
       profiles.value = [];
       memories.value = [];
@@ -44,7 +51,12 @@ export const useAppStore = defineStore('app', () => {
       posts.value = [];
       return;
     }
-    profiles.value = (await api<{ items: Profile[] }>('/profiles')).items;
+    const [profileResponse, orderResponse, postResponse] = await Promise.all([
+      api<{ items: Profile[] }>('/profiles'),
+      api<{ items: Order[] }>('/orders'),
+      api<{ items: Post[] }>('/square?view=mine'),
+    ]);
+    profiles.value = profileResponse.items;
     const scopedCurrent = uni.getStorageSync('yinghuo.current.' + s.userId) as string;
     const legacyCurrent = uni.getStorageSync('yinghuo.current') as string;
     const preferredCurrent =
@@ -53,12 +65,8 @@ export const useAppStore = defineStore('app', () => {
       ? preferredCurrent
       : bootstrap.value.recentProfileId || profiles.value[0]?.id || '';
     if (restoredId !== currentId.value) select(restoredId);
-    const [o, p] = await Promise.all([
-      api<{ items: Order[] }>('/orders'),
-      api<{ items: Post[] }>('/square?view=mine'),
-    ]);
-    orders.value = o.items;
-    posts.value = p.items;
+    orders.value = orderResponse.items;
+    posts.value = postResponse.items;
     if (currentId.value) {
       const [m, c] = await Promise.all([
         api<{ items: Memory[] }>('/profiles/' + currentId.value + '/memories'),
