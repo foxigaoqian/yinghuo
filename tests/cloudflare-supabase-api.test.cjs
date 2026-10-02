@@ -357,3 +357,48 @@ test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a dat
     global.fetch = previousFetch;
   }
 });
+
+test('AI router prefers SquareFace and falls back to Workers AI without exposing the key', async () => {
+  const { aiProvider, generateAiReply } = await import('../lib/yinghuo-ai.js');
+  const previousFetch = global.fetch;
+  const requests = [];
+  let fallbackCalls = 0;
+  const env = {
+    SQUAREFACE_API_KEY: 'test-squareface-secret',
+    SQUAREFACE_BASE_URL: 'https://api.sqface.sbs/v1',
+    SQUAREFACE_CHAT_MODEL: 'claude-sonnet-5',
+    AI: {
+      async run(model, input) {
+        fallbackCalls += 1;
+        assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fp8');
+        assert.equal(input.messages[0].content, 'system prompt');
+        return { response: 'Workers AI 回退正常。' };
+      },
+    },
+  };
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return Response.json({ choices: [{ message: { content: '中转站主模型响应正常。' } }] });
+  };
+  try {
+    assert.equal(aiProvider(env), 'squareface-with-workers-ai-fallback');
+    const messages = [
+      { role: 'system', content: 'system prompt' },
+      { role: 'user', content: '你好' },
+    ];
+    assert.equal(await generateAiReply(env, messages), '中转站主模型响应正常。');
+    assert.equal(requests[0].url, 'https://api.sqface.sbs/v1/chat/completions');
+    assert.equal(requests[0].options.headers.Authorization, 'Bearer test-squareface-secret');
+    const sent = JSON.parse(requests[0].options.body);
+    assert.equal(sent.model, 'claude-sonnet-5');
+    assert.deepEqual(sent.messages, messages);
+    assert.doesNotMatch(requests[0].options.body, /test-squareface-secret/);
+    assert.equal(fallbackCalls, 0);
+
+    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
+    assert.equal(fallbackCalls, 1);
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
