@@ -100,6 +100,19 @@ export const useAppStore = defineStore('app', () => {
     setCsrf(null);
     await refresh(false);
   }
+  async function createRecoveryCode() {
+    return api<{ familyCode: string; recoveryCode: string }>(
+      '/auth/recovery-code',
+      'POST',
+      {},
+    );
+  }
+  async function recover(input: { familyCode: string; recoveryCode: string }) {
+    const s = await api<SessionInfo>('/auth/recover', 'POST', input);
+    session.value = s;
+    setCsrf(s.csrfToken);
+    await refresh(false);
+  }
   async function addProfile(input: unknown, edit = false) {
     const p = await api<Profile>(
       '/profiles' + (edit ? '/' + currentId.value : ''),
@@ -166,6 +179,8 @@ export const useAppStore = defineStore('app', () => {
     select,
     login,
     logout,
+    createRecoveryCode,
+    recover,
     addProfile,
     addMemory,
     send,

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 function fakeSupabase() {
   const sessions = new Map();
+  const recoveryCodes = new Map();
+  const recoveryAttempts = new Map();
   const profiles = [];
   const memories = [];
   const conversations = [];
@@ -43,6 +45,7 @@ function fakeSupabase() {
           const user = {
             id: crypto.randomUUID(),
             account_kind: 'guest',
+            family_code: 'TEST1234',
             free_slot_consumed_at: null,
             deleted_at: null,
           };
@@ -68,6 +71,53 @@ function fakeSupabase() {
         if (name === 'yinghuo_revoke_guest_session') {
           sessions.delete(input.p_refresh_hash);
           return Response.json(true);
+        }
+        if (name === 'yinghuo_set_recovery_code') {
+          const user = users.find((item) => item.id === input.p_user_id);
+          if (!user) return Response.json(false);
+          recoveryCodes.set(user.id, input.p_code_hash);
+          return Response.json(true);
+        }
+        if (name === 'yinghuo_recover_guest_session') {
+          const attempts = recoveryAttempts.get(input.p_attempt_hash) || 0;
+          if (attempts >= 8) {
+            return Response.json([
+              {
+                status: 'rate_limited',
+                user_id: null,
+                account_kind: null,
+                family_code: null,
+                expires_at: null,
+              },
+            ]);
+          }
+          recoveryAttempts.set(input.p_attempt_hash, attempts + 1);
+          const user = users.find(
+            (item) =>
+              item.family_code === input.p_family_code &&
+              recoveryCodes.get(item.id) === input.p_code_hash,
+          );
+          if (!user) {
+            return Response.json([
+              {
+                status: 'invalid',
+                user_id: null,
+                account_kind: null,
+                family_code: null,
+                expires_at: null,
+              },
+            ]);
+          }
+          sessions.set(input.p_refresh_hash, user.id);
+          return Response.json([
+            {
+              status: 'ok',
+              user_id: user.id,
+              account_kind: user.account_kind,
+              family_code: user.family_code,
+              expires_at: input.p_expires_at,
+            },
+          ]);
         }
         if (name === 'yinghuo_create_profile') {
           const profile = {
@@ -190,7 +240,8 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
         const res = await onRequest({ request: req, env });
         if (res.headers.has('set-cookie')) cookie = res.headers.get('set-cookie').split(';')[0];
         const data = await res.json();
-        if (path === '/auth/guest' && res.ok) csrf = data.csrfToken;
+        if ((path === '/auth/guest' || path === '/auth/recover') && res.ok)
+          csrf = data.csrfToken;
         return { status: res.status, data, res };
       },
       setCsrf(value) {
@@ -208,6 +259,10 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(opened.status, 200);
     assert.match(opened.res.headers.get('set-cookie'), /__Host-yinghuo_session=.*HttpOnly; Secure/);
     assert.equal((await a.request('GET', '/auth/session')).data.userId, opened.data.userId);
+    const recoveryBundle = await a.request('POST', '/auth/recovery-code');
+    assert.equal(recoveryBundle.status, 200);
+    assert.equal(recoveryBundle.data.familyCode, 'TEST1234');
+    assert.match(recoveryBundle.data.recoveryCode, /^YH(?:-[A-HJ-NP-Z2-9]{4}){5}$/);
     a.setCsrf('bad');
     assert.equal((await a.request('POST', '/profiles', { name: '爸爸' })).status, 403);
     a.setCsrf(opened.data.csrfToken);
@@ -220,6 +275,20 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(profile.status, 200);
     assert.equal(profile.data.aiConsent, false);
     assert.equal((await a.request('GET', '/profiles')).data.items.length, 1);
+    const recovered = client();
+    assert.equal(
+      (
+        await recovered.request('POST', '/auth/recover', {
+          familyCode: 'TEST1234',
+          recoveryCode: 'YH-AAAA-AAAA-AAAA-AAAA-AAAA',
+        })
+      ).status,
+      400,
+    );
+    const restored = await recovered.request('POST', '/auth/recover', recoveryBundle.data);
+    assert.equal(restored.status, 200);
+    assert.equal(restored.data.userId, opened.data.userId);
+    assert.equal((await recovered.request('GET', '/profiles')).data.items.length, 1);
     assert.equal((await a.request('GET', '/bootstrap')).data.canCreateFreeProfile, false);
     const memories = await a.request('GET', '/profiles/' + profile.data.id + '/memories');
     assert.equal(memories.data.items[0].body, '第一次做饭');
@@ -306,6 +375,11 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal((await a.request('GET', '/auth/session')).data.userId, null);
     assert.ok(
       backend.calls.every((call) => !JSON.stringify(call).includes('test-server-only-key')),
+    );
+    assert.ok(
+      backend.calls.every(
+        (call) => !JSON.stringify(call).includes(recoveryBundle.data.recoveryCode),
+      ),
     );
   } finally {
     global.fetch = previousFetch;

@@ -6,7 +6,7 @@ import AppShell from './AppShell.vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ page: string; title: string; query?: Record<string, string> }>();
 const app = useAppStore();
-const loading = ref(!app.bootstrap);
+const loading = ref(props.page !== 'home' && !app.bootstrap);
 const hostedPreview = computed(() => Boolean(app.bootstrap?.features?.hostedPreview));
 const form = reactive({
   name: '',
@@ -17,6 +17,8 @@ const form = reactive({
   body: '',
   public: false,
   publicConsent: false,
+  familyCode: '',
+  recoveryCode: '',
 });
 const createStep = ref(1);
 const squareView = ref('精选');
@@ -24,6 +26,7 @@ const preview = ref('');
 const chatText = ref('');
 const chatConsent = ref(false);
 const selectedChatMemories = ref<string[]>([]);
+const generatedRecoveryCode = ref('');
 const chatAvailable = computed(() => Boolean(app.bootstrap?.features?.textChat));
 let restoringDraft = false;
 let profileDraftOwner = '';
@@ -57,10 +60,10 @@ const sampleStories = [
 ];
 const selectedSample = computed(() => sampleStories.find((s) => s.id === props.query?.id));
 async function loadScreen() {
-  if (!app.bootstrap) loading.value = true;
+  if (props.page !== 'home' && !app.bootstrap) loading.value = true;
   app.error = '';
   try {
-    await app.refresh(props.page !== 'home');
+    await app.refresh(!['home', 'login'].includes(props.page));
     restoreProfileDraft();
     restoreChatDraft();
   } catch (error) {
@@ -294,10 +297,46 @@ watch(
 function info(title: string, content: string) {
   uni.showModal({ title, content, showCancel: false });
 }
+function copyText(value: string, label: string) {
+  if (!value) return;
+  uni.setClipboardData({
+    data: value,
+    success: () => {
+      app.status = label + '已复制';
+    },
+  });
+}
+function createRecoveryCode() {
+  uni.showModal({
+    title: '生成新的安全恢复码？',
+    content: '新的恢复码只显示这一次；再次生成会让旧恢复码失效。请复制后保存在安全的地方。',
+    confirmText: '生成恢复码',
+    success: (result) => {
+      if (!result.confirm) return;
+      void app.run(async () => {
+        const bundle = await app.createRecoveryCode();
+        generatedRecoveryCode.value = bundle.recoveryCode;
+        app.status = '恢复码已生成，请立即复制保存。';
+      });
+    },
+  });
+}
+function recoverAccount() {
+  const familyCode = form.familyCode.trim().toUpperCase();
+  const recoveryCode = form.recoveryCode.trim().toUpperCase();
+  if (!familyCode || !recoveryCode) {
+    app.error = '请输入萤火号和安全恢复码';
+    return;
+  }
+  void app.run(async () => {
+    await app.recover({ familyCode, recoveryCode });
+    replace(nextAfterLogin.value);
+  });
+}
 function confirmLogout() {
   uni.showModal({
     title: '离开当前空间？',
-    content: '退出后，这个临时空间的内容将无法找回。',
+    content: '退出会清除这台设备的登录。只有保存过安全恢复码，才能重新找回这个空间。',
     confirmText: '确认退出',
     success: (result) => {
       if (result.confirm)
@@ -314,7 +353,7 @@ function confirmLogout() {
     <view v-if="loading" class="loading-state" role="status" aria-label="正在打开萤火">
       <view class="loading-line short" /><view class="loading-line" /><view class="loading-block" />
     </view>
-    <view v-else-if="!app.bootstrap" class="empty" role="alert">
+    <view v-else-if="!app.bootstrap && page !== 'home'" class="empty" role="alert">
       <h2>暂时无法打开萤火</h2>
       <p>{{ app.error || '请检查网络，稍后再试。' }}</p>
       <button class="btn secondary" @click="onRetry">重试</button>
@@ -382,7 +421,7 @@ function confirmLogout() {
         >
         <view class="card"
           ><h3>继续体验</h3>
-          <p class="caption">当前是临时体验空间，暂时无法跨设备找回。请只使用虚构内容。</p>
+          <p class="caption">无需注册即可开始；创建后可在“我的”保存安全恢复码。</p>
           <button
             class="btn"
             :disabled="app.busy"
@@ -398,9 +437,27 @@ function confirmLogout() {
         >
         <view class="notice">{{
           hostedPreview
-            ? '记录约 24 小时后自动清除，请勿在这里保存真实家庭资料。'
-            : '记录可能无法长期保存，请勿在这里填写真实家庭资料。'
+            ? '当前设备登录通常保留 30 天；请在“我的”保存安全恢复码。'
+            : '请在“我的”保存安全恢复码，以便更换设备后找回。'
         }}</view>
+        <view class="card recovery-card">
+          <h3>找回已有空间</h3>
+          <p class="caption">需要同时填写萤火号和安全恢复码，萤火号本身不能用于登录。</p>
+          <label class="field"
+            ><text>萤火号</text
+            ><input v-model="form.familyCode" maxlength="24" placeholder="例如：A1B2C3D4"
+          /></label>
+          <label class="field"
+            ><text>安全恢复码</text
+            ><input
+              v-model="form.recoveryCode"
+              maxlength="40"
+              placeholder="例如：YH-XXXX-XXXX-XXXX-XXXX-XXXX"
+          /></label>
+          <button class="btn secondary" :disabled="app.busy" @click="recoverAccount">
+            {{ app.busy ? '正在找回…' : '找回我的萤火' }}
+          </button>
+        </view>
       </template>
       <template v-else-if="page === 'create'">
         <h1>{{ editing ? '补充 TA 的故事' : '为重要的人，留下一束光' }}</h1>
@@ -408,7 +465,7 @@ function confirmLogout() {
           {{ editing ? '修改记忆空间资料。' : '不用一次准备齐全，三步就能开始。' }}
         </p>
         <view v-if="!editing" class="notice"
-          >当前为限时体验，内容约 24 小时后清除。请用虚构资料体验，不要填写真实私人信息。</view
+          >当前设备登录通常保留 30 天。创建后请到“我的”保存安全恢复码。</view
         >
         <view v-if="!app.session.userId" class="card"
           ><p>先进入体验空间，再继续填写。</p>
@@ -710,7 +767,7 @@ function confirmLogout() {
           ><h2>基础空间</h2>
           <text class="price">¥0</text>
           <p>现在可体验：创建 TA、保存私密文字记忆、写故事。</p>
-          <small>当前记录约 24 小时后清除，请勿填写真实私人信息。</small></view
+          <small>当前设备登录通常保留 30 天；安全恢复码可用于换设备找回。</small></view
         >
         <view class="card highlight"
           ><text class="badge">尚未开放</text>
@@ -857,6 +914,31 @@ function confirmLogout() {
           ><view class="sprite mascot mini"
         /></view>
         <button v-if="!app.session.userId" class="btn" @click="go('login')">开始体验</button>
+        <view v-if="app.session.userId" class="card account-card">
+          <text class="badge">临时匿名账号</text>
+          <h2>我的萤火号</h2>
+          <button
+            class="account-code"
+            :aria-label="'复制萤火号 ' + (app.session.familyCode || '')"
+            @click="copyText(app.session.familyCode || '', '萤火号')"
+          >
+            {{ app.session.familyCode || '正在识别…' }}
+          </button>
+          <p class="caption">这是公开识别号，不能单独登录。当前设备登录通常保留 30 天。</p>
+          <template v-if="generatedRecoveryCode">
+            <view class="recovery-secret">
+              <small>安全恢复码 · 只显示这一次</small>
+              <strong>{{ generatedRecoveryCode }}</strong>
+            </view>
+            <button class="btn" @click="copyText(generatedRecoveryCode, '安全恢复码')">
+              复制安全恢复码
+            </button>
+          </template>
+          <button v-else class="btn secondary" :disabled="app.busy" @click="createRecoveryCode">
+            {{ app.busy ? '正在生成…' : '生成安全恢复码' }}
+          </button>
+          <p class="account-warning">请勿把安全恢复码发给别人；萤火不会通过客服向你索要恢复码。</p>
+        </view>
         <view class="grid2"
           ><button class="tile" @click="needProfile('memories')">
             <AppIcon name="book" /><text>我的记忆</text></button
@@ -872,8 +954,8 @@ function confirmLogout() {
               info(
                 '隐私与数据',
                 hostedPreview
-                  ? '请只填写虚构内容。当前空间的记录约 24 小时后清除，退出后也无法找回。暂不支持跨设备找回。'
-                  : '当前空间的记录可能无法长期保存，请只填写虚构内容。',
+                  ? '当前设备登录通常保留 30 天。萤火号是公开识别号，不能用于登录；请保存安全恢复码，以便换设备或登录过期后找回。'
+                  : '萤火号不能用于登录；请保存安全恢复码，以便换设备后找回。',
               )
             "
           >
