@@ -18,8 +18,8 @@ body {
   font:
     16px/1.6 -apple-system,
     BlinkMacSystemFont,
-    "PingFang SC",
-    "Microsoft YaHei",
+    'PingFang SC',
+    'Microsoft YaHei',
     sans-serif;
 }
 button,
@@ -88,7 +88,7 @@ small,
   box-shadow: 0 20px 70px #67533716;
 }
 .app-shell::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -245,24 +245,25 @@ small,
   gap: 8px;
   margin-top: 14px;
   padding: 14px;
+  border: 1px solid #e3c56e;
   border-radius: 14px;
-  background: #40382f;
-  color: #fff8e8;
+  background: #fff8dc;
   text-align: center;
 }
 .recovery-secret small {
-  color: #ead9b3;
+  color: #7c6844;
 }
 .recovery-secret strong {
-  overflow-wrap: anywhere;
-  font-size: 17px;
+  color: #4e3a14;
+  font-size: 18px;
   letter-spacing: 1px;
+  overflow-wrap: anywhere;
 }
 .account-warning {
-  margin-top: 12px;
-  color: #766342;
+  margin: 12px 0 0;
+  color: #8a5a28;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 .card.highlight {
   border-color: #e6b650;
@@ -326,7 +327,7 @@ small,
   margin-top: 4px;
 }
 .sprite {
-  background-image: url("/static/atlas.png");
+  background-image: url('/static/atlas.png');
   background-size: 200% 200%;
   background-repeat: no-repeat;
   aspect-ratio: 1;

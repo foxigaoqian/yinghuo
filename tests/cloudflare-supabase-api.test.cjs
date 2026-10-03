@@ -1,5 +1,5 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+const test = require('node:test');
+const assert = require('node:assert/strict');
 
 function fakeSupabase() {
   const sessions = new Map();
@@ -23,74 +23,67 @@ function fakeSupabase() {
   };
   const matches = (row, query) =>
     [...query.entries()].every(([key, value]) => {
-      if (["select", "limit", "order", "on_conflict"].includes(key))
-        return true;
-      if (value === "is.null") return row[key] == null;
-      if (value.startsWith("eq.")) return String(row[key]) === value.slice(3);
-      if (value.startsWith("in.("))
-        return value.slice(4, -1).split(",").includes(String(row[key]));
-      throw Error("unexpected query " + key + "=" + value);
+      if (['select', 'limit', 'order', 'on_conflict'].includes(key)) return true;
+      if (value === 'is.null') return row[key] == null;
+      if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
+      if (value.startsWith('in.(')) return value.slice(4, -1).split(',').includes(String(row[key]));
+      throw Error('unexpected query ' + key + '=' + value);
     });
   return {
     calls,
     async fetch(url, options) {
       const address = new URL(url);
-      assert.equal(address.hostname, "sg.supabase.co");
-      assert.equal(options.headers.apikey, "test-server-only-key");
+      assert.equal(address.hostname, 'sg.supabase.co');
+      assert.equal(options.headers.apikey, 'test-server-only-key');
       assert.equal(options.headers.authorization, undefined);
-      const path = address.pathname.slice("/rest/v1/".length);
+      const path = address.pathname.slice('/rest/v1/'.length);
       const input = options.body ? JSON.parse(options.body) : undefined;
-      calls.push({
-        path,
-        method: options.method,
-        query: address.searchParams,
-        input,
-      });
-      if (path.startsWith("rpc/")) {
+      calls.push({ path, method: options.method, query: address.searchParams, input });
+      if (path.startsWith('rpc/')) {
         const name = path.slice(4);
-        if (name === "yinghuo_create_guest_session") {
+        if (name === 'yinghuo_create_guest_session') {
           const user = {
             id: crypto.randomUUID(),
-            account_kind: "guest",
-            family_code: "TEST1234",
+            account_kind: 'guest',
+            family_code: 'TEST1234',
             free_slot_consumed_at: null,
             deleted_at: null,
           };
           users.push(user);
           sessions.set(input.p_refresh_hash, user.id);
-          return Response.json([{ user_id: user.id, family_code: "TEST1234" }]);
+          return Response.json([{ user_id: user.id, family_code: 'TEST1234' }]);
         }
-        if (name === "yinghuo_get_guest_session") {
+        if (name === 'yinghuo_get_guest_session') {
           const userId = sessions.get(input.p_refresh_hash);
           return Response.json(
             userId
               ? [
                   {
                     user_id: userId,
-                    account_kind: "guest",
-                    family_code: "TEST1234",
+                    account_kind: 'guest',
+                    family_code: 'TEST1234',
                     expires_at: new Date(Date.now() + 86400000).toISOString(),
                   },
                 ]
               : [],
           );
         }
-        if (name === "yinghuo_revoke_guest_session") {
+        if (name === 'yinghuo_revoke_guest_session') {
           sessions.delete(input.p_refresh_hash);
           return Response.json(true);
         }
-        if (name === "yinghuo_set_recovery_code") {
+        if (name === 'yinghuo_set_recovery_code') {
           const user = users.find((item) => item.id === input.p_user_id);
           if (!user) return Response.json(false);
           recoveryCodes.set(user.id, input.p_code_hash);
           return Response.json(true);
         }
-        if (name === "yinghuo_recover_guest_session") {
+        if (name === 'yinghuo_recover_guest_session') {
           const attempts = recoveryAttempts.get(input.p_attempt_hash) || 0;
           if (attempts >= 8) {
             return Response.json([
               {
-                status: "rate_limited",
+                status: 'rate_limited',
                 user_id: null,
                 account_kind: null,
                 family_code: null,
@@ -107,7 +100,7 @@ function fakeSupabase() {
           if (!user) {
             return Response.json([
               {
-                status: "invalid",
+                status: 'invalid',
                 user_id: null,
                 account_kind: null,
                 family_code: null,
@@ -118,7 +111,7 @@ function fakeSupabase() {
           sessions.set(input.p_refresh_hash, user.id);
           return Response.json([
             {
-              status: "ok",
+              status: 'ok',
               user_id: user.id,
               account_kind: user.account_kind,
               family_code: user.family_code,
@@ -126,12 +119,12 @@ function fakeSupabase() {
             },
           ]);
         }
-        if (name === "yinghuo_create_profile") {
+        if (name === 'yinghuo_create_profile') {
           const profile = {
             id: crypto.randomUUID(),
             creator_user_id: input.p_user_id,
             display_name: input.p_display_name,
-            status: "active",
+            status: 'active',
             deleted_at: null,
             created_at: new Date().toISOString(),
           };
@@ -148,34 +141,34 @@ function fakeSupabase() {
               id: crypto.randomUUID(),
               profile_id: profile.id,
               owner_user_id: user.id,
-              title: "关于TA",
+              title: '关于TA',
               body: input.p_story,
               use_for_ai: false,
-              source_type: "profile_story",
-              confirmation_state: "confirmed",
+              source_type: 'profile_story',
+              confirmation_state: 'confirmed',
               deleted_at: null,
               created_at: new Date().toISOString(),
             });
           return Response.json([profile]);
         }
-        throw Error("unexpected RPC: " + name);
+        throw Error('unexpected RPC: ' + name);
       }
       const data = table[path];
-      if (!data) throw Error("unexpected table: " + path);
-      if (options.method === "GET") {
+      if (!data) throw Error('unexpected table: ' + path);
+      if (options.method === 'GET') {
         let results = data.filter((row) => matches(row, address.searchParams));
-        if (address.searchParams.has("limit"))
-          results = results.slice(0, Number(address.searchParams.get("limit")));
+        if (address.searchParams.has('limit'))
+          results = results.slice(0, Number(address.searchParams.get('limit')));
         return Response.json(results);
       }
-      if (options.method === "POST") {
-        if (path === "messages" && Array.isArray(input) && input.length > 1) {
+      if (options.method === 'POST') {
+        if (path === 'messages' && Array.isArray(input) && input.length > 1) {
           const expectedKeys = Object.keys(input[0]).sort();
           for (const row of input.slice(1)) {
             assert.deepEqual(
               Object.keys(row).sort(),
               expectedKeys,
-              "PostgREST bulk inserts require every object to use the same keys",
+              'PostgREST bulk inserts require every object to use the same keys',
             );
           }
         }
@@ -183,12 +176,8 @@ function fakeSupabase() {
         const saved = [];
         for (const row of entries) {
           const existing =
-            options.headers.prefer?.includes("merge-duplicates") &&
-            data.find(
-              (old) =>
-                old.profile_id === row.profile_id &&
-                old.user_id === row.user_id,
-            );
+            options.headers.prefer?.includes('merge-duplicates') &&
+            data.find((old) => old.profile_id === row.profile_id && old.user_id === row.user_id);
           if (existing) {
             Object.assign(existing, row);
             saved.push(existing);
@@ -205,54 +194,53 @@ function fakeSupabase() {
         }
         return Response.json(saved);
       }
-      if (options.method === "PATCH") {
+      if (options.method === 'PATCH') {
         const found = data.filter((row) => matches(row, address.searchParams));
         found.forEach((row) => Object.assign(row, input));
         return Response.json(found);
       }
-      throw Error("unexpected method");
+      throw Error('unexpected method');
     },
   };
 }
 
-test("Supabase H5 Pages adapter persists a private guest space and never opens payment", async () => {
-  const { onRequest } = await import("../functions/api/v1/[[path]].js");
+test('Supabase H5 Pages adapter persists a private guest space and never opens payment', async () => {
+  const { onRequest } = await import('../functions/api/v1/[[path]].js');
   const backend = fakeSupabase();
   const previousFetch = global.fetch;
   global.fetch = backend.fetch;
   const prompts = [];
   const env = {
-    APP_BACKEND: "supabase",
-    SUPABASE_URL: "https://sg.supabase.co",
-    SUPABASE_SECRET_KEY: "test-server-only-key",
-    SESSION_SECRET: "x".repeat(48),
+    APP_BACKEND: 'supabase',
+    SUPABASE_URL: 'https://sg.supabase.co',
+    SUPABASE_SECRET_KEY: 'test-server-only-key',
+    SESSION_SECRET: 'x'.repeat(48),
     AI: {
       async run(model, input) {
         prompts.push({ model, input });
-        return { response: "你留下的记忆里写着一起做饭。" };
+        return { response: '你留下的记忆里写着一起做饭。' };
       },
     },
   };
   function client() {
-    let cookie = "";
-    let csrf = "";
+    let cookie = '';
+    let csrf = '';
     return {
       async request(method, path, input, extra = {}) {
-        const req = new Request("https://preview.example.com/api/v1" + path, {
+        const req = new Request('https://preview.example.com/api/v1' + path, {
           method,
           headers: {
             ...(cookie ? { cookie } : {}),
-            ...(csrf ? { "x-csrf-token": csrf } : {}),
-            ...(method === "GET" ? {} : { "content-type": "application/json" }),
+            ...(csrf ? { 'x-csrf-token': csrf } : {}),
+            ...(method === 'GET' ? {} : { 'content-type': 'application/json' }),
             ...extra,
           },
-          ...(method === "GET" ? {} : { body: JSON.stringify(input ?? {}) }),
+          ...(method === 'GET' ? {} : { body: JSON.stringify(input ?? {}) }),
         });
         const res = await onRequest({ request: req, env });
-        if (res.headers.has("set-cookie"))
-          cookie = res.headers.get("set-cookie").split(";")[0];
+        if (res.headers.has('set-cookie')) cookie = res.headers.get('set-cookie').split(';')[0];
         const data = await res.json();
-        if ((path === "/auth/guest" || path === "/auth/recover") && res.ok)
+        if ((path === '/auth/guest' || path === '/auth/recover') && res.ok)
           csrf = data.csrfToken;
         return { status: res.status, data, res };
       },
@@ -264,157 +252,91 @@ test("Supabase H5 Pages adapter persists a private guest space and never opens p
   try {
     const a = client();
     const b = client();
-    assert.equal(
-      (await a.request("GET", "/capabilities")).data.mode,
-      "supabase",
-    );
-    assert.equal(
-      (await a.request("GET", "/bootstrap")).data.features.payment,
-      false,
-    );
-    assert.equal((await a.request("GET", "/auth/session")).data.userId, null);
-    const opened = await a.request("POST", "/auth/guest");
+    assert.equal((await a.request('GET', '/capabilities')).data.mode, 'supabase');
+    assert.equal((await a.request('GET', '/bootstrap')).data.features.payment, false);
+    assert.equal((await a.request('GET', '/auth/session')).data.userId, null);
+    const opened = await a.request('POST', '/auth/guest');
     assert.equal(opened.status, 200);
-    assert.match(
-      opened.res.headers.get("set-cookie"),
-      /__Host-yinghuo_session=.*HttpOnly; Secure/,
-    );
-    assert.equal(
-      (await a.request("GET", "/auth/session")).data.userId,
-      opened.data.userId,
-    );
-    const recoveryBundle = await a.request("POST", "/auth/recovery-code");
+    assert.match(opened.res.headers.get('set-cookie'), /__Host-yinghuo_session=.*HttpOnly; Secure/);
+    assert.equal((await a.request('GET', '/auth/session')).data.userId, opened.data.userId);
+    const recoveryBundle = await a.request('POST', '/auth/recovery-code');
     assert.equal(recoveryBundle.status, 200);
-    assert.equal(recoveryBundle.data.familyCode, "TEST1234");
-    assert.match(
-      recoveryBundle.data.recoveryCode,
-      /^YH(?:-[A-HJ-NP-Z2-9]{4}){5}$/,
-    );
-    a.setCsrf("bad");
-    assert.equal(
-      (await a.request("POST", "/profiles", { name: "爸爸" })).status,
-      403,
-    );
+    assert.equal(recoveryBundle.data.familyCode, 'TEST1234');
+    assert.match(recoveryBundle.data.recoveryCode, /^YH(?:-[A-HJ-NP-Z2-9]{4}){5}$/);
+    a.setCsrf('bad');
+    assert.equal((await a.request('POST', '/profiles', { name: '爸爸' })).status, 403);
     a.setCsrf(opened.data.csrfToken);
-    const profile = await a.request("POST", "/profiles", {
-      name: "爸爸",
-      callMe: "小宇",
-      story: "第一次做饭",
+    const profile = await a.request('POST', '/profiles', {
+      name: '爸爸',
+      callMe: '小宇',
+      story: '第一次做饭',
       aiConsent: false,
     });
     assert.equal(profile.status, 200);
     assert.equal(profile.data.aiConsent, false);
-    assert.equal((await a.request("GET", "/profiles")).data.items.length, 1);
+    assert.equal((await a.request('GET', '/profiles')).data.items.length, 1);
     const recovered = client();
     assert.equal(
       (
-        await recovered.request("POST", "/auth/recover", {
-          familyCode: "TEST1234",
-          recoveryCode: "YH-AAAA-AAAA-AAAA-AAAA-AAAA",
+        await recovered.request('POST', '/auth/recover', {
+          familyCode: 'TEST1234',
+          recoveryCode: 'YH-AAAA-AAAA-AAAA-AAAA-AAAA',
         })
       ).status,
       400,
     );
-    const restored = await recovered.request(
-      "POST",
-      "/auth/recover",
-      recoveryBundle.data,
-    );
+    const restored = await recovered.request('POST', '/auth/recover', recoveryBundle.data);
     assert.equal(restored.status, 200);
     assert.equal(restored.data.userId, opened.data.userId);
-    assert.equal(
-      (await recovered.request("GET", "/profiles")).data.items.length,
-      1,
-    );
-    assert.equal(
-      (await a.request("GET", "/bootstrap")).data.canCreateFreeProfile,
-      false,
-    );
-    const memories = await a.request(
-      "GET",
-      "/profiles/" + profile.data.id + "/memories",
-    );
-    assert.equal(memories.data.items[0].body, "第一次做饭");
-    const selected = await a.request(
-      "POST",
-      "/profiles/" + profile.data.id + "/memories",
-      {
-        title: "晚饭",
-        body: "一起做饭",
-        useForAi: false,
-      },
-    );
+    assert.equal((await recovered.request('GET', '/profiles')).data.items.length, 1);
+    assert.equal((await a.request('GET', '/bootstrap')).data.canCreateFreeProfile, false);
+    const memories = await a.request('GET', '/profiles/' + profile.data.id + '/memories');
+    assert.equal(memories.data.items[0].body, '第一次做饭');
+    const selected = await a.request('POST', '/profiles/' + profile.data.id + '/memories', {
+      title: '晚饭',
+      body: '一起做饭',
+      useForAi: false,
+    });
     assert.equal(selected.status, 200);
-    const another = await b.request("POST", "/auth/guest");
+    const another = await b.request('POST', '/auth/guest');
     assert.notEqual(another.data.userId, opened.data.userId);
-    assert.equal(
-      (await b.request("GET", "/profiles/" + profile.data.id)).status,
-      404,
-    );
-    assert.equal((await b.request("GET", "/profiles")).data.items.length, 0);
-    const privateStory = await a.request("POST", "/square", {
-      title: "窗边的下午",
-      body: "她喜欢在窗台养花。",
-      visibility: "private",
+    assert.equal((await b.request('GET', '/profiles/' + profile.data.id)).status, 404);
+    assert.equal((await b.request('GET', '/profiles')).data.items.length, 0);
+    const privateStory = await a.request('POST', '/square', {
+      title: '窗边的下午',
+      body: '她喜欢在窗台养花。',
+      visibility: 'private',
     });
     assert.equal(privateStory.status, 200);
-    assert.equal(privateStory.data.moderation, "private");
+    assert.equal(privateStory.data.moderation, 'private');
+    assert.equal((await a.request('GET', '/square?view=mine')).data.items[0].title, '窗边的下午');
+    assert.equal((await a.request('GET', '/square')).data.items.length, 0);
+    assert.equal((await b.request('GET', '/square?view=mine')).data.items.length, 0);
     assert.equal(
-      (await a.request("GET", "/square?view=mine")).data.items[0].title,
-      "窗边的下午",
-    );
-    assert.equal((await a.request("GET", "/square")).data.items.length, 0);
-    assert.equal(
-      (await b.request("GET", "/square?view=mine")).data.items.length,
-      0,
-    );
-    assert.equal(
-      (
-        await a.request("POST", "/square", {
-          title: "公开",
-          body: "不可见",
-          visibility: "public",
-          publicConsent: true,
-        })
-      ).status,
+      (await a.request('POST', '/square', { title: '公开', body: '不可见', visibility: 'public', publicConsent: true })).status,
       503,
     );
-    const foreign = await b.request("POST", "/profiles", {
-      name: "朋友",
-      aiConsent: false,
+    const foreign = await b.request('POST', '/profiles', { name: '朋友', aiConsent: false });
+    const badMemory = await b.request('POST', '/profiles/' + foreign.data.id + '/messages', {
+      text: '聊聊',
+      aiConsent: true,
+      memoryIds: [selected.data.id],
     });
-    const badMemory = await b.request(
-      "POST",
-      "/profiles/" + foreign.data.id + "/messages",
-      {
-        text: "聊聊",
-        aiConsent: true,
-        memoryIds: [selected.data.id],
-      },
-    );
     assert.equal(badMemory.status, 400);
     assert.equal(prompts.length, 0);
-    const denied = await a.request(
-      "POST",
-      "/profiles/" + profile.data.id + "/messages",
-      {
-        text: "今天怎么样",
-        memoryIds: [selected.data.id],
-      },
-    );
+    const denied = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '今天怎么样',
+      memoryIds: [selected.data.id],
+    });
     assert.equal(denied.status, 403);
     assert.equal(prompts.length, 0);
     const messageId = crypto.randomUUID();
-    const sent = await a.request(
-      "POST",
-      "/profiles/" + profile.data.id + "/messages",
-      {
-        text: "今天怎么样",
-        memoryIds: [selected.data.id],
-        aiConsent: true,
-        clientMessageId: messageId,
-      },
-    );
+    const sent = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '今天怎么样',
+      memoryIds: [selected.data.id],
+      aiConsent: true,
+      clientMessageId: messageId,
+    });
     assert.equal(sent.status, 200);
     assert.deepEqual(
       sent.data.items.map((m) => m.mock),
@@ -422,58 +344,41 @@ test("Supabase H5 Pages adapter persists a private guest space and never opens p
     );
     assert.match(prompts[0].input.messages[0].content, /一起做饭/);
     assert.doesNotMatch(prompts[0].input.messages[0].content, /第一次做饭/);
-    const again = await a.request(
-      "POST",
-      "/profiles/" + profile.data.id + "/messages",
-      {
-        text: "今天怎么样",
-        memoryIds: [selected.data.id],
-        aiConsent: true,
-        clientMessageId: messageId,
-      },
-    );
+    const again = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '今天怎么样',
+      memoryIds: [selected.data.id],
+      aiConsent: true,
+      clientMessageId: messageId,
+    });
     assert.equal(again.status, 200);
     assert.equal(prompts.length, 1);
     assert.equal(
-      (await a.request("GET", "/profiles/" + profile.data.id + "/messages"))
-        .data.items.length,
+      (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
       2,
     );
     env.AI.run = async () => {
-      throw Error("model temporarily unavailable");
+      throw Error('model temporarily unavailable');
     };
-    const failed = await a.request(
-      "POST",
-      "/profiles/" + profile.data.id + "/messages",
-      {
-        text: "还有呢",
-        aiConsent: true,
-        memoryIds: [],
-        clientMessageId: crypto.randomUUID(),
-      },
-    );
+    const failed = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '还有呢',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
     assert.equal(failed.status, 503);
     assert.equal(
-      (await a.request("GET", "/profiles/" + profile.data.id + "/messages"))
-        .data.items.length,
+      (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
       2,
     );
-    assert.equal(
-      (await a.request("POST", "/orders", { profileId: profile.data.id }))
-        .status,
-      503,
-    );
-    assert.equal((await a.request("POST", "/auth/logout")).status, 200);
-    assert.equal((await a.request("GET", "/auth/session")).data.userId, null);
+    assert.equal((await a.request('POST', '/orders', { profileId: profile.data.id })).status, 503);
+    assert.equal((await a.request('POST', '/auth/logout')).status, 200);
+    assert.equal((await a.request('GET', '/auth/session')).data.userId, null);
     assert.ok(
-      backend.calls.every(
-        (call) => !JSON.stringify(call).includes("test-server-only-key"),
-      ),
+      backend.calls.every((call) => !JSON.stringify(call).includes('test-server-only-key')),
     );
     assert.ok(
       backend.calls.every(
-        (call) =>
-          !JSON.stringify(call).includes(recoveryBundle.data.recoveryCode),
+        (call) => !JSON.stringify(call).includes(recoveryBundle.data.recoveryCode),
       ),
     );
   } finally {
@@ -481,122 +386,106 @@ test("Supabase H5 Pages adapter persists a private guest space and never opens p
   }
 });
 
-test("Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a database key", async () => {
-  const { onRequest } = await import("../functions/api/v1/[[path]].js");
+test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a database key', async () => {
+  const { onRequest } = await import('../functions/api/v1/[[path]].js');
   const previousFetch = global.fetch;
   const calls = [];
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), options });
-    assert.equal(
-      String(url),
-      "https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway",
-    );
-    assert.equal(options.headers["x-yinghuo-backend-token"], "test-edge-token");
+    assert.equal(String(url), 'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway');
+    assert.equal(options.headers['x-yinghuo-backend-token'], 'test-edge-token');
     assert.equal(options.headers.apikey, undefined);
     const payload = JSON.parse(options.body);
-    if (payload.operation === "health") {
-      return Response.json({ status: "ok", database: "connected" });
+    if (payload.operation === 'health') {
+      return Response.json({ status: 'ok', database: 'connected' });
     }
-    assert.equal(payload.operation, "database");
-    assert.equal(payload.resource, "rpc/yinghuo_create_guest_session");
-    assert.equal(payload.method, "POST");
-    return Response.json([
-      { user_id: crypto.randomUUID(), family_code: "TEST1234" },
-    ]);
+    assert.equal(payload.operation, 'database');
+    assert.equal(payload.resource, 'rpc/yinghuo_create_guest_session');
+    assert.equal(payload.method, 'POST');
+    return Response.json([{ user_id: crypto.randomUUID(), family_code: 'TEST1234' }]);
   };
   try {
     const response = await onRequest({
-      request: new Request("https://stage.example.com/api/v1/health"),
+      request: new Request('https://stage.example.com/api/v1/health'),
       env: {
-        SUPABASE_EDGE_SHARED_SECRET: "test-edge-token",
-        SESSION_SECRET: "x".repeat(48),
+        SUPABASE_EDGE_SHARED_SECRET: 'test-edge-token',
+        SESSION_SECRET: 'x'.repeat(48),
         AI: { run() {} },
       },
     });
     assert.equal(response.status, 200);
     const data = await response.json();
-    assert.equal(data.mode, "supabase");
-    assert.equal(data.persistence, "supabase-edge-gateway");
-    assert.equal(data.databaseStatus, "connected");
+    assert.equal(data.mode, 'supabase');
+    assert.equal(data.persistence, 'supabase-edge-gateway');
+    assert.equal(data.databaseStatus, 'connected');
 
     const guest = await onRequest({
-      request: new Request("https://stage.example.com/api/v1/auth/guest", {
-        method: "POST",
+      request: new Request('https://stage.example.com/api/v1/auth/guest', {
+        method: 'POST',
         headers: {
-          "content-type": "application/json",
-          origin: "https://stage.example.com",
+          'content-type': 'application/json',
+          origin: 'https://stage.example.com',
         },
-        body: "{}",
+        body: '{}',
       }),
       env: {
-        SUPABASE_EDGE_SHARED_SECRET: "test-edge-token",
-        SESSION_SECRET: "x".repeat(48),
+        SUPABASE_EDGE_SHARED_SECRET: 'test-edge-token',
+        SESSION_SECRET: 'x'.repeat(48),
         AI: { run() {} },
       },
     });
     assert.equal(guest.status, 200);
-    assert.equal(typeof (await guest.json()).userId, "string");
+    assert.equal(typeof (await guest.json()).userId, 'string');
     assert.equal(calls.length, 2);
   } finally {
     global.fetch = previousFetch;
   }
 });
 
-test("AI router prefers SquareFace and falls back to Workers AI without exposing the key", async () => {
-  const { aiProvider, generateAiReply } = await import("../lib/yinghuo-ai.js");
+test('AI router prefers SquareFace and falls back to Workers AI without exposing the key', async () => {
+  const { aiProvider, generateAiReply } = await import('../lib/yinghuo-ai.js');
   const previousFetch = global.fetch;
   const requests = [];
   let fallbackCalls = 0;
   const env = {
-    SQUAREFACE_API_KEY: "test-squareface-secret",
-    SQUAREFACE_BASE_URL: "https://api.sqface.sbs/v1",
-    SQUAREFACE_CHAT_MODEL: "claude-sonnet-5",
+    SQUAREFACE_API_KEY: 'test-squareface-secret',
+    SQUAREFACE_BASE_URL: 'https://api.sqface.sbs/v1',
+    SQUAREFACE_CHAT_MODEL: 'claude-sonnet-5',
     AI: {
       async run(model, input) {
         fallbackCalls += 1;
-        assert.equal(model, "@cf/meta/llama-3.1-8b-instruct-fp8");
-        assert.equal(input.messages[0].content, "system prompt");
-        return { response: "Workers AI 回退正常。" };
+        assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fp8');
+        assert.equal(input.messages[0].content, 'system prompt');
+        return { response: 'Workers AI 回退正常。' };
       },
     },
   };
   global.fetch = async (url, options) => {
     requests.push({ url: String(url), options });
-    return Response.json({
-      choices: [{ message: { content: "中转站主模型响应正常。" } }],
-    });
+    return Response.json({ choices: [{ message: { content: '中转站主模型响应正常。' } }] });
   };
   try {
-    assert.equal(aiProvider(env), "squareface-with-workers-ai-fallback");
+    assert.equal(aiProvider(env), 'squareface-with-workers-ai-fallback');
     const messages = [
-      { role: "system", content: "system prompt" },
-      { role: "user", content: "你好" },
+      { role: 'system', content: 'system prompt' },
+      { role: 'user', content: '你好' },
     ];
-    assert.equal(
-      await generateAiReply(env, messages),
-      "中转站主模型响应正常。",
-    );
-    assert.equal(requests[0].url, "https://api.sqface.sbs/v1/chat/completions");
-    assert.equal(
-      requests[0].options.headers.Authorization,
-      "Bearer test-squareface-secret",
-    );
+    assert.equal(await generateAiReply(env, messages), '中转站主模型响应正常。');
+    assert.equal(requests[0].url, 'https://api.sqface.sbs/v1/chat/completions');
+    assert.equal(requests[0].options.headers.Authorization, 'Bearer test-squareface-secret');
     const sent = JSON.parse(requests[0].options.body);
-    assert.equal(sent.model, "claude-sonnet-5");
+    assert.equal(sent.model, 'claude-sonnet-5');
     assert.deepEqual(sent.messages, messages);
     assert.doesNotMatch(requests[0].options.body, /test-squareface-secret/);
     assert.equal(fallbackCalls, 0);
 
     global.fetch = async () =>
-      Response.json({
-        choices: [{ message: { content: "我记得你们一起做饭。" } }],
-      });
-    assert.equal(await generateAiReply(env, messages), "Workers AI 回退正常。");
+      Response.json({ choices: [{ message: { content: '我记得你们一起做饭。' } }] });
+    assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
     assert.equal(fallbackCalls, 1);
 
-    global.fetch = async () =>
-      new Response("upstream unavailable", { status: 502 });
-    assert.equal(await generateAiReply(env, messages), "Workers AI 回退正常。");
+    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
     assert.equal(fallbackCalls, 2);
   } finally {
     global.fetch = previousFetch;
