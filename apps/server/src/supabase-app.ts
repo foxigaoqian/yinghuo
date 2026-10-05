@@ -89,7 +89,8 @@ type MessageRow = {
 };
 
 const liveChatConfigured = () => process.env.AI_PROVIDER === 'openai_compatible';
-const messageColumns = 'id,conversation_id,client_message_id,generation_id,role,status,text,created_at';
+const messageColumns =
+  'id,conversation_id,client_message_id,generation_id,role,status,text,created_at';
 
 @Controller()
 export class SupabasePublicController {
@@ -198,6 +199,11 @@ export class SupabasePublicController {
       canCreateFreeProfile: false,
       accountState: null,
       boundPhone: null,
+      phoneVerified: false,
+      gender: null,
+      birthYear: null,
+      recoveryConfigured: false,
+      recoveryUpdatedAt: null,
       profileCount: 0,
       recentProfileId: null,
       recentConversationId: null,
@@ -362,8 +368,7 @@ export class SupabaseProfilesController {
     const profile = await this.loadProfile(ownerId, profileId);
     const data = read(chatInput, body);
     if (!liveChatConfigured()) throw new ServiceUnavailableException('记忆对话尚未开放');
-    if (data.aiConsent !== true)
-      throw new ForbiddenException('请先确认了解 AI 对话的内容使用方式');
+    if (data.aiConsent !== true) throw new ForbiddenException('请先确认了解 AI 对话的内容使用方式');
     const conversation = await this.findConversation(ownerId, profileId);
 
     if (conversation && data.clientMessageId) {
@@ -506,6 +511,9 @@ export class SupabaseProfilesController {
       id: row.id,
       ownerId,
       name: row.display_name,
+      relationship: row.relationship || row.display_name,
+      nickname: row.relationship && row.display_name !== row.relationship ? row.display_name : '',
+      avatarUrl: null,
       callMe: prefById.get(row.id)?.call_me || '',
       story: storyById.get(row.id)?.body || '',
       aiConsent: consentIds.has(row.id),
@@ -650,7 +658,11 @@ class SupabaseSquareUnavailableController {
               process.env.AI_API_KEY || '',
               process.env.AI_MODEL || '',
             )
-          : { reply: async () => { throw new ServiceUnavailableException('记忆对话尚未开放'); } },
+          : {
+              reply: async () => {
+                throw new ServiceUnavailableException('记忆对话尚未开放');
+              },
+            },
     },
     {
       provide: SupabaseDataApi,

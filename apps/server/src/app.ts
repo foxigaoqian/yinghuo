@@ -102,6 +102,11 @@ export class PublicController {
       canCreateFreeProfile: Boolean(session && ownedProfiles.length === 0),
       accountState: session ? 'guest' : null,
       boundPhone: null,
+      phoneVerified: false,
+      gender: null,
+      birthYear: null,
+      recoveryConfigured: false,
+      recoveryUpdatedAt: null,
       profileCount: ownedProfiles.length,
       recentProfileId: recentProfile?.id || null,
       recentConversationId: null,
@@ -141,6 +146,8 @@ export class ProfilesController {
       id: this.db.id(),
       ownerId: req.demoSession.userId,
       ...data,
+      relationship: data.relationship || data.name,
+      avatarUrl: null,
       createdAt: this.db.now(),
     };
     this.db.state.profiles.push(p);
