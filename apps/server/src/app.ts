@@ -116,11 +116,58 @@ export class PublicController {
   @Get('products') products() {
     return { items: PRODUCTS, mock: true, pricesFinal: false };
   }
+  @Get('app-state') appState(
+    @Req() req: Request,
+    @Query('profileId') requestedProfileId?: string,
+    @Query('includeMessages') includeMessages?: string,
+    @Query('includePosts') includePosts?: string,
+  ) {
+    const session = this.auth.read(req);
+    const bootstrap = this.bootstrap(req);
+    const profiles = session
+      ? this.db.state.profiles.filter((profile) => profile.ownerId === session.userId)
+      : [];
+    const currentProfile =
+      profiles.find((profile) => profile.id === requestedProfileId) ||
+      profiles.find((profile) => profile.id === bootstrap.recentProfileId) ||
+      profiles[0];
+    return {
+      session: this.session(req),
+      bootstrap,
+      products: PRODUCTS,
+      profiles,
+      currentProfileId: currentProfile?.id || null,
+      memories:
+        session && currentProfile
+          ? this.db.state.memories.filter(
+              (memory) =>
+                memory.ownerId === session.userId && memory.profileId === currentProfile.id,
+            )
+          : [],
+      messages:
+        session && currentProfile && includeMessages === '1'
+          ? this.db.state.messages.filter(
+              (message) =>
+                message.ownerId === session.userId && message.profileId === currentProfile.id,
+            )
+          : [],
+      orders: session
+        ? this.db.state.orders.filter((order) => order.ownerId === session.userId)
+        : [],
+      posts:
+        session && includePosts === '1'
+          ? this.db.state.posts.filter((post) => post.ownerId === session.userId)
+          : [],
+    };
+  }
   @Get('auth/session') session(@Req() req: Request) {
     const s = this.auth.read(req);
     return { userId: s?.userId || null, csrfToken: s?.csrfToken || null, mock: true };
   }
   @Post('dev/session') login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.auth.open(req, res);
+  }
+  @Post('auth/guest') guest(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.auth.open(req, res);
   }
   @Post('auth/logout')

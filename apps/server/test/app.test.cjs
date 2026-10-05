@@ -95,6 +95,27 @@ describe('local demo API', () => {
       .expect(404);
     assert.equal((await b.get('/api/v1/profiles')).body.items.length, 0);
   });
+  it('hydrates H5 state without exposing another account', async () => {
+    const own = await a.get('/api/v1/app-state?includeMessages=1&includePosts=1').expect(200);
+    assert.equal(own.body.currentProfileId, profile.id);
+    assert.equal(own.body.memories.length, 1);
+    assert.equal(own.body.session.csrfToken, csrf);
+    assert.equal(own.body.profiles[0].avatarUrl, null);
+    for (const agent of [b, request(server)]) {
+      const state = await agent.get('/api/v1/app-state?profileId=' + profile.id).expect(200);
+      assert.deepEqual(state.body.profiles, []);
+      assert.deepEqual(state.body.memories, []);
+      assert.deepEqual(state.body.messages, []);
+      assert.deepEqual(state.body.posts, []);
+    }
+  });
+  it('supports the H5 guest entry route', async () => {
+    const guest = request.agent(server);
+    const session = await guest.post('/api/v1/auth/guest').send({}).expect(201);
+    const state = await guest.get('/api/v1/app-state').expect(200);
+    assert.equal(state.body.session.userId, session.body.userId);
+    assert.equal(state.body.bootstrap.canCreateFreeProfile, true);
+  });
   it('persists private text memory and defaults AI access off', async () => {
     const r = await a
       .post('/api/v1/profiles/' + profile.id + '/memories')
