@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev:h5": "node scripts/uni.mjs --host 127.0.0.1 --port 5173",
-    "build:h5": "node scripts/uni.mjs build -p h5",
+    "build:h5": "node scripts/uni.mjs build -p h5 && node scripts/cache-bust.mjs",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

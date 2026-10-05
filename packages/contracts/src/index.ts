@@ -4,9 +4,17 @@ const short = z.string().trim().min(1).max(80);
 export const profileInput = z
   .object({
     name: short,
+    relationship: z.string().trim().max(40).default(''),
+    nickname: z.string().trim().max(40).default(''),
     callMe: z.string().trim().max(40).default(''),
     story: z.string().trim().max(1000).default(''),
     aiConsent: z.boolean().default(false),
+    removeAvatar: z.boolean().default(false),
+    avatarDataUrl: z
+      .string()
+      .max(90_000)
+      .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+      .optional(),
   })
   .strict();
 export const memoryInput = z
@@ -36,10 +44,27 @@ export const postInput = z
     message: '公开前需要确认分享授权',
     path: ['publicConsent'],
   });
+export const feedbackInput = z
+  .object({
+    category: z.enum(['problem', 'suggestion', 'privacy']).default('suggestion'),
+    body: z.string().trim().min(2).max(2000),
+    pageUrl: z.string().trim().max(500).default(''),
+    appVersion: z.string().trim().max(40).default(''),
+    requestId: z.string().trim().max(80).default(''),
+  })
+  .strict();
 export const orderInput = z
   .object({
     productId: z.enum(['memory-year', 'photo-restore']),
     profileId: z.string().uuid(),
+  })
+  .strict();
+export const phoneBindInput = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .regex(/^1[3-9]\d{9}$/, '请输入正确的 11 位手机号'),
   })
   .strict();
 export const idParam = z.string().uuid();
@@ -47,6 +72,9 @@ export type Profile = {
   id: string;
   ownerId: string;
   name: string;
+  relationship: string;
+  nickname: string;
+  avatarUrl: string | null;
   callMe: string;
   story: string;
   aiConsent: boolean;
@@ -76,7 +104,8 @@ export type Post = {
   title: string;
   body: string;
   visibility: 'private' | 'public';
-  moderation: 'private' | 'pending';
+  moderation: 'private' | 'pending' | 'published' | 'rejected';
+  moderationReason?: string | null;
   createdAt: string;
 };
 export type Product = {
@@ -113,9 +142,14 @@ export type BootstrapState = {
   canCreateFreeProfile: boolean;
   accountState: 'guest' | 'bound' | null;
   boundPhone: string | null;
+  phoneVerified: boolean;
+  gender: 'male' | 'female' | null;
+  birthYear: number | null;
   profileCount: number;
   recentProfileId: string | null;
   recentConversationId: string | null;
+  recoveryConfigured: boolean;
+  recoveryUpdatedAt: string | null;
   pendingTaskCount: number;
 };
 export type ApiError = { error: { code: string; message: string }; requestId: string };

@@ -4,10 +4,76 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f7f5f0" />
+    <meta name="description" content="萤火是一处珍藏人物、记忆与故事的私人空间。" />
+    <meta property="og:title" content="萤火 · 珍藏每一点光" />
+    <meta property="og:description" content="让想念，有一个地方安放。" />
+    <meta property="og:type" content="website" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%235f7359'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23f7d774'/%3E%3C/svg%3E"
+    />
     <title>萤火 · 珍藏每一点光</title>
+    <style>
+      html,
+      body,
+      #app {
+        min-height: 100%;
+        margin: 0;
+        background: #f7f5f0;
+        color: #26372a;
+      }
+      .boot-shell {
+        box-sizing: border-box;
+        min-height: 100vh;
+        padding: 72px 24px 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        text-align: center;
+      }
+      .boot-shell__word {
+        display: block;
+        margin-bottom: 10px;
+        color: #5f7359;
+        font-size: 18px;
+        letter-spacing: 0.35em;
+      }
+      .boot-shell h1 {
+        max-width: 420px;
+        margin: 0 auto 16px;
+        font-family: serif;
+        font-size: 40px;
+        line-height: 1.28;
+        font-weight: 500;
+      }
+      .boot-shell p {
+        margin: 0;
+        color: #69756b;
+        font-size: 15px;
+      }
+      .boot-shell__status {
+        display: inline-flex;
+        margin-top: 28px;
+        padding: 12px 24px;
+        border: 1px solid #ccd4c8;
+        border-radius: 999px;
+        background: #fff;
+        color: #5f7359;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <main class="boot-shell" role="status" aria-label="正在打开萤火">
+        <div>
+          <span class="boot-shell__word">萤火</span>
+          <h1>让想念，有一个地方安放。</h1>
+          <p>正在找回这台设备上的记忆空间</p>
+          <span class="boot-shell__status">正在打开萤火…</span>
+        </div>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

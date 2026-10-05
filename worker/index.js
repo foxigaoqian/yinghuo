@@ -8,6 +8,14 @@ export default {
       return handleApi({ request, env });
     }
 
+    if (/^\/admin\/?$/.test(url.pathname)) {
+      url.pathname = '/admin/index.html';
+      const response = await env.ASSETS.fetch(new Request(url, request));
+      const headers = new Headers(response.headers);
+      headers.set('x-robots-tag', 'noindex, nofollow');
+      headers.set('cache-control', 'no-cache');
+      return new Response(response.body, { status: response.status, headers });
+    }
     return env.ASSETS.fetch(request);
   },
 };

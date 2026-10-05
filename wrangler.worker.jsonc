@@ -1,31 +1,32 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "yinghuo-h5-sg-stage",
+  "name": "yinghuo-h5-sg-v2",
   "main": "./worker/index.js",
   "compatibility_date": "2026-10-01",
   "routes": [
     {
       "pattern": "yinghuo.soocly.com",
-      "custom_domain": true
-    }
+      "custom_domain": true,
+    },
   ],
   "vars": {
     "APP_BACKEND": "supabase",
     "SQUAREFACE_BASE_URL": "https://api.sqface.sbs/v1",
     "SQUAREFACE_CHAT_MODEL": "claude-sonnet-5",
-    "SUPABASE_EDGE_GATEWAY_URL": "https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway"
+    "AI_LEGACY_BACKEND_URL": "https://yinghuo-h5-sg-stage.foxigaoqian-soocly.workers.dev",
+    "SUPABASE_EDGE_GATEWAY_URL": "https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway",
   },
   "assets": {
     "directory": "./apps/client/dist/build/h5",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/v1/*"]
+    "run_worker_first": ["/api/v1/*", "/admin", "/admin/"],
   },
   "ai": {
-    "binding": "AI"
+    "binding": "AI",
   },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
-  }
+    "head_sampling_rate": 1,
+  },
 }

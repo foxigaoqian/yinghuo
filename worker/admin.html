@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>萤火 · 故事审核</title>
+    <style>
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        background: #f7f5f0;
+        color: #26372a;
+        font:
+          16px/1.6 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 20px;
+      }
+      h1 {
+        font-family: serif;
+        font-weight: 500;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        box-sizing: border-box;
+        border: 1px solid #c8d0c3;
+        border-radius: 10px;
+        padding: 10px 14px;
+      }
+      button {
+        background: #5f7359;
+        color: white;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+      }
+      input,
+      textarea {
+        background: #fff;
+        width: 100%;
+      }
+      textarea {
+        min-height: 75px;
+      }
+      form,
+      .toolbar,
+      .actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      form input {
+        flex: 1;
+        min-width: 220px;
+      }
+      article {
+        background: #fff;
+        border: 1px solid #dfe3db;
+        border-radius: 18px;
+        margin: 20px 0;
+        padding: 24px;
+      }
+      .body {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .meta {
+        color: #687469;
+        font-size: 14px;
+      }
+      #notice {
+        min-height: 24px;
+        color: #97463b;
+      }
+      .secondary {
+        background: #fff;
+        color: #5f7359;
+      }
+      .actions {
+        margin-top: 14px;
+      }
+      small {
+        display: block;
+        color: #69756b;
+      }
+      #queue {
+        margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>故事审核</h1>
+      <p>公开申请审核通过后，才会出现在萤火广场。</p>
+      <form id="login">
+        <input
+          id="token"
+          type="password"
+          autocomplete="off"
+          placeholder="管理员口令"
+          aria-label="管理员口令"
+          required
+        /><button>进入审核</button>
+      </form>
+      <div id="notice" role="status" aria-live="polite"></div>
+      <div id="tools" class="toolbar" hidden>
+        <select id="filter" aria-label="审核状态">
+          <option value="pending">待审核</option>
+          <option value="published">已发布</option>
+          <option value="rejected">已退回</option></select
+        ><button id="refresh">刷新</button><button id="logout" class="secondary">退出审核</button>
+      </div>
+      <div id="queue"></div>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let token = sessionStorage.getItem('yinghuo.review') || '';
+      const fragment = new URLSearchParams(location.hash.slice(1));
+      if (fragment.get('token')) {
+        token = fragment.get('token');
+        history.replaceState(null, '', location.pathname);
+      }
+      async function request(path, method = 'GET', data) {
+        const response = await fetch('/api/v1/admin/' + path, {
+          method,
+          headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+          ...(data ? { body: JSON.stringify(data) } : {}),
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result?.error?.message || '请求失败');
+        return result;
+      }
+      function el(tag, text, className) {
+        const node = document.createElement(tag);
+        if (text) node.textContent = text;
+        if (className) node.className = className;
+        return node;
+      }
+      async function load() {
+        try {
+          $('notice').textContent = '正在读取…';
+          const result = await request('stories?status=' + $('filter').value);
+          sessionStorage.setItem('yinghuo.review', token);
+          $('login').hidden = true;
+          $('tools').hidden = false;
+          $('queue').replaceChildren();
+          for (const story of result.items) {
+            const card = el('article');
+            card.append(
+              el('h2', story.title),
+              el('p', story.body, 'body'),
+              el('p', new Date(story.createdAt).toLocaleString(), 'meta'),
+            );
+            if (story.moderationReason) card.append(el('small', story.moderationReason));
+            const reason = el('textarea');
+            reason.placeholder = '退回原因（退回时必填）';
+            reason.setAttribute('aria-label', '退回原因');
+            const actions = el('div', '', 'actions');
+            for (const [decision, label] of [
+              ['published', '审核通过并发布'],
+              ['rejected', '退回修改'],
+            ]) {
+              const button = el('button', label, decision === 'rejected' ? 'secondary' : '');
+              button.onclick = async () => {
+                if (decision === 'rejected' && !reason.value.trim()) {
+                  reason.focus();
+                  $('notice').textContent = '请填写退回原因';
+                  return;
+                }
+                if (
+                  !confirm(
+                    decision === 'published'
+                      ? '确认将这个故事公开到广场？'
+                      : '确认退回这个公开申请？',
+                  )
+                )
+                  return;
+                button.disabled = true;
+                try {
+                  await request('stories/' + story.id, 'PATCH', { decision, reason: reason.value });
+                  await load();
+                } catch (error) {
+                  $('notice').textContent = error.message;
+                  button.disabled = false;
+                }
+              };
+              actions.append(button);
+            }
+            card.append(reason, actions);
+            $('queue').append(card);
+          }
+          $('notice').textContent = result.items.length
+            ? '共 ' + result.items.length + ' 个故事'
+            : '目前没有这类故事。';
+        } catch (error) {
+          $('notice').textContent = error.message;
+        }
+      }
+      $('login').onsubmit = (event) => {
+        event.preventDefault();
+        token = $('token').value.trim();
+        $('token').value = '';
+        load();
+      };
+      $('filter').onchange = load;
+      $('refresh').onclick = load;
+      $('logout').onclick = () => {
+        token = '';
+        sessionStorage.removeItem('yinghuo.review');
+        $('login').hidden = false;
+        $('tools').hidden = true;
+        $('queue').replaceChildren();
+        $('notice').textContent = '已退出审核';
+      };
+      if (token) load();
+    </script>
+  </body>
+</html>

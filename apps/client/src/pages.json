@@ -24,7 +24,7 @@
     {
       "path": "pages/space/index",
       "style": {
-        "navigationBarTitleText": "TA 的萤火",
+        "navigationBarTitleText": "我的萤火",
         "navigationStyle": "custom"
       }
     },
@@ -52,7 +52,7 @@
     {
       "path": "pages/chat/index",
       "style": {
-        "navigationBarTitleText": "AI 记忆对话",
+        "navigationBarTitleText": "记忆对话",
         "navigationStyle": "custom"
       }
     },
@@ -102,6 +102,27 @@
       "path": "pages/compose/index",
       "style": {
         "navigationBarTitleText": "写故事",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/privacy/index",
+      "style": {
+        "navigationBarTitleText": "隐私与数据",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/terms/index",
+      "style": {
+        "navigationBarTitleText": "协议与 AI 说明",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/support/index",
+      "style": {
+        "navigationBarTitleText": "帮助与反馈",
         "navigationStyle": "custom"
       }
     }

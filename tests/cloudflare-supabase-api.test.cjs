@@ -9,21 +9,25 @@ function fakeSupabase() {
   const memories = [];
   const conversations = [];
   const messages = [];
+  const recoveryRows = [];
   const users = [];
   const calls = [];
   const table = {
     app_users: users,
     profiles,
+    profile_avatars: [],
     memories,
     conversations,
     messages,
     profile_preferences: [],
     consents: [],
     private_stories: [],
+    account_recovery_codes: recoveryRows,
+    user_feedback: [],
   };
   const matches = (row, query) =>
     [...query.entries()].every(([key, value]) => {
-      if (['select', 'limit', 'order', 'on_conflict'].includes(key)) return true;
+      if (['select', 'limit', 'offset', 'order', 'on_conflict'].includes(key)) return true;
       if (value === 'is.null') return row[key] == null;
       if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
       if (value.startsWith('in.(')) return value.slice(4, -1).split(',').includes(String(row[key]));
@@ -31,6 +35,7 @@ function fakeSupabase() {
     });
   return {
     calls,
+    table,
     async fetch(url, options) {
       const address = new URL(url);
       assert.equal(address.hostname, 'sg.supabase.co');
@@ -47,6 +52,11 @@ function fakeSupabase() {
             account_kind: 'guest',
             family_code: 'TEST1234',
             free_slot_consumed_at: null,
+            phone_hash: null,
+            phone_last4: null,
+            phone_verified: false,
+            gender: null,
+            birth_year: null,
             deleted_at: null,
           };
           users.push(user);
@@ -55,13 +65,14 @@ function fakeSupabase() {
         }
         if (name === 'yinghuo_get_guest_session') {
           const userId = sessions.get(input.p_refresh_hash);
+          const user = users.find((item) => item.id === userId);
           return Response.json(
-            userId
+            user
               ? [
                   {
-                    user_id: userId,
-                    account_kind: 'guest',
-                    family_code: 'TEST1234',
+                    user_id: user.id,
+                    account_kind: user.account_kind,
+                    family_code: user.family_code,
                     expires_at: new Date(Date.now() + 86400000).toISOString(),
                   },
                 ]
@@ -76,9 +87,20 @@ function fakeSupabase() {
           const user = users.find((item) => item.id === input.p_user_id);
           if (!user) return Response.json(false);
           recoveryCodes.set(user.id, input.p_code_hash);
+          const existing = recoveryRows.find((item) => item.user_id === user.id);
+          if (existing) existing.rotated_at = new Date().toISOString();
+          else
+            recoveryRows.push({
+              user_id: user.id,
+              created_at: new Date().toISOString(),
+              rotated_at: null,
+            });
           return Response.json(true);
         }
-        if (name === 'yinghuo_recover_guest_session') {
+        if (
+          name === 'yinghuo_recover_guest_session' ||
+          name === 'yinghuo_recover_guest_session_v2'
+        ) {
           const attempts = recoveryAttempts.get(input.p_attempt_hash) || 0;
           if (attempts >= 8) {
             return Response.json([
@@ -119,6 +141,49 @@ function fakeSupabase() {
             },
           ]);
         }
+        if (name === 'yinghuo_get_app_state') {
+          const owner = sessions.get(input.p_refresh_hash);
+          const user = users.find((item) => item.id === owner);
+          if (!user) return Response.json(null);
+          const own = profiles.filter((item) => item.creator_user_id === owner && !item.deleted_at);
+          const current = own.find((p) => p.id === input.p_requested_profile_id) || own[0];
+          const mapped = own.map((p) => ({
+            id: p.id,
+            ownerId: owner,
+            name: p.display_name,
+            relationship: p.relationship || p.display_name,
+            aiConsent: false,
+          }));
+          return Response.json({
+            session: { userId: owner, accountKind: 'guest', familyCode: user.family_code },
+            bootstrap: {
+              features: { textChat: true },
+              recoveryConfigured: recoveryCodes.has(owner),
+            },
+            profiles: mapped,
+            currentProfileId: current?.id || null,
+            memories: memories
+              .filter(
+                (m) => m.owner_user_id === owner && m.profile_id === current?.id && !m.deleted_at,
+              )
+              .map((m) => ({ id: m.id, body: m.body })),
+            messages: [],
+            posts: [],
+            orders: [],
+          });
+        }
+        if (name === 'yinghuo_reset_conversation') {
+          const c = conversations.find(
+            (c) => c.user_id === input.p_user_id && c.profile_id === input.p_profile_id,
+          );
+          if (c) {
+            messages
+              .filter((m) => m.conversation_id === c.id && m.epoch === c.epoch)
+              .forEach((m) => (m.status = 'archived'));
+            c.epoch += 1;
+          }
+          return Response.json(true);
+        }
         if (name === 'yinghuo_create_profile') {
           const profile = {
             id: crypto.randomUUID(),
@@ -157,6 +222,8 @@ function fakeSupabase() {
       if (!data) throw Error('unexpected table: ' + path);
       if (options.method === 'GET') {
         let results = data.filter((row) => matches(row, address.searchParams));
+        const offset = Number(address.searchParams.get('offset') || 0);
+        results = results.slice(offset);
         if (address.searchParams.has('limit'))
           results = results.slice(0, Number(address.searchParams.get('limit')));
         return Response.json(results);
@@ -240,9 +307,18 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
         const res = await onRequest({ request: req, env });
         if (res.headers.has('set-cookie')) cookie = res.headers.get('set-cookie').split(';')[0];
         const data = await res.json();
-        if ((path === '/auth/guest' || path === '/auth/recover') && res.ok)
-          csrf = data.csrfToken;
+        if ((path === '/auth/guest' || path === '/auth/recover') && res.ok) csrf = data.csrfToken;
         return { status: res.status, data, res };
+      },
+      async raw(method, path) {
+        const req = new Request('https://preview.example.com/api/v1' + path, {
+          method,
+          headers: {
+            ...(cookie ? { cookie } : {}),
+            ...(csrf ? { 'x-csrf-token': csrf } : {}),
+          },
+        });
+        return onRequest({ request: req, env });
       },
       setCsrf(value) {
         csrf = value;
@@ -263,16 +339,46 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(recoveryBundle.status, 200);
     assert.equal(recoveryBundle.data.familyCode, 'TEST1234');
     assert.match(recoveryBundle.data.recoveryCode, /^YH(?:-[A-HJ-NP-Z2-9]{4}){5}$/);
+    assert.equal(
+      (await a.request('POST', '/auth/bind-phone', { phone: '12800000000' })).status,
+      400,
+    );
+    const bound = await a.request('POST', '/auth/bind-phone', {
+      phone: '13800138000',
+    });
+    assert.equal(bound.status, 200);
+    assert.equal(bound.data.boundPhone, '未验证 · 尾号 8000');
+    assert.equal(bound.data.phoneVerified, false);
+    const boundBootstrap = await a.request('GET', '/bootstrap');
+    assert.equal(boundBootstrap.data.accountState, 'guest');
+    assert.equal(boundBootstrap.data.boundPhone, '未验证 · 尾号 8000');
+    assert.ok(
+      backend.calls.every((call) => !JSON.stringify(call.input || '').includes('13800138000')),
+      'the full phone number is never persisted to Supabase',
+    );
     a.setCsrf('bad');
     assert.equal((await a.request('POST', '/profiles', { name: '爸爸' })).status, 403);
     a.setCsrf(opened.data.csrfToken);
     const profile = await a.request('POST', '/profiles', {
-      name: '爸爸',
+      name: '老爸',
+      relationship: '爸爸',
+      nickname: '老爸',
+      avatarDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
       callMe: '小宇',
       story: '第一次做饭',
       aiConsent: false,
     });
     assert.equal(profile.status, 200);
+    assert.equal(profile.data.name, '老爸');
+    assert.equal(profile.data.relationship, '爸爸');
+    assert.equal(profile.data.nickname, '老爸');
+    assert.match(
+      profile.data.avatarUrl,
+      new RegExp('/api/v1/profiles/' + profile.data.id + '/avatar'),
+    );
+    const avatar = await a.raw('GET', '/profiles/' + profile.data.id + '/avatar');
+    assert.equal(avatar.status, 200);
+    assert.equal(avatar.headers.get('content-type'), 'image/png');
     assert.equal(profile.data.aiConsent, false);
     assert.equal((await a.request('GET', '/profiles')).data.items.length, 1);
     const recovered = client();
@@ -289,9 +395,32 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(restored.status, 200);
     assert.equal(restored.data.userId, opened.data.userId);
     assert.equal((await recovered.request('GET', '/profiles')).data.items.length, 1);
+    const phoneRecovered = client();
+    const restoredByPhone = await phoneRecovered.request('POST', '/auth/recover', {
+      familyCode: '13800138000',
+      recoveryCode: recoveryBundle.data.recoveryCode,
+    });
+    assert.equal(restoredByPhone.status, 400);
     assert.equal((await a.request('GET', '/bootstrap')).data.canCreateFreeProfile, false);
     const memories = await a.request('GET', '/profiles/' + profile.data.id + '/memories');
     assert.equal(memories.data.items[0].body, '第一次做饭');
+    const callsBeforeState = backend.calls.length;
+    const appState = await a.request('GET', '/app-state?profileId=' + profile.data.id);
+    assert.equal(appState.status, 200);
+    assert.equal(appState.data.session.userId, opened.data.userId);
+    assert.equal(appState.data.currentProfileId, profile.data.id);
+    assert.equal(appState.data.profiles.length, 1);
+    assert.equal(appState.data.memories[0].body, '第一次做饭');
+    assert.equal(appState.data.bootstrap.recoveryConfigured, true);
+    assert.deepEqual(appState.data.messages, []);
+    assert.deepEqual(appState.data.posts, []);
+    assert.equal(backend.calls.length - callsBeforeState, 1, 'state hydration uses one RPC');
+    assert.equal(
+      backend.calls
+        .slice(callsBeforeState)
+        .some((call) => call.path === 'messages' || call.path === 'private_stories'),
+      false,
+    );
     const selected = await a.request('POST', '/profiles/' + profile.data.id + '/memories', {
       title: '晚饭',
       body: '一起做饭',
@@ -300,6 +429,10 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(selected.status, 200);
     const another = await b.request('POST', '/auth/guest');
     assert.notEqual(another.data.userId, opened.data.userId);
+    assert.equal(
+      (await b.request('POST', '/auth/bind-phone', { phone: '13800138000' })).status,
+      200,
+    );
     assert.equal((await b.request('GET', '/profiles/' + profile.data.id)).status, 404);
     assert.equal((await b.request('GET', '/profiles')).data.items.length, 0);
     const privateStory = await a.request('POST', '/square', {
@@ -312,10 +445,66 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal((await a.request('GET', '/square?view=mine')).data.items[0].title, '窗边的下午');
     assert.equal((await a.request('GET', '/square')).data.items.length, 0);
     assert.equal((await b.request('GET', '/square?view=mine')).data.items.length, 0);
+    const removable = await a.request('POST', '/profiles/' + profile.data.id + '/memories', {
+      title: '准备删除',
+      body: '这是一条删除功能测试记忆',
+      useForAi: false,
+    });
+    assert.equal((await b.request('DELETE', '/memories/' + removable.data.id)).status, 404);
+    assert.equal((await a.request('DELETE', '/memories/' + removable.data.id)).status, 200);
     assert.equal(
-      (await a.request('POST', '/square', { title: '公开', body: '不可见', visibility: 'public', publicConsent: true })).status,
-      503,
+      (await a.request('GET', '/profiles/' + profile.data.id + '/memories')).data.items.some(
+        (item) => item.id === removable.data.id,
+      ),
+      false,
     );
+    const publicStory = await a.request('POST', '/square', {
+      title: '公开',
+      body: '等待审核后展示',
+      visibility: 'public',
+      publicConsent: true,
+    });
+    assert.equal(publicStory.status, 200);
+    assert.equal(publicStory.data.visibility, 'public');
+    assert.equal(publicStory.data.moderation, 'pending');
+    assert.equal((await a.request('GET', '/square?view=public')).data.items.length, 0);
+    assert.equal((await a.request('GET', '/admin/stories')).status, 401);
+    env.ADMIN_REVIEW_TOKEN = 'review-test-token-long-enough';
+    const reviewer = { authorization: 'Bearer ' + env.ADMIN_REVIEW_TOKEN };
+    assert.equal(
+      (await a.request('GET', '/admin/stories', undefined, reviewer)).data.items.length,
+      1,
+    );
+    const published = await a.request(
+      'PATCH',
+      '/admin/stories/' + publicStory.data.id,
+      { decision: 'published' },
+      reviewer,
+    );
+    assert.equal(published.status, 200);
+    assert.equal((await b.request('GET', '/square?view=public')).data.items.length, 1);
+    const rejected = await a.request(
+      'PATCH',
+      '/admin/stories/' + publicStory.data.id,
+      { decision: 'rejected', reason: '请移除可识别的信息' },
+      reviewer,
+    );
+    assert.equal(rejected.status, 200);
+    assert.equal((await b.request('GET', '/square?view=public')).data.items.length, 0);
+    const contact = await a.request('POST', '/square', {
+      title: '联系我',
+      body: '手机号 13800138000',
+      visibility: 'public',
+      publicConsent: true,
+    });
+    assert.equal(contact.data.moderation, 'rejected');
+    const ordinary = await a.request('POST', '/square', {
+      title: '那通电话',
+      body: '还记得爸爸打电话叮嘱我带伞。',
+      visibility: 'public',
+      publicConsent: true,
+    });
+    assert.equal(ordinary.data.moderation, 'pending');
     const foreign = await b.request('POST', '/profiles', { name: '朋友', aiConsent: false });
     const badMemory = await b.request('POST', '/profiles/' + foreign.data.id + '/messages', {
       text: '聊聊',
@@ -344,6 +533,10 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     );
     assert.match(prompts[0].input.messages[0].content, /一起做饭/);
     assert.doesNotMatch(prompts[0].input.messages[0].content, /第一次做饭/);
+    assert.match(prompts[0].input.messages[0].content, /对象对用户的称呼："小宇"/);
+    assert.match(prompts[0].input.messages[0].content, /不要先解释你的身份/);
+    assert.match(prompts[0].input.messages[0].content, /你们平时怎么联系/);
+    assert.match(prompts[0].input.messages[0].content, /今天是什么让你特别想起/);
     const again = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
       text: '今天怎么样',
       memoryIds: [selected.data.id],
@@ -356,6 +549,34 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
       (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
       2,
     );
+    env.AI.run = async (model, input) => {
+      prompts.push({ model, input });
+      return { response: '听起来你今天很想念他。今天是什么让你想起他的？' };
+    };
+    const withoutMemory = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '我今天又想起他了',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
+    assert.equal(withoutMemory.status, 200);
+    assert.equal(prompts.length, 2);
+    assert.doesNotMatch(prompts[1].input.messages[0].content, /一起做饭/);
+    assert.deepEqual(
+      prompts[1].input.messages.slice(1, -1).map((message) => message.role),
+      [],
+    );
+    const promptsBeforeCrisis = prompts.length;
+    const crisis = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '爷爷，我不想活了，想去陪你',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
+    assert.equal(crisis.status, 200);
+    assert.match(crisis.data.items[1].text, /12356/);
+    assert.match(crisis.data.items[1].text, /110 或 120/);
+    assert.equal(prompts.length, promptsBeforeCrisis, '危机消息不应进入普通模型生成');
     env.AI.run = async () => {
       throw Error('model temporarily unavailable');
     };
@@ -368,8 +589,53 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(failed.status, 503);
     assert.equal(
       (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
-      2,
+      6,
     );
+    const reset = await a.request('POST', '/profiles/' + profile.data.id + '/messages/reset');
+    assert.equal(reset.status, 200);
+    assert.ok(
+      backend.calls.some((call) => call.path === 'rpc/yinghuo_reset_conversation'),
+      'reset runs as a single database transaction',
+    );
+    assert.equal(
+      (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
+      0,
+    );
+    env.AI.run = async (model, input) => {
+      prompts.push({ model, input });
+      return { response: '我们可以从现在重新聊起。' };
+    };
+    const afterReset = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '重新开始吧',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
+    assert.equal(afterReset.status, 200);
+    assert.deepEqual(prompts.at(-1).input.messages.slice(1, -1), []);
+    const conversation = backend.table.conversations.find(
+      (row) => row.profile_id === profile.data.id,
+    );
+    for (let i = 0; i < 1001; i++)
+      backend.table.messages.push({
+        id: crypto.randomUUID(),
+        conversation_id: conversation.id,
+        role: 'user',
+        text: `分页导出验证 ${i}`,
+        status: 'archived',
+        epoch: 0,
+        created_at: new Date().toISOString(),
+      });
+    const exported = await a.request('GET', '/account/export');
+    assert.equal(exported.status, 200);
+    assert.equal(
+      exported.data.messages.length,
+      1009,
+      'export includes every page and archived conversations',
+    );
+    for (const key of ['profilePreferences', 'profileAvatars', 'consents', 'feedback']) {
+      assert.ok(Array.isArray(exported.data[key]), `export includes ${key}`);
+    }
     assert.equal((await a.request('POST', '/orders', { profileId: profile.data.id })).status, 503);
     assert.equal((await a.request('POST', '/auth/logout')).status, 200);
     assert.equal((await a.request('GET', '/auth/session')).data.userId, null);
@@ -392,8 +658,12 @@ test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a dat
   const calls = [];
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), options });
-    assert.equal(String(url), 'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway');
+    assert.equal(
+      String(url),
+      'https://wabohmofgmgfffpmaorh.supabase.co/functions/v1/yinghuo-data-gateway',
+    );
     assert.equal(options.headers['x-yinghuo-backend-token'], 'test-edge-token');
+    assert.equal(options.headers['x-region'], 'ap-southeast-1');
     assert.equal(options.headers.apikey, undefined);
     const payload = JSON.parse(options.body);
     if (payload.operation === 'health') {
@@ -484,9 +754,16 @@ test('AI router prefers SquareFace and falls back to Workers AI without exposing
     assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
     assert.equal(fallbackCalls, 1);
 
-    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    global.fetch = async () =>
+      Response.json({
+        choices: [{ message: { content: '我不是你的爷爷哦，我是萤火 AI 记忆陪伴助手。' } }],
+      });
     assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
     assert.equal(fallbackCalls, 2);
+
+    global.fetch = async () => new Response('upstream unavailable', { status: 502 });
+    assert.equal(await generateAiReply(env, messages), 'Workers AI 回退正常。');
+    assert.equal(fallbackCalls, 3);
   } finally {
     global.fetch = previousFetch;
   }
