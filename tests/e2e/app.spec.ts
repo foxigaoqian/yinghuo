@@ -10,7 +10,7 @@ async function firstMemory(page: Page) {
   await page.reload();
   await expect(page.locator('textarea').first()).toHaveValue('每周末做番茄鸡蛋面。');
   await page.getByRole('button', { name: '保存第一条记忆', exact: true }).click();
-  await expect(page).toHaveURL(/space/);
+  await expect(page).toHaveURL(/[?&]saved=1/);
   await expect(page.getByRole('heading', { name: '演示妈妈的萤火', exact: true })).toBeVisible();
 }
 
@@ -70,11 +70,13 @@ test('one-page creation, body-only save, draft recovery and square writing use t
 }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await firstMemory(page);
-  await fitsFirstScreen(page, '再记下一件小事');
-  await expect(page.getByText('记忆已保存到空间，只有你能看到。', { exact: true })).toBeVisible();
+  await fitsFirstScreen(page, '记录一件小事');
+  await expect(page.getByText('已保存到演示妈妈的记忆。', { exact: true })).toBeVisible();
   await expect(page.getByText('内容已保存，跨设备找回还未设置。', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '再记下一件小事', exact: true }).click();
-  await expect(page.getByText('关于 演示妈妈 · 保存后仅自己可见', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '记录一件小事', exact: true }).click();
+  await expect(
+    page.getByText('关于 演示妈妈 · 默认只保存在“我的记忆”', { exact: true }),
+  ).toBeVisible();
   await page.locator('textarea').first().fill('窗台上总有一束花。她每天都换水。');
   await page.reload();
   await expect(page.locator('textarea').first()).toHaveValue('窗台上总有一束花。她每天都换水。');
@@ -129,12 +131,14 @@ test('all-person library retains historical private stories and offers a scoped 
     .click();
   await expect(page.getByRole('heading', { name: '旧版私密故事', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '再记下一件小事', exact: true }).click();
-  await expect(page.getByText('关于 演示外婆 · 保存后仅自己可见', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('关于 演示外婆 · 默认只保存在“我的记忆”', { exact: true }),
+  ).toBeVisible();
 });
 
 test('failed saving keeps text and a retry saves without a required title', async ({ page }) => {
   await firstMemory(page);
-  await page.getByRole('button', { name: '再记下一件小事', exact: true }).click();
+  await page.getByRole('button', { name: '记录一件小事', exact: true }).click();
   await page.locator('textarea').first().fill('下雨时她总让我带伞。');
   let fail = true;
   await page.route('**/api/v1/profiles/*/memories', async (route) => {
@@ -166,6 +170,12 @@ test('chat identifies the assistant, requires consent and sends only selected me
     const response = await route.fetch();
     const state = await response.json();
     state.bootstrap.features.textChat = true;
+    const currentProfile = state.profiles.find(
+      (profile: { id: string }) => profile.id === state.currentProfileId,
+    );
+    if (currentProfile)
+      currentProfile.avatarUrl =
+        'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="32" height="32"%3E%3Crect width="32" height="32" fill="%23e9b949"/%3E%3C/svg%3E';
     await route.fulfill({ response, json: state });
   });
   let releaseReply!: () => void;
@@ -193,10 +203,14 @@ test('chat identifies the assistant, requires consent and sends only selected me
     });
   });
   await page.goto('/pages/chat/index');
-  await expect(page.getByRole('heading', { name: '小萤 · AI 记忆助手' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '和演示妈妈聊聊 · AI 生成' })).toBeVisible();
   await expect(
-    page.getByText('陪你回看与整理记忆。回复由 AI 生成，不代表演示妈妈本人。', { exact: true }),
+    page.getByText('AI 会根据你提供的内容回复，不是演示妈妈本人，也可能不准确。', {
+      exact: true,
+    }),
   ).toBeVisible();
+  await expect(page.locator('.chat-heading .profile-avatar')).toHaveCount(1);
+  await expect(page.locator('.chat-heading .profile-avatar.fallback')).toHaveCount(0);
   await page.getByRole('button', { name: '聊聊一件小事', exact: true }).click();
   await expect(page.locator('.chat-input input')).toHaveValue('我想聊聊关于演示妈妈的一件小事。');
   await expect(page.getByRole('button', { name: '发送消息', exact: true })).toHaveAttribute(
@@ -217,6 +231,8 @@ test('chat identifies the assistant, requires consent and sends only selected me
   ).toContain('我想聊聊关于演示妈妈的一件小事。');
   releaseReply();
   await expect(page.getByText('我们可以慢慢整理这段记忆。', { exact: true })).toBeVisible();
+  await expect(page.getByText('演示妈妈 · AI 生成', { exact: true })).toBeVisible();
+  await expect(page.locator('.message-row').last().locator('.profile-avatar')).toHaveCount(1);
   expect(payload?.aiConsent).toBe(true);
   expect(payload?.memoryIds).toEqual([]);
   await page.locator('.context-toggle').click();
@@ -229,16 +245,41 @@ test('chat identifies the assistant, requires consent and sends only selected me
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(viewport);
+    await page.locator('.chat-input input').focus();
     await expect
       .poll(async () => {
         const box = await page.locator('.chat-input').boundingBox();
         return Boolean(box && box.y >= 0 && box.y + box.height <= viewport.height + 1);
       })
       .toBeTruthy();
+    expect(await page.locator('.chat-thread .chat-composer').count()).toBe(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
     ).toBeTruthy();
   }
+});
+
+test('recovery information can be saved as a phone-friendly recovery card', async ({ page }) => {
+  await firstMemory(page);
+  await page.route('**/api/v1/auth/recovery-code', async (route) => {
+    await route.fulfill({
+      json: {
+        familyCode: 'YH-TEST-CARD',
+        recoveryCode: 'YH-RECOVERY-CARD-123456',
+        recoveryConfigured: true,
+        recoveryUpdatedAt: new Date().toISOString(),
+      },
+    });
+  });
+  await page.goto('/pages/me/index');
+  await page.getByRole('button', { name: '生成找回卡', exact: true }).click();
+  await expect(page.locator('.recovery-secret')).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '保存找回卡', exact: true }).click();
+  await download;
+  await expect(page.locator('.recovery-card-preview')).toBeVisible();
+  await expect(page.getByText(/请把找回卡存到安全的位置/)).toBeVisible();
 });
 
 test('loading remains distinct from an empty library', async ({ page }) => {
@@ -307,6 +348,90 @@ test('sharing uses an explicit independent copy and does not edit the private me
   await expect(page.locator('.prose')).toHaveText('每周末做番茄鸡蛋面。');
 });
 
+test('a new memory can be saved privately and submitted to the square in one action', async ({
+  page,
+}) => {
+  await firstMemory(page);
+  await page.route('**/api/v1/app-state*', async (route) => {
+    const response = await route.fetch();
+    const state = await response.json();
+    state.bootstrap.features.publicSquare = true;
+    await route.fulfill({ response, json: state });
+  });
+  await page.reload();
+  await page.getByRole('button', { name: '记录一件小事', exact: true }).click();
+  await page.locator('textarea').first().fill('爷爷总会把最后一块西瓜留给我。');
+  await page.getByRole('button', { name: /同时分享到广场/ }).click();
+  await expect(page.getByRole('button', { name: '保存并申请公开', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await page.locator('.public-consent').click();
+  await page.getByRole('button', { name: '保存并申请公开', exact: true }).click();
+  await expect(page).toHaveURL(/memory.*shared=1/);
+  await expect(page.getByText('记忆已保存；公开副本已提交审核。', { exact: true })).toBeVisible();
+  await expect(page.locator('.prose')).toHaveText('爷爷总会把最后一块西瓜留给我。');
+  await page.goto('/pages/square/index?view=mine');
+  await expect(
+    page.getByRole('heading', { name: '爷爷总会把最后一块西瓜留给我', exact: true }),
+  ).toBeVisible();
+});
+
+test('a failed square submission keeps the saved private memory and offers a safe retry', async ({
+  page,
+}) => {
+  await firstMemory(page);
+  await page.route('**/api/v1/app-state*', async (route) => {
+    const response = await route.fetch();
+    const state = await response.json();
+    state.bootstrap.features.publicSquare = true;
+    await route.fulfill({ response, json: state });
+  });
+  await page.reload();
+  await page.route('**/api/v1/square', async (route) => {
+    if (route.request().method() === 'POST')
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'TEST_UNAVAILABLE', message: '广场暂时不可用' } }),
+      });
+    else await route.continue();
+  });
+  await page.getByRole('button', { name: '记录一件小事', exact: true }).click();
+  await page.locator('textarea').first().fill('院子里的桂花开了。');
+  await page.getByRole('button', { name: /同时分享到广场/ }).click();
+  await page.locator('.public-consent').click();
+  await page.getByRole('button', { name: '保存并申请公开', exact: true }).click();
+  await expect(page).toHaveURL(/memory.*shareFailed=1/);
+  await expect(page.getByText('记忆已保存；公开副本暂未提交。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '重试分享到广场', exact: true })).toBeVisible();
+  await expect(page.locator('.prose')).toHaveText('院子里的桂花开了。');
+});
+
+test('the homepage makes person switching visible and the old space route returns home', async ({
+  page,
+}) => {
+  await firstMemory(page);
+  await seed(page, '/profiles', {
+    name: '演示爷爷',
+    relationship: '爷爷',
+    story: '他每天早上都去公园散步。',
+    aiConsent: false,
+  });
+  await page.reload();
+  await expect(page.locator('.home-profile-tabs')).toBeVisible();
+  await expect(
+    page.locator('.home-profile-tabs').getByRole('button', { name: /演示爷爷/ }),
+  ).toBeVisible();
+  await page
+    .locator('.home-profile-tabs')
+    .getByRole('button', { name: /演示爷爷/ })
+    .click();
+  await expect(page.getByRole('heading', { name: '演示爷爷的萤火', exact: true })).toBeVisible();
+  await page.goto('/pages/space/index');
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/');
+});
+
 test('a library request waits for homepage hydration and still fetches its posts', async ({
   page,
 }) => {
@@ -369,7 +494,7 @@ test('opening a conversation with history starts at the latest messages', async 
   await expect
     .poll(() =>
       page
-        .locator('.content')
+        .locator('.chat-thread')
         .evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop),
     )
     .toBeLessThan(5);

@@ -14,6 +14,7 @@ const shellTitle = computed(() => {
   if (props.page === 'login' && props.query?.mode === 'recover') return '找回我的萤火';
   if (props.page === 'memories') return '我的记忆';
   if (props.page === 'compose' && props.query?.memoryId) return '分享记忆';
+  if (props.page === 'chat' && app.current) return '和' + app.current.name + '聊聊';
   return props.title;
 });
 const hostedPreview = computed(() => Boolean(app.bootstrap?.features?.hostedPreview));
@@ -51,6 +52,7 @@ const chatText = ref('');
 const chatConsent = ref(false);
 const selectedChatMemories = ref<string[]>([]);
 const generatedRecoveryCode = ref('');
+const recoveryCardDataUrl = ref('');
 const recoveryHelpOpen = ref(false);
 const phonePanelOpen = ref(false);
 const chatReplyPending = ref(false);
@@ -71,6 +73,10 @@ const recoveryNeeded = computed(
 const draftStatus = computed(() => {
   if (app.busy) return '正在保存到空间…';
   if (localDraftError.value) return '本机草稿暂存失败，请先保存内容再离开。';
+  if (props.page === 'memory-edit' && form.public)
+    return localDraftSaved.value
+      ? '草稿已暂存；保存后私密原文会保留，公开副本将提交审核。'
+      : '私密原文会保留，公开副本审核通过后才会展示。';
   if (props.page === 'compose' && form.public)
     return localDraftSaved.value
       ? '草稿已暂存到本机，尚未提交审核。'
@@ -138,9 +144,9 @@ const ownsSelectedPost = computed(() =>
   Boolean(selectedPost.value && selectedPost.value.ownerId === app.session.userId),
 );
 const nextAfterLogin = computed(() =>
-  ['create', 'compose', 'memories', 'memory-edit', 'space'].includes(props.query?.next || '')
+  ['home', 'create', 'compose', 'memories', 'memory-edit'].includes(props.query?.next || '')
     ? props.query!.next!
-    : 'space',
+    : 'home',
 );
 const sampleStories = [
   {
@@ -182,7 +188,11 @@ async function loadScreen() {
       ['square', 'memories', 'compose'].includes(props.page),
     );
     if (props.page === 'login' && app.session.userId && !recovering.value) {
-      replace(app.current ? 'space' : 'create');
+      replace(app.current ? 'home' : 'create');
+      return;
+    }
+    if (props.page === 'space') {
+      replace('home', props.query?.saved === '1' ? '?saved=1' : '');
       return;
     }
     if (props.page === 'square') await app.fetchPublicPosts();
@@ -273,7 +283,7 @@ function openHomePrimary() {
   void app.run(async () => {
     await app.refresh(false);
     if (!app.session.userId) await app.login();
-    go(app.current ? 'space' : 'create');
+    go(app.current ? 'home' : 'create');
   });
 }
 function profileQuery() {
@@ -310,7 +320,7 @@ function create() {
     );
     if (!editing.value && app.session.userId)
       uni.removeStorageSync('yinghuo.profileDraft.' + app.session.userId);
-    replace('space', editing.value ? '' : '?saved=1');
+    replace('home', editing.value ? '' : '?saved=1');
   });
 }
 function profileInitial(profile: { name: string; relationship?: string; nickname?: string }) {
@@ -383,7 +393,24 @@ function memorySave() {
         : await app.addMemory(input);
     const key = memoryDraftKey();
     if (key) uni.removeStorageSync(key);
-    replace('memory', '?id=' + savedMemory.id + '&profileId=' + savedMemory.profileId + '&saved=1');
+    let shareState = '';
+    if (!editingMemory.value && form.public) {
+      try {
+        await app.publish({
+          title: memoryTitle(form.title, form.body, 60),
+          body: form.body,
+          visibility: 'public',
+          publicConsent: form.publicConsent,
+        });
+        shareState = '&shared=1';
+      } catch {
+        shareState = '&shareFailed=1';
+      }
+    }
+    replace(
+      'memory',
+      '?id=' + savedMemory.id + '&profileId=' + savedMemory.profileId + '&saved=1' + shareState,
+    );
   });
 }
 function confirmDeleteMemory() {
@@ -465,9 +492,13 @@ function sendChat() {
 function scrollChatToEnd() {
   if (props.page !== 'chat') return;
   void nextTick(() => {
-    const anchor = document.getElementById('chat-end');
-    anchor?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const thread = document.getElementById('chat-thread');
+    if (thread) thread.scrollTop = thread.scrollHeight;
   });
+}
+function onChatFocus() {
+  scrollChatToEnd();
+  requestAnimationFrame(() => requestAnimationFrame(scrollChatToEnd));
 }
 watch(
   () => [loading.value, app.messages.length, pendingChatText.value, chatReplyPending.value],
@@ -627,10 +658,16 @@ function restoreEditorDraft() {
         ? storyDraftKey()
         : '';
   if (!key || (!editingMemory.value && !editingStory.value && (form.title || form.body))) return;
-  const draft = uni.getStorageSync(key) as { title?: string; body?: string } | undefined;
+  const draft = uni.getStorageSync(key) as
+    | { title?: string; body?: string; public?: boolean; publicConsent?: boolean }
+    | undefined;
   if (!draft || typeof draft !== 'object') return;
   form.title = typeof draft.title === 'string' ? draft.title : '';
   form.body = typeof draft.body === 'string' ? draft.body : '';
+  if (props.page === 'memory-edit' && !editingMemory.value) {
+    form.public = draft.public === true;
+    form.publicConsent = draft.publicConsent === true;
+  }
   localDraftSaved.value = Boolean(form.title || form.body);
   if (form.title || form.body) app.status = '已恢复你未保存的草稿。';
 }
@@ -643,12 +680,22 @@ function saveEditorDraft() {
     uni.removeStorageSync(key);
     return;
   }
-  storeDraft(key, { title: form.title, body: form.body });
+  storeDraft(key, {
+    title: form.title,
+    body: form.body,
+    ...(props.page === 'memory-edit'
+      ? { public: form.public, publicConsent: form.publicConsent }
+      : {}),
+  });
 }
 
-watch(() => [app.session.userId, app.currentId, form.title, form.body], saveEditorDraft, {
-  flush: 'sync',
-});
+watch(
+  () => [app.session.userId, app.currentId, form.title, form.body, form.public, form.publicConsent],
+  saveEditorDraft,
+  {
+    flush: 'sync',
+  },
+);
 
 function publish() {
   const action = () =>
@@ -761,22 +808,87 @@ function createRecoveryCode() {
     app.run(async () => {
       const bundle = await app.createRecoveryCode();
       generatedRecoveryCode.value = bundle.recoveryCode;
-      app.status = '找回信息已生成，请在离开前保存萤火号和恢复码。';
+      recoveryCardDataUrl.value = '';
+      app.status = '找回卡信息已生成，请在离开前复制或保存图片。';
     });
   if (!app.bootstrap?.recoveryConfigured) {
     void action();
     return;
   }
   uni.showModal({
-    title: '生成新的安全恢复码？',
-    content: '新的恢复码只显示这一次；再次生成会让旧恢复码失效。请复制后保存在安全的地方。',
-    confirmText: '生成恢复码',
+    title: '生成新的找回卡？',
+    content: '新的安全恢复码只显示这一次；再次生成会让旧找回卡失效。请生成后立即保存图片。',
+    confirmText: '生成找回卡',
     cancelText: '取消',
     success: (result) => {
       if (!result.confirm) return;
       void action();
     },
   });
+}
+function saveRecoveryCard() {
+  if (!generatedRecoveryCode.value || !app.session.familyCode) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1440;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    app.error = '当前浏览器暂时无法生成找回卡，请先复制找回信息。';
+    return;
+  }
+  const gradient = context.createLinearGradient(0, 0, 1080, 1440);
+  gradient.addColorStop(0, '#fffaf0');
+  gradient.addColorStop(1, '#f5e2a7');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#40382f';
+  context.textAlign = 'center';
+  context.font = '700 76px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('萤火找回卡', 540, 190);
+  context.fillStyle = '#756e64';
+  context.font = '36px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('换手机或登录失效时，用这两项找回记忆', 540, 270);
+  context.fillStyle = '#fffdf9';
+  context.strokeStyle = '#dfbd63';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.roundRect(100, 360, 880, 650, 42);
+  context.fill();
+  context.stroke();
+  context.fillStyle = '#756e64';
+  context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('萤火号', 540, 480);
+  context.fillStyle = '#4e3a14';
+  context.font = '700 62px ui-monospace, SFMono-Regular, Menlo, monospace';
+  context.fillText(app.session.familyCode, 540, 575);
+  context.fillStyle = '#756e64';
+  context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('安全恢复码', 540, 720);
+  context.fillStyle = '#4e3a14';
+  context.font = '700 42px ui-monospace, SFMono-Regular, Menlo, monospace';
+  const code = generatedRecoveryCode.value;
+  const lines = code.length > 24 ? [code.slice(0, 24), code.slice(24)] : [code];
+  lines.forEach((line, index) => context.fillText(line, 540, 815 + index * 64));
+  context.fillStyle = '#8a5a28';
+  context.font = '32px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('请勿转发给他人，也不要交给客服', 540, 1120);
+  context.fillStyle = '#756e64';
+  context.font = '28px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+  context.fillText('生成日期：' + new Date().toLocaleDateString('zh-CN'), 540, 1195);
+  context.fillText('萤火不会通过客服索要安全恢复码', 540, 1250);
+  const dataUrl = canvas.toDataURL('image/png');
+  recoveryCardDataUrl.value = dataUrl;
+  if (isWeChat.value) {
+    app.status = '找回卡已生成，请长按下方图片保存到手机。';
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = '萤火找回卡.png';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  app.status = '找回卡图片已保存；也可以长按下方图片再次保存。';
 }
 function recoverAccount() {
   const familyCode = form.familyCode.trim().toUpperCase();
@@ -821,7 +933,7 @@ function confirmDeleteProfile() {
       if (!result.confirm) return;
       void app.run(async () => {
         await app.deleteProfile(profileId);
-        replace('space');
+        replace('home');
       });
     },
   });
@@ -850,14 +962,14 @@ watch(
 function confirmLogout() {
   if (!app.bootstrap?.recoveryConfigured) {
     info(
-      '请先保存安全恢复码',
-      '当前空间还没有安全恢复码。请先生成并妥善保存，否则退出后将无法找回这些记忆。',
+      '请先保存找回卡',
+      '当前空间还没有找回卡。请先生成并妥善保存，否则退出后将无法找回这些记忆。',
     );
     return;
   }
   uni.showModal({
     title: '离开当前空间？',
-    content: '退出会清除这台设备的登录。只有保存过安全恢复码，才能重新找回这个空间。',
+    content: '退出会清除这台设备的登录。只有保存过找回卡，才能重新找回这个空间。',
     confirmText: '确认退出',
     cancelText: '取消',
     success: (result) => {
@@ -959,41 +1071,78 @@ function confirmDeleteAccount() {
           />
         </view>
         <template v-else-if="app.current">
-          <view class="returning-heading">
-            <small>继续留住你们的日常</small>
-            <view class="profile-heading">
-              <image
-                v-if="app.current.avatarUrl"
-                class="profile-avatar large"
-                :src="app.current.avatarUrl"
-                mode="aspectFill"
-              />
-              <view v-else class="profile-avatar large fallback">{{
-                profileInitial(app.current)
-              }}</view>
-              <view
-                ><h1>{{ app.current.name }}的萤火</h1>
-                <small>内容仅自己可见</small></view
-              >
+          <view class="returning-hero">
+            <view
+              class="sprite mascot returning-mascot"
+              role="img"
+              aria-label="一只发光的大萤火虫"
+            />
+            <view>
+              <small>继续留住你们的日常</small>
+              <h1>{{ app.current.name }}的萤火</h1>
+              <p>想起一句话，就回来记下来。</p>
             </view>
           </view>
-          <button
-            role="button"
-            class="btn"
-            :disabled="app.busy"
-            @click="needProfile('memory-edit')"
-            :aria-disabled="app.busy"
+          <view class="person-switch-heading">
+            <small>切换人物</small>
+            <button
+              role="button"
+              class="text-button"
+              @click="go('create', '?edit=1&profileId=' + app.currentId)"
+            >
+              编辑当前人物
+            </button>
+          </view>
+          <view class="profile-tabs home-profile-tabs" aria-label="切换人物">
+            <button
+              role="button"
+              v-for="p in app.profiles"
+              :key="p.id"
+              class="profile-tab"
+              :class="{ active: app.currentId === p.id }"
+              :aria-pressed="app.currentId === p.id"
+              @click="switchProfile(p.id)"
+            >
+              <image
+                v-if="p.avatarUrl"
+                class="profile-avatar"
+                :src="p.avatarUrl"
+                mode="aspectFill"
+              /><view v-else class="profile-avatar fallback">{{ profileInitial(p) }}</view
+              ><text>{{ p.name }}</text>
+            </button>
+            <button role="button" class="profile-tab add-person-tab" @click="go('create')">
+              <AppIcon name="plus" /><text>添加人物</text>
+            </button>
+          </view>
+          <view class="home-primary-actions">
+            <button
+              role="button"
+              class="home-primary-action"
+              aria-label="记录一件小事"
+              :disabled="app.busy"
+              @click="needProfile('memory-edit')"
+              :aria-disabled="app.busy"
+            >
+              <AppIcon name="plus" />
+              <text><strong>记录一件小事</strong><small>默认仅自己可见</small></text>
+            </button>
+            <button
+              role="button"
+              v-if="chatAvailable"
+              class="home-primary-action secondary"
+              :aria-label="'和' + app.current.name + '聊聊'"
+              @click="go('chat', profileQuery())"
+            >
+              <AppIcon name="chat" />
+              <text
+                ><strong>和{{ app.current.name }}聊聊</strong><small>AI 根据记忆生成</small></text
+              >
+            </button>
+          </view>
+          <view v-if="query?.saved === '1'" class="saved-state" role="status"
+            >已保存到{{ app.current.name }}的记忆。</view
           >
-            再记下一件小事
-          </button>
-          <button
-            role="button"
-            v-if="chatAvailable"
-            class="btn secondary"
-            @click="go('chat', profileQuery())"
-          >
-            聊聊关于{{ app.current.name }}的记忆
-          </button>
           <view class="section"
             ><h2>最近留下的记忆</h2>
             <button role="button" class="text-button" @click="go('memories')">
@@ -1015,9 +1164,6 @@ function confirmDeleteAccount() {
             ><text>内容已保存，跨设备找回还未设置。</text
             ><button role="button" class="text-button" @click="go('me')">设置找回方式</button></view
           >
-          <button role="button" class="row" @click="go('space')">
-            进入人物空间与切换人物 <AppIcon name="arrow" />
-          </button>
         </template>
         <view v-else class="hero first-visit">
           <text class="wordmark">萤火</text>
@@ -1055,7 +1201,7 @@ function confirmDeleteAccount() {
         <p class="caption">
           {{
             recovering
-              ? '用以前保存的萤火号和安全恢复码，接着使用原来的空间。'
+              ? '打开以前保存的“萤火找回卡”，输入上面的两项信息。'
               : '无需先注册。留下记忆后，再设置跨设备找回。'
           }}
         </p>
@@ -1084,7 +1230,7 @@ function confirmDeleteAccount() {
               v-model="form.familyCode"
               aria-label="萤火号"
               maxlength="24"
-              placeholder="输入以前保存的萤火号"
+              placeholder="输入找回卡上的萤火号"
           /></label>
           <label class="field"
             ><text>安全恢复码</text
@@ -1093,7 +1239,7 @@ function confirmDeleteAccount() {
               aria-label="安全恢复码"
               :password="true"
               maxlength="40"
-              placeholder="输入以前保存的 YH- 开头恢复码"
+              placeholder="输入找回卡上的 YH- 开头恢复码"
           /></label>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
           <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
@@ -1106,17 +1252,17 @@ function confirmDeleteAccount() {
           >
             {{ app.busy ? '正在找回…' : '找回我的萤火' }}
           </button>
-          <small class="block recovery-hint">需要同时填写两项；手机号目前不能用于找回。</small>
+          <small class="block recovery-hint">需要同时填写两项；手机号验证码找回尚未接通。</small>
           <button
             role="button"
             class="disclosure-button"
             :aria-expanded="recoveryHelpOpen"
             @click="recoveryHelpOpen = !recoveryHelpOpen"
           >
-            <text>没有保存恢复码怎么办？</text><text>{{ recoveryHelpOpen ? '收起' : '查看' }}</text>
+            <text>没有保存找回卡怎么办？</text><text>{{ recoveryHelpOpen ? '收起' : '查看' }}</text>
           </button>
           <view v-if="recoveryHelpOpen" class="notice"
-            >如果旧设备仍能打开原来的空间，请在那里进入“我的”生成并保存找回信息。如果已经失去登录、也没有恢复码，目前无法验证并找回原空间。</view
+            >如果旧设备仍能打开原来的空间，请在那里进入“我的”重新生成并保存找回卡。如果已经失去登录、也没有找回卡，目前无法安全验证账号归属。</view
           >
         </view>
         <button
@@ -1359,7 +1505,7 @@ function confirmDeleteAccount() {
           <view v-if="query?.saved === '1'" class="saved-state" role="status">{{
             app.memories.length
               ? '记忆已保存到空间，只有你能看到。'
-              : '人物空间已保存，可以开始留下记忆了。'
+              : '人物已保存，可以开始留下记忆了。'
           }}</view>
           <view v-if="recoveryNeeded" class="recovery-reminder"
             ><text>内容已保存，跨设备找回还未设置。</text
@@ -1471,7 +1617,7 @@ function confirmDeleteAccount() {
       <template v-else-if="page === 'memory-edit'">
         <h1>{{ editingMemory ? '修改这段记忆' : '记下一件小事' }}</h1>
         <template v-if="app.current">
-          <p class="caption editor-owner">关于 {{ app.current.name }} · 保存后仅自己可见</p>
+          <p class="caption editor-owner">关于 {{ app.current.name }} · 默认只保存在“我的记忆”</p>
           <view v-if="query?.type" class="notice"
             >照片、声音和视频稍后开放，现在可以先记下一段文字。</view
           >
@@ -1492,6 +1638,47 @@ function confirmDeleteAccount() {
               maxlength="120"
               placeholder="留空时，用正文开头作为标题"
           /></label>
+          <view
+            v-if="!editingMemory && app.bootstrap?.features?.publicSquare"
+            class="visibility-picker memory-visibility"
+          >
+            <text>保存后是否同时分享到广场？</text>
+            <view class="visibility-options">
+              <button
+                role="button"
+                :class="{ active: !form.public }"
+                :aria-pressed="!form.public"
+                @click="
+                  form.public = false;
+                  form.publicConsent = false;
+                "
+              >
+                <strong>仅自己可见</strong><small>默认，更安心</small>
+              </button>
+              <button
+                role="button"
+                :class="{ active: form.public }"
+                :aria-pressed="form.public"
+                @click="form.public = true"
+              >
+                <strong>同时分享到广场</strong><small>生成独立审核副本</small>
+              </button>
+            </view>
+          </view>
+          <checkbox-group
+            v-if="!editingMemory && form.public"
+            @change="toggle('publicConsent', $event)"
+          >
+            <label class="check public-consent"
+              ><checkbox
+                value="yes"
+                :checked="form.publicConsent"
+              />我确认有权公开这些内容；原记忆仍保持私密。</label
+            >
+          </checkbox-group>
+          <small v-if="!editingMemory && form.public && form.body.length > 3000" class="danger-text"
+            >广场副本最多 3000 字；可以缩短内容，或改为仅自己可见后保存完整记忆。</small
+          >
           <view class="editor-actions">
             <view v-if="app.error" class="notice error" role="alert"
               >{{ app.error }} 内容还在，可以重试。</view
@@ -1501,13 +1688,28 @@ function confirmDeleteAccount() {
             <button
               role="button"
               class="btn"
-              :disabled="app.busy || !form.body.trim()"
+              :disabled="
+                app.busy ||
+                !form.body.trim() ||
+                (!editingMemory && form.public && (!form.publicConsent || form.body.length > 3000))
+              "
               @click="memorySave"
-              :aria-disabled="app.busy || !form.body.trim()"
+              :aria-disabled="
+                app.busy ||
+                !form.body.trim() ||
+                (!editingMemory && form.public && (!form.publicConsent || form.body.length > 3000))
+              "
             >
-              {{ app.busy ? '正在保存…' : editingMemory ? '保存修改' : '保存记忆' }}
+              {{
+                app.busy
+                  ? '正在保存…'
+                  : editingMemory
+                    ? '保存修改'
+                    : form.public
+                      ? '保存并申请公开'
+                      : '保存记忆'
+              }}
             </button>
-            <small v-if="!form.body.trim()" class="block">先写下一句话，就可以保存。</small>
           </view>
         </template>
         <button role="button" v-else class="btn" @click="start">先选一位重要的人</button>
@@ -1515,8 +1717,15 @@ function confirmDeleteAccount() {
       <template v-else-if="page === 'memory'">
         <template v-if="selectedMemory"
           ><text class="badge">{{ app.current?.name }} · 仅自己可见</text>
-          <view v-if="query?.saved === '1'" class="saved-state" role="status"
-            >记忆已保存到空间。</view
+          <view v-if="query?.saved === '1'" class="saved-state" role="status">{{
+            query?.shared === '1'
+              ? '记忆已保存；公开副本已提交审核。'
+              : query?.shareFailed === '1'
+                ? '记忆已保存；公开副本暂未提交。'
+                : '记忆已保存到空间。'
+          }}</view>
+          <view v-if="query?.shareFailed === '1'" class="notice error" role="alert"
+            >私密记忆没有丢失，也不会重复保存。网络恢复后，可在下方重新提交公开副本。</view
           >
           <h1>{{ selectedMemory.title }}</h1>
           <p class="prose">{{ selectedMemory.body }}</p>
@@ -1537,7 +1746,7 @@ function confirmDeleteAccount() {
             class="btn secondary"
             @click="shareCurrentMemory"
           >
-            分享到广场
+            {{ query?.shareFailed === '1' ? '重试分享到广场' : '分享到广场' }}
           </button>
           <view v-if="recoveryNeeded" class="recovery-reminder"
             ><text>跨设备找回还未设置。</text
@@ -1561,172 +1770,208 @@ function confirmDeleteAccount() {
       </template>
       <template v-else-if="page === 'chat'">
         <template v-if="chatAvailable && app.current">
-          <view class="chat-heading">
-            <view class="sprite mascot assistant-avatar" role="img" aria-label="小萤 AI 记忆助手" />
-            <view
-              ><h1>小萤 <small>· AI 记忆助手</small></h1>
-              <p :class="{ 'typing-status': chatReplyPending }">
-                {{ chatReplyPending ? '正在组织回复…' : '聊聊关于' + app.current.name + '的记忆' }}
-              </p></view
-            >
-          </view>
-          <view class="chat-disclosure" role="note"
-            >陪你回看与整理记忆。回复由 AI 生成，不代表{{ app.current.name }}本人。</view
-          >
-          <view
-            v-if="!app.messages.some((item) => !item.mock) && !pendingChatText"
-            class="chat-welcome"
-          >
-            <h2>这次想从哪里聊起？</h2>
-            <p class="caption">选一句开场，也可以写自己的话。</p>
-            <button
-              role="button"
-              class="prompt-button"
-              @click="useChatPrompt('我想聊聊关于' + app.current.name + '的一件小事。')"
-            >
-              聊聊一件小事
-            </button>
-            <button
-              role="button"
-              class="prompt-button"
-              @click="useChatPrompt('今天我又想起了' + app.current.name + '，想说一说。')"
-            >
-              今天又想起了 TA
-            </button>
-            <button
-              role="button"
-              class="prompt-button"
-              @click="useChatPrompt('我想把刚想起的一件事整理成记忆。')"
-            >
-              整理一段记忆
-            </button>
-          </view>
-          <view class="chat-list" aria-live="polite">
-            <view
-              v-for="message in app.messages.filter((item) => !item.mock)"
-              :key="message.id"
-              class="message-row"
-              :class="{ user: message.role === 'user' }"
-            >
-              <view
-                v-if="message.role === 'assistant'"
-                class="sprite mascot assistant-avatar chat-avatar"
-                role="img"
-                aria-label="小萤"
-              />
-              <view class="bubble" :class="{ user: message.role === 'user' }"
-                ><small>{{ message.role === 'user' ? '我' : '小萤 · AI 记忆助手' }}</small
-                ><text>{{ message.text }}</text></view
-              >
-            </view>
-            <view v-if="pendingChatText" class="message-row user pending-message"
-              ><view class="bubble user"
-                ><small>我</small><text>{{ pendingChatText }}</text></view
-              ></view
-            >
-            <view v-if="chatReplyPending" class="message-row typing-row" role="status">
-              <view
-                class="sprite mascot assistant-avatar chat-avatar"
-                role="img"
-                aria-label="小萤"
-              />
-              <view class="bubble typing-bubble" aria-label="小萤正在生成回复"
-                ><small>小萤 · 正在回复</small
-                ><view class="typing-dots" aria-hidden="true"><text /><text /><text /></view
-              ></view>
-            </view>
-          </view>
-          <button
-            role="button"
-            v-if="app.messages.some((item) => !item.mock)"
-            class="text-button chat-reset"
-            :disabled="app.busy"
-            @click="clearConversation"
-            :aria-disabled="app.busy"
-          >
-            开始一段新对话
-          </button>
-          <view class="chat-composer">
-            <button
-              role="button"
-              class="disclosure-button context-toggle"
-              :aria-expanded="chatMemoriesOpen"
-              @click="chatMemoriesOpen = !chatMemoriesOpen"
-            >
-              <text>{{
-                selectedChatMemories.length
-                  ? '本次引用 ' + selectedChatMemories.length + ' 条记忆'
-                  : '本次未引用记忆'
-              }}</text
-              ><text>{{ chatMemoriesOpen ? '收起' : '选择' }}</text>
-            </button>
-            <view v-if="chatMemoriesOpen" class="chat-memory-picker">
-              <small>只发送你本次选中的内容，最多 5 条。</small>
-              <view class="chips"
-                ><button
-                  role="button"
-                  v-for="memory in app.memories"
-                  :key="memory.id"
-                  class="chip"
-                  :class="{ active: selectedChatMemories.includes(memory.id) }"
-                  :aria-pressed="selectedChatMemories.includes(memory.id)"
-                  @click="toggleChatMemory(memory.id)"
+          <view class="chat-layout">
+            <view id="chat-thread" class="chat-thread">
+              <view class="chat-heading">
+                <image
+                  v-if="app.current.avatarUrl"
+                  class="profile-avatar large"
+                  :src="app.current.avatarUrl"
+                  mode="aspectFill"
+                /><view v-else class="profile-avatar large fallback">{{
+                  profileInitial(app.current)
+                }}</view>
+                <view
+                  ><h1>和{{ app.current.name }}聊聊 <small>· AI 生成</small></h1>
+                  <p :class="{ 'typing-status': chatReplyPending }">
+                    {{ chatReplyPending ? '正在组织回复…' : '从你们的记忆慢慢聊起' }}
+                  </p></view
                 >
-                  {{ memory.title }}
-                </button></view
+              </view>
+              <view class="chat-disclosure" role="note">
+                <view class="sprite mascot disclosure-mascot" aria-hidden="true" />
+                <text
+                  >AI 会根据你提供的内容回复，不是{{ app.current.name }}本人，也可能不准确。</text
+                >
+              </view>
+              <view
+                v-if="!app.messages.some((item) => !item.mock) && !pendingChatText"
+                class="chat-welcome"
               >
-              <p v-if="!app.memories.length" class="caption">
-                还没有保存的记忆，可以直接说说你想聊的事。
-              </p>
-            </view>
-            <checkbox-group @change="chatConsent = $event.detail.value.length > 0"
-              ><label class="check chat-consent"
-                ><checkbox
-                  value="agree"
-                  :checked="chatConsent"
-                />允许使用本次对话和选中的记忆生成回复。</label
-              ></checkbox-group
-            >
-            <view v-if="app.error" class="notice error" role="alert"
-              >{{ app.error }} 输入内容已保留，可以重试。</view
-            >
-            <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
-            <view class="chat-input">
-              <input
-                v-model="chatText"
-                aria-label="想对小萤说的话"
-                :disabled="chatReplyPending"
-                maxlength="500"
-                :placeholder="chatReplyPending ? '小萤正在回复…' : '想说点什么…'"
-                @confirm="sendChat"
-              />
+                <h2>这次想从哪里聊起？</h2>
+                <p class="caption">选一句开场，也可以写自己的话。</p>
+                <view class="prompt-list">
+                  <button
+                    role="button"
+                    class="prompt-button"
+                    @click="useChatPrompt('我想聊聊关于' + app.current.name + '的一件小事。')"
+                  >
+                    聊聊一件小事
+                  </button>
+                  <button
+                    role="button"
+                    class="prompt-button"
+                    @click="useChatPrompt('今天我又想起了' + app.current.name + '，想说一说。')"
+                  >
+                    今天又想起了 TA
+                  </button>
+                  <button
+                    role="button"
+                    class="prompt-button"
+                    @click="useChatPrompt('我想把刚想起的一件事整理成记忆。')"
+                  >
+                    整理一段记忆
+                  </button>
+                </view>
+              </view>
+              <view class="chat-list" aria-live="polite">
+                <view
+                  v-for="message in app.messages.filter((item) => !item.mock)"
+                  :key="message.id"
+                  class="message-row"
+                  :class="{ user: message.role === 'user' }"
+                >
+                  <image
+                    v-if="message.role === 'assistant' && app.current.avatarUrl"
+                    class="profile-avatar chat-avatar"
+                    :src="app.current.avatarUrl"
+                    mode="aspectFill"
+                    :aria-label="app.current.name + '的头像'"
+                  /><view
+                    v-else-if="message.role === 'assistant'"
+                    class="profile-avatar fallback chat-avatar"
+                    :aria-label="app.current.name + '的头像'"
+                    >{{ profileInitial(app.current) }}</view
+                  >
+                  <view class="bubble" :class="{ user: message.role === 'user' }"
+                    ><small>{{
+                      message.role === 'user' ? '我' : app.current.name + ' · AI 生成'
+                    }}</small
+                    ><text>{{ message.text }}</text></view
+                  >
+                </view>
+                <view v-if="pendingChatText" class="message-row user pending-message"
+                  ><view class="bubble user"
+                    ><small>我</small><text>{{ pendingChatText }}</text></view
+                  ></view
+                >
+                <view v-if="chatReplyPending" class="message-row typing-row" role="status">
+                  <image
+                    v-if="app.current.avatarUrl"
+                    class="profile-avatar chat-avatar"
+                    :src="app.current.avatarUrl"
+                    mode="aspectFill"
+                    :aria-label="app.current.name + '的头像'"
+                  /><view
+                    v-else
+                    class="profile-avatar fallback chat-avatar"
+                    :aria-label="app.current.name + '的头像'"
+                    >{{ profileInitial(app.current) }}</view
+                  >
+                  <view
+                    class="bubble typing-bubble"
+                    :aria-label="app.current.name + '的回复正在生成'"
+                    ><small>{{ app.current.name }} · AI 正在生成</small
+                    ><view class="typing-dots" aria-hidden="true"><text /><text /><text /></view
+                  ></view>
+                </view>
+              </view>
               <button
                 role="button"
-                class="send-button"
-                aria-label="发送消息"
-                :disabled="app.busy || !chatText.trim() || !chatConsent"
-                @click="sendChat"
-                :aria-disabled="app.busy || !chatText.trim() || !chatConsent"
+                v-if="app.messages.some((item) => !item.mock)"
+                class="text-button chat-reset"
+                :disabled="app.busy"
+                @click="clearConversation"
+                :aria-disabled="app.busy"
               >
-                {{ chatReplyPending ? '等待' : '发送' }}
+                开始一段新对话
               </button>
+              <view id="chat-end" class="chat-end" aria-hidden="true" />
             </view>
-            <small v-if="!chatConsent" class="composer-hint"
-              >勾选授权后可发送；未选中的记忆不会发送。</small
-            >
-            <small v-else-if="localDraftError" class="composer-hint"
-              >本机暂存失败，请复制输入内容后再离开。</small
-            >
-            <small v-else-if="chatText" class="composer-hint">输入内容已暂存本机，尚未发送。</small>
+            <view class="chat-composer">
+              <button
+                role="button"
+                class="disclosure-button context-toggle"
+                :aria-expanded="chatMemoriesOpen"
+                @click="chatMemoriesOpen = !chatMemoriesOpen"
+              >
+                <text>{{
+                  selectedChatMemories.length
+                    ? '本次引用 ' + selectedChatMemories.length + ' 条记忆'
+                    : '本次未引用记忆'
+                }}</text
+                ><text>{{ chatMemoriesOpen ? '收起' : '选择' }}</text>
+              </button>
+              <view v-if="chatMemoriesOpen" class="chat-memory-picker">
+                <small>只发送你本次选中的内容，最多 5 条。</small>
+                <view class="chips"
+                  ><button
+                    role="button"
+                    v-for="memory in app.memories"
+                    :key="memory.id"
+                    class="chip"
+                    :class="{ active: selectedChatMemories.includes(memory.id) }"
+                    :aria-pressed="selectedChatMemories.includes(memory.id)"
+                    @click="toggleChatMemory(memory.id)"
+                  >
+                    {{ memory.title }}
+                  </button></view
+                >
+                <p v-if="!app.memories.length" class="caption">
+                  还没有保存的记忆，可以直接说说你想聊的事。
+                </p>
+              </view>
+              <checkbox-group @change="chatConsent = $event.detail.value.length > 0"
+                ><label class="check chat-consent"
+                  ><checkbox
+                    value="agree"
+                    :checked="chatConsent"
+                  />允许使用本次对话和选中的记忆生成回复。</label
+                ></checkbox-group
+              >
+              <view v-if="app.error" class="notice error" role="alert"
+                >{{ app.error }} 输入内容已保留，可以重试。</view
+              >
+              <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
+              <view class="chat-input">
+                <input
+                  v-model="chatText"
+                  :aria-label="'想对' + app.current.name + '说的话'"
+                  :disabled="chatReplyPending"
+                  maxlength="500"
+                  :placeholder="
+                    chatReplyPending ? '正在生成回复…' : '想对' + app.current.name + '说点什么…'
+                  "
+                  @focus="onChatFocus"
+                  @confirm="sendChat"
+                />
+                <button
+                  role="button"
+                  class="send-button"
+                  aria-label="发送消息"
+                  :disabled="app.busy || !chatText.trim() || !chatConsent"
+                  @click="sendChat"
+                  :aria-disabled="app.busy || !chatText.trim() || !chatConsent"
+                >
+                  {{ chatReplyPending ? '等待' : '发送' }}
+                </button>
+              </view>
+              <small v-if="!chatConsent" class="composer-hint"
+                >勾选授权后可发送；未选中的记忆不会发送。</small
+              >
+              <small v-else-if="localDraftError" class="composer-hint"
+                >本机暂存失败，请复制输入内容后再离开。</small
+              >
+              <small v-else-if="chatText" class="composer-hint"
+                >输入内容已暂存本机，尚未发送。</small
+              >
+            </view>
           </view>
-          <view id="chat-end" class="chat-end" aria-hidden="true" />
         </template>
         <view v-else class="empty"
           ><h1>记忆对话暂时无法使用</h1>
           <p>可以先留下关于 TA 的记忆，稍后再回来聊。</p>
-          <button role="button" class="btn secondary" @click="go('space')">
-            返回人物空间
-          </button></view
+          <button role="button" class="btn secondary" @click="go('home')">返回首页</button></view
         >
       </template>
       <template v-else-if="page === 'restore'">
@@ -1760,7 +2005,7 @@ function confirmDeleteAccount() {
             ><p>计划提供每位 TA 5GB 素材空间</p>
             <p>计划支持照片、声音和更多家庭故事</p>
             <p>以正式上线时展示的权益与价格为准</p></view
-          ><button role="button" class="btn secondary" @click="go('space')">
+          ><button role="button" class="btn secondary" @click="go('home')">
             去记录一段文字记忆
           </button></view
         >
@@ -2133,7 +2378,7 @@ function confirmDeleteAccount() {
             app.bootstrap?.recoveryConfigured ? '跨设备找回已设置' : '跨设备找回未设置'
           }}</text>
           <h2>保护你的记忆</h2>
-          <p class="caption">内容已保存在空间。换设备或登录过期后，找回需要下面两项信息。</p>
+          <p class="caption">内容已保存在空间。生成一张找回卡并存到手机，换设备时照着填写即可。</p>
           <small>萤火号</small
           ><button
             role="button"
@@ -2148,19 +2393,35 @@ function confirmDeleteAccount() {
               ><small>安全恢复码 · 只显示这一次</small
               ><strong>{{ generatedRecoveryCode }}</strong></view
             >
-            <button
-              role="button"
-              class="btn"
-              @click="
-                copyText(
-                  '萤火号：' + app.session.familyCode + '\n安全恢复码：' + generatedRecoveryCode,
-                  '萤火号和安全恢复码',
-                )
-              "
-            >
-              复制完整找回信息
-            </button>
-            <p class="account-warning">离开前请把两项信息一起保存到安全的地方。</p>
+            <view class="recovery-actions">
+              <button
+                role="button"
+                class="btn secondary"
+                @click="
+                  copyText(
+                    '萤火号：' + app.session.familyCode + '\n安全恢复码：' + generatedRecoveryCode,
+                    '萤火号和安全恢复码',
+                  )
+                "
+              >
+                复制信息
+              </button>
+              <button role="button" class="btn" @click="saveRecoveryCard">保存找回卡</button>
+            </view>
+            <image
+              v-if="recoveryCardDataUrl"
+              class="recovery-card-preview"
+              :src="recoveryCardDataUrl"
+              mode="widthFix"
+              aria-label="包含萤火号和安全恢复码的找回卡"
+            />
+            <p class="account-warning">
+              {{
+                isWeChat
+                  ? '微信内请长按找回卡图片保存。'
+                  : '请把找回卡存到安全的位置，不要转发给他人。'
+              }}
+            </p>
           </template>
           <template v-else>
             <view v-if="app.bootstrap?.recoveryConfigured" class="notice"
@@ -2178,14 +2439,14 @@ function confirmDeleteAccount() {
                 app.busy
                   ? '正在生成…'
                   : app.bootstrap?.recoveryConfigured
-                    ? '重新生成恢复码'
-                    : '生成安全恢复码'
+                    ? '重新生成找回卡'
+                    : '生成找回卡'
               }}
             </button>
             <p class="account-warning">
               {{
                 app.bootstrap?.recoveryConfigured
-                  ? '萤火不会通过客服向你索要恢复码。'
+                  ? '重新生成会让旧找回卡失效；萤火不会通过客服索要恢复码。'
                   : '未设置找回方式时，请保留当前登录；失去登录后可能无法找回。'
               }}
             </p>

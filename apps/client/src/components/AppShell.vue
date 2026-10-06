@@ -3,17 +3,21 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
 const props = defineProps<{ page: string; title: string }>();
 const visibleHeight = ref(0);
+const visibleOffsetTop = ref(0);
 function syncVisibleHeight() {
   visibleHeight.value = window.visualViewport?.height || window.innerHeight;
+  visibleOffsetTop.value = window.visualViewport?.offsetTop || 0;
 }
 onMounted(() => {
   if (props.page !== 'chat') return;
   syncVisibleHeight();
   window.visualViewport?.addEventListener('resize', syncVisibleHeight);
+  window.visualViewport?.addEventListener('scroll', syncVisibleHeight);
   window.addEventListener('resize', syncVisibleHeight);
 });
 onUnmounted(() => {
   window.visualViewport?.removeEventListener('resize', syncVisibleHeight);
+  window.visualViewport?.removeEventListener('scroll', syncVisibleHeight);
   window.removeEventListener('resize', syncVisibleHeight);
 });
 const tabs = [
@@ -45,7 +49,7 @@ function back() {
       ['space', 'memory', 'memory-edit', 'compose'].includes(props.page)
         ? 'memories'
         : props.page === 'chat' || props.page === 'create'
-          ? 'space'
+          ? 'home'
           : props.page === 'story'
             ? 'square'
             : 'home',
@@ -58,7 +62,10 @@ function back() {
     :class="{ 'focused-screen': focusedPage, 'chat-screen': page === 'chat' }"
     :style="
       page === 'chat' && visibleHeight
-        ? { '--chat-viewport-height': visibleHeight + 'px' }
+        ? {
+            '--chat-viewport-height': visibleHeight + 'px',
+            '--chat-viewport-offset': visibleOffsetTop + 'px',
+          }
         : undefined
     "
   >

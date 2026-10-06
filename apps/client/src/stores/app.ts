@@ -219,6 +219,7 @@ export const useAppStore = defineStore('app', () => {
       bootstrap.value.recoveryConfigured = true;
       bootstrap.value.recoveryUpdatedAt = bundle.recoveryUpdatedAt;
     }
+    session.value.familyCode = bundle.familyCode;
     return bundle;
   }
   async function recover(input: {
