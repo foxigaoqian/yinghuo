@@ -17,7 +17,7 @@
     {
       "path": "pages/create/index",
       "style": {
-        "navigationBarTitleText": "创建 TA",
+        "navigationBarTitleText": "留下第一条记忆",
         "navigationStyle": "custom"
       }
     },
@@ -31,7 +31,7 @@
     {
       "path": "pages/memories/index",
       "style": {
-        "navigationBarTitleText": "记忆库",
+        "navigationBarTitleText": "我的记忆",
         "navigationStyle": "custom"
       }
     },

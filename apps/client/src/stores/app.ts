@@ -25,6 +25,8 @@ export const useAppStore = defineStore('app', () => {
   const orders = ref<Order[]>([]);
   const posts = ref<Post[]>([]);
   const publicPosts = ref<Post[]>([]);
+  const libraryMemories = ref<Memory[]>([]);
+  const libraryReady = ref(false);
   const products = ref<Product[]>([]);
   const lastUserId = (uni.getStorageSync('yinghuo.lastUserId') as string) || '';
   const currentId = ref(
@@ -35,6 +37,10 @@ export const useAppStore = defineStore('app', () => {
   const messagesProfileId = ref('');
   const postsHydrated = ref(false);
   const current = computed(() => profiles.value.find((p) => p.id === currentId.value));
+  const messagesReady = computed(
+    () => messagesHydrated.value && messagesProfileId.value === currentId.value,
+  );
+  const postsReady = computed(() => postsHydrated.value);
   const busy = ref(false);
   const error = ref('');
   const status = ref('');
@@ -70,6 +76,8 @@ export const useAppStore = defineStore('app', () => {
     if (accountChanged) {
       posts.value = [];
       postsHydrated.value = false;
+      libraryMemories.value = [];
+      libraryReady.value = false;
     }
     session.value = state.session;
     setCsrf(state.session.csrfToken || state.bootstrap.csrfToken);
@@ -78,6 +86,11 @@ export const useAppStore = defineStore('app', () => {
     profiles.value = state.profiles;
     currentId.value = state.currentProfileId || '';
     memories.value = state.memories;
+    if (libraryReady.value && state.currentProfileId)
+      libraryMemories.value = [
+        ...libraryMemories.value.filter((m) => m.profileId !== state.currentProfileId),
+        ...state.memories,
+      ];
     if (includeMessages) {
       messages.value = state.messages;
       messagesHydrated.value = true;
@@ -115,9 +128,11 @@ export const useAppStore = defineStore('app', () => {
     const hasRequestedPosts = !includePosts || postsHydrated.value;
     if (!force && hydrated.value && hasRequestedMessages && hasRequestedPosts) return;
     if (refreshPromise) {
-      if (!force) return refreshPromise;
-      while (refreshPromise) await refreshPromise;
-      currentId.value = requestedProfileId;
+      await refreshPromise;
+      if (force) currentId.value = requestedProfileId;
+      // A concurrent homepage request may not contain chat history or posts.
+      // Re-check the requested data instead of treating any refresh as complete.
+      return refresh(createGuest, force, includeMessages, includePosts);
     }
     const currentRefresh = (async () => {
       let state = await fetchState(includeMessages, includePosts);
@@ -162,9 +177,31 @@ export const useAppStore = defineStore('app', () => {
     hydrated.value = false;
     await refresh(true, true);
   }
+  async function fetchLibrary() {
+    if (libraryReady.value) return;
+    const ownerId = session.value.userId;
+    const items = await Promise.all(
+      profiles.value.map(async (profile) => {
+        if (profile.id === currentId.value) return memories.value;
+        const result = await api<{ items: Memory[] }>('/profiles/' + profile.id + '/memories');
+        return result.items;
+      }),
+    );
+    if (session.value.userId !== ownerId) return;
+    libraryMemories.value = items.flat();
+    libraryReady.value = true;
+  }
   async function logout() {
     await api('/auth/logout', 'POST', {});
     session.value = { userId: null, csrfToken: null, mock: true };
+    profiles.value = [];
+    memories.value = [];
+    messages.value = [];
+    posts.value = [];
+    libraryMemories.value = [];
+    libraryReady.value = false;
+    currentId.value = '';
+    pendingMessage = null;
     setCsrf(null);
     hydrated.value = false;
     messagesHydrated.value = false;
@@ -196,6 +233,8 @@ export const useAppStore = defineStore('app', () => {
     messages.value = [];
     memories.value = [];
     posts.value = [];
+    libraryMemories.value = [];
+    libraryReady.value = false;
     currentId.value = '';
     messagesHydrated.value = false;
     postsHydrated.value = false;
@@ -231,11 +270,14 @@ export const useAppStore = defineStore('app', () => {
       input,
     );
     select(p.id);
+    libraryReady.value = false;
     hydrated.value = false;
     await refresh(true, true);
   }
   async function deleteProfile(id: string) {
     await api<{ ok: true }>('/profiles/' + id, 'DELETE', {});
+    libraryMemories.value = libraryMemories.value.filter((m) => m.profileId !== id);
+    libraryReady.value = false;
     if (session.value.userId) clearLocalAccountData(uni, session.value.userId, id);
     if (currentId.value === id) currentId.value = '';
     hydrated.value = false;
@@ -246,15 +288,23 @@ export const useAppStore = defineStore('app', () => {
   async function addMemory(input: unknown) {
     const memory = await api<Memory>('/profiles/' + currentId.value + '/memories', 'POST', input);
     memories.value = [memory, ...memories.value.filter((item) => item.id !== memory.id)];
+    if (libraryReady.value)
+      libraryMemories.value = [
+        memory,
+        ...libraryMemories.value.filter((item) => item.id !== memory.id),
+      ];
+    return memory;
   }
   async function updateMemory(id: string, input: unknown) {
     const memory = await api<Memory>('/memories/' + id, 'PATCH', input);
     memories.value = memories.value.map((item) => (item.id === id ? memory : item));
+    libraryMemories.value = libraryMemories.value.map((item) => (item.id === id ? memory : item));
     return memory;
   }
   async function deleteMemory(id: string) {
     await api<{ ok: true }>('/memories/' + id, 'DELETE', {});
     memories.value = memories.value.filter((item) => item.id !== id);
+    libraryMemories.value = libraryMemories.value.filter((item) => item.id !== id);
   }
   async function resetConversation() {
     await api<{ ok: true }>('/profiles/' + currentId.value + '/messages/reset', 'POST', {});
@@ -354,6 +404,8 @@ export const useAppStore = defineStore('app', () => {
     messages.value = [];
     posts.value = [];
     publicPosts.value = [];
+    libraryMemories.value = [];
+    libraryReady.value = false;
     hydrated.value = false;
   }
   async function run(action: () => Promise<void>) {
@@ -380,6 +432,10 @@ export const useAppStore = defineStore('app', () => {
     orders,
     posts,
     publicPosts,
+    libraryMemories,
+    libraryReady,
+    messagesReady,
+    postsReady,
     products,
     currentId,
     hydrated,
@@ -389,6 +445,7 @@ export const useAppStore = defineStore('app', () => {
     status,
     lastRequestId,
     refresh,
+    fetchLibrary,
     select,
     login,
     logout,
