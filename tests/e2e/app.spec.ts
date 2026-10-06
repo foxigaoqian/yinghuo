@@ -347,3 +347,32 @@ test('a missing edit target does not silently create a new memory', async ({ pag
   await expect(page.getByRole('alert')).toContainText('这条记忆暂时找不到');
   await expect(page.getByRole('button', { name: '保存修改', exact: true })).toHaveCount(0);
 });
+
+test('opening a conversation with history starts at the latest messages', async ({ page }) => {
+  await firstMemory(page);
+  await page.route('**/api/v1/app-state*', async (route) => {
+    const response = await route.fetch();
+    const state = await response.json();
+    state.bootstrap.features.textChat = true;
+    state.messages = Array.from({ length: 20 }, (_, index) => ({
+      id: 'history-' + index,
+      profileId: state.currentProfileId,
+      role: 'assistant',
+      text: '历史对话第 ' + (index + 1) + ' 条。我们可以回看与整理这些记忆。',
+      mock: false,
+      createdAt: new Date(2026, 9, 6, 0, 0, index).toISOString(),
+    }));
+    await route.fulfill({ response, json: state });
+  });
+  await page.goto('/pages/chat/index');
+  await expect(page.locator('.chat-list .bubble').last()).toContainText('历史对话第 20 条');
+  await expect
+    .poll(() =>
+      page
+        .locator('.content')
+        .evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop),
+    )
+    .toBeLessThan(5);
+  const box = await page.locator('.chat-input').boundingBox();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+});

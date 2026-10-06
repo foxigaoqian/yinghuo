@@ -469,9 +469,13 @@ function scrollChatToEnd() {
     anchor?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   });
 }
-watch(() => [app.messages.length, pendingChatText.value, chatReplyPending.value], scrollChatToEnd, {
-  flush: 'post',
-});
+watch(
+  () => [loading.value, app.messages.length, pendingChatText.value, chatReplyPending.value],
+  scrollChatToEnd,
+  {
+    flush: 'post',
+  },
+);
 
 function clearConversation() {
   uni.showModal({
