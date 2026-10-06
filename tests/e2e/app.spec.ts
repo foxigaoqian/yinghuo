@@ -168,10 +168,15 @@ test('chat identifies the assistant, requires consent and sends only selected me
     state.bootstrap.features.textChat = true;
     await route.fulfill({ response, json: state });
   });
+  let releaseReply!: () => void;
+  const replyGate = new Promise<void>((resolve) => {
+    releaseReply = resolve;
+  });
   let payload: Record<string, unknown> | undefined;
   await page.route('**/api/v1/profiles/*/messages', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     payload = route.request().postDataJSON();
+    await replyGate;
     await route.fulfill({
       json: {
         items: [
@@ -200,10 +205,21 @@ test('chat identifies the assistant, requires consent and sends only selected me
   );
   await page.locator('.chat-consent').click();
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect(page.locator('.pending-message')).toContainText('我想聊聊关于演示妈妈的一件小事。');
+  await expect(page.locator('.chat-input input')).toBeDisabled();
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith('yinghuo.chatDraft.'))
+        .map((key) => localStorage.getItem(key))
+        .join(''),
+    ),
+  ).toContain('我想聊聊关于演示妈妈的一件小事。');
+  releaseReply();
   await expect(page.getByText('我们可以慢慢整理这段记忆。', { exact: true })).toBeVisible();
   expect(payload?.aiConsent).toBe(true);
   expect(payload?.memoryIds).toEqual([]);
-  await page.getByRole('button', { name: '本次未引用记忆 选择' }).click();
+  await page.locator('.context-toggle').click();
   await page.locator('.chat-memory-picker').getByRole('button').first().click();
   await page.locator('.chat-input input').fill('想再聊一会。');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
@@ -323,4 +339,11 @@ test('a library request waits for homepage hydration and still fetches its posts
   await expect(
     page.getByRole('heading', { name: '并发加载时的旧故事', exact: true }),
   ).toBeVisible();
+});
+
+test('a missing edit target does not silently create a new memory', async ({ page }) => {
+  await firstMemory(page);
+  await page.goto('/pages/memory-edit/index?id=missing-memory');
+  await expect(page.getByRole('alert')).toContainText('这条记忆暂时找不到');
+  await expect(page.getByRole('button', { name: '保存修改', exact: true })).toHaveCount(0);
 });

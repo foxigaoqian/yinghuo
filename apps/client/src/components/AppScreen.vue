@@ -198,6 +198,8 @@ async function loadScreen() {
       throw new Error('这段内容不属于当前空间，无法修改。');
     if (props.page === 'compose' && props.query?.memoryId && !shareMemory.value)
       throw new Error('这条记忆暂时找不到，请返回我的记忆重新选择。');
+    if (editingMemory.value && !selectedMemory.value)
+      throw new Error('这条记忆暂时找不到，请返回我的记忆重新选择。');
     restoreProfileDraft();
     restoreChatDraft();
     restoreEditorDraft();
@@ -1689,8 +1691,9 @@ function confirmDeleteAccount() {
               <input
                 v-model="chatText"
                 aria-label="想对小萤说的话"
+                :disabled="chatReplyPending"
                 maxlength="500"
-                placeholder="想说点什么…"
+                :placeholder="chatReplyPending ? '小萤正在回复…' : '想说点什么…'"
                 @confirm="sendChat"
               />
               <button
