@@ -67,3 +67,11 @@ Worker 只会向 `api.sqface.sbs` 或官方备用域名发送对话请求，避�
 - 管理入口为 `/admin`，使用 `ADMIN_REVIEW_TOKEN`，口令仅在当前标签页保存。审核通过才会出现在公开广场，退回理由会回显给作者。
 
 可使用 `YINGHUO_ADMIN_TOKEN` 环境变量运行 `python tests/production-smoke.py` 做独立账号验证。脚本仅创建合成数据并在结束时删除自己的测试账号，不读取现有浏览器登录。
+
+## 删除与迟到回复的并发保护
+
+`20261006005429_prevent_late_messages_after_deletion.sql` 在消息插入时取得账号级共享事务锁，并重新检查账号与人物仍有效。人物和账号删除在修改任何行前取得同一把锁的排他模式：较早的保存事务提交后会被删除逻辑擦除，等待删除完成的迟到保存则被拒绝。锁只覆盖数据库写入，不覆盖 AI 生成的等待时间。
+
+保护位于 `messages` 表的插入触发器，因此正式 Worker 与旧 AI 中转均受保护，无需改写中转密钥或 Worker 版本。辅助函数为 `SECURITY INVOKER`，固定空 `search_path`，仅授予 `service_role` 执行权限。
+
+数据库回归脚本为 `supabase/tests/deletion_write_guards.sql`。它使用合成账号验证正常批量消息保存、无效会话拒绝删除、人物与账号删除、已保存消息擦除、迟到消息拒绝及会话撤销，完成后回滚全部测试数据。
