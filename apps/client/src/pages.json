@@ -99,6 +99,13 @@
       }
     },
     {
+      "path": "pages/shares/index",
+      "style": {
+        "navigationBarTitleText": "我的发布",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/compose/index",
       "style": {
         "navigationBarTitleText": "写故事",

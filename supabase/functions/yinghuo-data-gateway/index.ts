@@ -10,6 +10,9 @@ const TABLES = new Set([
   'conversations',
   'messages',
   'private_stories',
+  'story_reactions',
+  'story_comments',
+  'story_comment_reports',
   'account_recovery_codes',
   'user_feedback',
   'app_static_assets',
@@ -157,7 +160,7 @@ Deno.serve(async (request: Request) => {
   if (!isAuthorized) return json({ error: 'UNAUTHORIZED' }, 401);
 
   const raw = await request.text();
-  if (raw.length > 128_000) return json({ error: 'PAYLOAD_TOO_LARGE' }, 413);
+  if (raw.length > 1_600_000) return json({ error: 'PAYLOAD_TOO_LARGE' }, 413);
 
   let input: Record<string, unknown>;
   try {

@@ -114,7 +114,7 @@ a, b = Client(), Client()
 try:
     started = time.monotonic()
     home = http.get(ROOT + '/', timeout=30)
-    assert home.status_code == 200 and home.headers.get('x-yinghuo-release') == '20261005-complete'
+    assert home.status_code == 200 and home.headers.get('x-yinghuo-release') == '20261008-square10'
     assert 'boot-shell' in home.text
     print('PASS deployed home shell', round(time.monotonic() - started, 2), 'seconds', flush=True)
     assert http.get(ROOT + '/admin', timeout=30).headers.get('x-robots-tag') == 'noindex, nofollow'

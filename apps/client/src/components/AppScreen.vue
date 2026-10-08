@@ -10,11 +10,12 @@ const app = useAppStore();
 const loading = ref(!app.bootstrap);
 const screenReady = ref(false);
 const shellTitle = computed(() => {
-  if (props.page === 'create') return props.query?.edit === '1' ? '人物资料' : '留下第一条记忆';
+  if (props.page === 'create') return props.query?.edit === '1' ? '人物资料' : '添加想念的人';
   if (props.page === 'login' && props.query?.mode === 'recover') return '找回我的萤火';
   if (props.page === 'memories') return '我的记忆';
-  if (props.page === 'compose' && props.query?.memoryId) return '分享记忆';
-  if (props.page === 'chat' && app.current) return '和' + app.current.name + '聊聊';
+  if (props.page === 'compose') return props.query?.edit === '1' ? '编辑发布' : '发布纪念';
+  if (props.page === 'shares') return '我的发布';
+  if (props.page === 'chat' && props.query?.profileId && app.current) return app.current.name;
   return props.title;
 });
 const hostedPreview = computed(() => Boolean(app.bootstrap?.features?.hostedPreview));
@@ -42,23 +43,83 @@ const form = reactive({
 });
 const detailsOpen = ref(false);
 const customRelationship = ref(false);
-const chatMemoriesOpen = ref(false);
+const activeChatPanel = ref<'none' | 'tools' | 'emoji' | 'memories'>('none');
+const chatInputMode = ref<'text' | 'voice'>('text');
+const chatPhotoDraft = ref('');
+const chatPhotoProcessing = ref(false);
+const pendingChatPhoto = ref('');
+const voiceListening = ref(false);
+const voiceTranscript = ref('');
 const libraryFilter = ref('all');
 const localDraftSaved = ref(false);
 const localDraftError = ref(false);
-const squareView = ref('精选');
+const squareSharePickerOpen = ref(false);
+const publishProfilePickerOpen = ref(false);
+const visibilityPickerOpen = ref(false);
+const squareCommentSheetOpen = ref(false);
+const activeSquarePostId = ref('');
+const replyTarget = ref<{ id: string; name: string } | null>(null);
+const storyImages = ref<string[]>([]);
+const storyPhotoProcessing = ref(false);
 const preview = ref('');
 const chatText = ref('');
-const chatConsent = ref(false);
+const storyCommentText = ref('');
+const activeMessageActionId = ref('');
 const selectedChatMemories = ref<string[]>([]);
 const generatedRecoveryCode = ref('');
 const recoveryCardDataUrl = ref('');
 const recoveryHelpOpen = ref(false);
+const backupPanelOpen = ref(false);
 const phonePanelOpen = ref(false);
 const chatReplyPending = ref(false);
 const pendingChatText = ref('');
+const memoryUseForAi = ref(true);
+const chatContextInitializedFor = ref('');
 const environmentNoticeDismissed = ref(false);
 const chatAvailable = computed(() => Boolean(app.bootstrap?.features?.textChat));
+const chatConversation = computed(() => props.page === 'chat' && Boolean(props.query?.profileId));
+const realChatMessages = computed(() => app.messages.filter((item) => !item.mock));
+const commonEmojis = [
+  '微笑',
+  '想念',
+  '拥抱',
+  '爱心',
+  '流泪',
+  '开心',
+  '晚安',
+  '太阳',
+  '月亮',
+  '鲜花',
+  '蛋糕',
+  '赞',
+] as const;
+const emojiCharacters: Record<(typeof commonEmojis)[number], string> = {
+  微笑: '🙂',
+  想念: '🥺',
+  拥抱: '🫂',
+  爱心: '❤️',
+  流泪: '😢',
+  开心: '😊',
+  晚安: '🌙',
+  太阳: '☀️',
+  月亮: '🌕',
+  鲜花: '🌷',
+  蛋糕: '🎂',
+  赞: '👍',
+};
+const voiceSupported = computed(
+  () =>
+    typeof window !== 'undefined' &&
+    Boolean(
+      (window as typeof window & { SpeechRecognition?: unknown }).SpeechRecognition ||
+        (window as typeof window & { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition,
+    ),
+);
+const shellSubtitle = computed(() =>
+  chatConversation.value
+    ? `AI 模拟 · ${selectedChatMemories.value.length ? `已融入 ${selectedChatMemories.value.length} 条记忆` : '暂未融入记忆'}`
+    : '',
+);
 const recovering = computed(() => props.page === 'login' && props.query?.mode === 'recover');
 const isWeChat = computed(
   () => typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent),
@@ -93,7 +154,7 @@ const libraryItems = computed(() => {
       : [];
   return [...memories, ...stories].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 });
-const myShares = computed(() => app.posts.filter((p) => p.visibility === 'public'));
+const myShares = computed(() => app.posts);
 const shareMemory = computed(() => app.memories.find((m) => m.id === props.query?.memoryId));
 function profileName(id: string) {
   return app.profiles.find((p) => p.id === id)?.name || '人物记忆';
@@ -137,6 +198,19 @@ const selectedMemory = computed(() => app.memories.find((m) => m.id === props.qu
 const selectedPost = computed(() =>
   [...app.posts, ...app.publicPosts].find((p) => p.id === props.query?.id),
 );
+const selectedStoryComments = computed(() =>
+  selectedPost.value ? app.storyComments[selectedPost.value.id] || [] : [],
+);
+const activeSquarePost = computed(() =>
+  app.publicPosts.find((post) => post.id === activeSquarePostId.value),
+);
+const activeSquareComments = computed(() =>
+  activeSquarePostId.value ? app.storyComments[activeSquarePostId.value] || [] : [],
+);
+const selectedPostIsInteractive = computed(
+  () =>
+    selectedPost.value?.visibility === 'public' && selectedPost.value?.moderation === 'published',
+);
 const editing = computed(() => props.query?.edit === '1');
 const editingMemory = computed(() => props.page === 'memory-edit' && Boolean(props.query?.id));
 const editingStory = computed(() => props.page === 'compose' && props.query?.edit === '1');
@@ -151,15 +225,16 @@ const nextAfterLogin = computed(() =>
 const sampleStories = [
   {
     id: 'sample',
-    title: '妈妈窗边的那束花',
-    excerpt: '小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。',
-    body: '小时候，总觉得窗台上的花开得特别慢。后来才明白，是她把平凡的日子照顾得很好。如今，看到一束小雏菊，我也会记得给生活留一点明亮。',
+    title: '她把四季都晒在阳台上',
+    excerpt:
+      '外婆总说，太阳好的时候别浪费。被子、萝卜干，还有我们小时候的衣服，都带着同一种暖暖的味道。',
+    body: '外婆总说，太阳好的时候别浪费。被子、萝卜干，还有我们小时候的衣服，都带着同一种暖暖的味道。后来每次闻到晒过太阳的被子，我都会想起她站在阳台上的背影。',
   },
   {
     id: 'sample-dad',
-    title: '爸爸留下的那把旧伞',
-    excerpt: '下雨天出门，他总把伞塞到我手里。现在我也会在门口提醒家人带伞。',
-    body: '下雨天出门，他总把伞塞到我手里，说天气变得快，别淋着了。后来我有了自己的家，也会在门口提醒家人带伞。那些小小的叮嘱，慢慢成了我的习惯。',
+    title: '第一次学会骑自行车',
+    excerpt: '我一直以为他还扶着后座，回头才发现他站在很远的地方笑。',
+    body: '我一直以为他还扶着后座，回头才发现他站在很远的地方笑。那天的风很大，我第一次知道，原来被放开也是一种守护。',
   },
   {
     id: 'sample-grandma',
@@ -177,15 +252,15 @@ async function loadScreen() {
       app.select(props.query.profileId);
     loading.value =
       !app.bootstrap ||
-      (props.page === 'chat' && !app.messagesReady) ||
+      (chatConversation.value && !app.messagesReady) ||
       (props.page === 'memories' && !app.libraryReady) ||
-      (props.page === 'square' && !screenReady.value) ||
+      (['square', 'shares'].includes(props.page) && !screenReady.value) ||
       (!['home', 'login'].includes(props.page) && !screenReady.value);
     await app.refresh(
       !['home', 'login'].includes(props.page),
       Boolean(props.query?.profileId),
-      props.page === 'chat',
-      ['square', 'memories', 'compose'].includes(props.page),
+      chatConversation.value,
+      ['square', 'shares', 'memories', 'compose'].includes(props.page),
     );
     if (props.page === 'login' && app.session.userId && !recovering.value) {
       replace(app.current ? 'home' : 'create');
@@ -195,8 +270,13 @@ async function loadScreen() {
       replace('home', props.query?.saved === '1' ? '?saved=1' : '');
       return;
     }
+    if (props.page === 'square' && props.query?.view === 'mine') {
+      replace('shares');
+      return;
+    }
     if (props.page === 'square') await app.fetchPublicPosts();
-    if (props.page === 'memories') await app.fetchLibrary();
+    if (props.page === 'shares') await app.fetchOwnPosts();
+    if (['memories', 'me'].includes(props.page)) await app.fetchLibrary();
     if (
       ['story', 'compose'].includes(props.page) &&
       props.query?.id &&
@@ -204,14 +284,19 @@ async function loadScreen() {
       !selectedPost.value
     )
       await app.fetchPost(props.query.id);
+    if (props.page === 'story' && selectedPostIsInteractive.value && selectedPost.value)
+      await app.fetchStoryComments(selectedPost.value.id);
     if (editingStory.value && !ownsSelectedPost.value)
       throw new Error('这段内容不属于当前空间，无法修改。');
     if (props.page === 'compose' && props.query?.memoryId && !shareMemory.value)
       throw new Error('这条记忆暂时找不到，请返回我的记忆重新选择。');
     if (editingMemory.value && !selectedMemory.value)
       throw new Error('这条记忆暂时找不到，请返回我的记忆重新选择。');
+    if (editingMemory.value && selectedMemory.value)
+      memoryUseForAi.value = selectedMemory.value.useForAi;
     restoreProfileDraft();
     restoreChatDraft();
+    initializeChatMemories();
     restoreEditorDraft();
     if (
       props.page === 'compose' &&
@@ -226,8 +311,19 @@ async function loadScreen() {
       form.public = Boolean(app.bootstrap?.features?.publicSquare);
       form.publicConsent = false;
     }
+    if (
+      props.page === 'compose' &&
+      props.query?.from === 'square' &&
+      !editingStory.value &&
+      !form.body &&
+      !storyImages.value.length
+    ) {
+      form.public = true;
+      form.publicConsent = true;
+    }
     editorDraftReady = true;
     screenReady.value = true;
+    if (props.page === 'story' && props.query?.comment === '1') focusStoryComment();
   } catch (error) {
     app.error = error instanceof Error ? error.message : '暂时无法完成，请重试';
   } finally {
@@ -299,6 +395,155 @@ function needProfile(next: string) {
   }
   go(app.current ? next : 'create', app.current ? profileQuery() : '');
 }
+function storyAuthor(post: { authorName?: string; isOfficial?: boolean }) {
+  return post.authorName || (post.isOfficial ? '萤火故事馆' : '萤火用户');
+}
+function squareDate(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const elapsed = Date.now() - date.getTime();
+  if (elapsed >= 0 && elapsed < 60_000) return '刚刚';
+  if (elapsed >= 0 && elapsed < 3_600_000)
+    return Math.max(1, Math.floor(elapsed / 60_000)) + '分钟前';
+  if (elapsed >= 0 && elapsed < 86_400_000)
+    return Math.max(1, Math.floor(elapsed / 3_600_000)) + '小时前';
+  const now = new Date();
+  if (date.getFullYear() === now.getFullYear())
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+function storyMeta(post: { isOfficial?: boolean; createdAt?: string }) {
+  const date = squareDate(post.createdAt);
+  if (post.isOfficial) return date || '官方内容';
+  return date;
+}
+function storyAvatar(post: { authorName?: string; isOfficial?: boolean }) {
+  return post.isOfficial ? '萤' : storyAuthor(post).trim().slice(0, 1) || '光';
+}
+function storyMemorialLabel(post: { profileRelationship?: string; profileName?: string }) {
+  const name = post.profileRelationship || post.profileName;
+  return name ? `纪念${name}` : '一段想念';
+}
+function openStory(id: string, comment = false) {
+  go('story', '?id=' + encodeURIComponent(id) + (comment ? '&comment=1' : ''));
+}
+function toggleStoryLight(post: { id: string; viewerHasLit?: boolean }) {
+  if (app.busy) return;
+  const nextActive = !post.viewerHasLit;
+  void app.run(async () => {
+    await app.setStoryLight(post.id, nextActive);
+    app.status = nextActive ? '已为这段故事点亮。' : '已收回这束萤火。';
+  });
+}
+function chooseSquareMemory(memory: { id: string; profileId: string }) {
+  squareSharePickerOpen.value = false;
+  const selected = app.libraryMemories.find((item) => item.id === memory.id);
+  if (!selected) return;
+  if (memory.profileId !== app.currentId) app.select(memory.profileId);
+  form.title = selected.title;
+  form.body = selected.body;
+  app.status = '已带入这段记忆，你可以继续修改后再发布。';
+}
+function recordFromSquarePicker() {
+  squareSharePickerOpen.value = false;
+  needProfile('memory-edit');
+}
+function openSquareSharePicker() {
+  if (app.busy) return;
+  void app.run(async () => {
+    if (!app.session.userId) await app.login();
+    if (!app.current && app.profiles[0]) {
+      app.select(app.profiles[0].id);
+      await app.refresh(true, true);
+    }
+    if (!app.current) {
+      go('create');
+      return;
+    }
+    await app.fetchLibrary();
+    squareSharePickerOpen.value = true;
+  });
+}
+function openSquareComposer() {
+  if (app.busy) return;
+  void app.run(async () => {
+    if (!app.session.userId) await app.login();
+    if (!app.current && app.profiles[0]) app.select(app.profiles[0].id);
+    if (!app.current) {
+      go('create');
+      return;
+    }
+    go('compose', '?from=square&profileId=' + encodeURIComponent(app.currentId));
+  });
+}
+function selectPublishProfile(id: string) {
+  if (id !== app.currentId) app.select(id);
+  publishProfilePickerOpen.value = false;
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.set('profileId', id);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }
+}
+function openSquareComments(id: string) {
+  activeSquarePostId.value = id;
+  storyCommentText.value = '';
+  replyTarget.value = null;
+  squareCommentSheetOpen.value = true;
+  void app.run(async () => {
+    await app.fetchStoryComments(id);
+  });
+}
+function closeSquareComments() {
+  squareCommentSheetOpen.value = false;
+  storyCommentText.value = '';
+  replyTarget.value = null;
+}
+function chooseReply(comment: { id: string; authorName: string }) {
+  replyTarget.value = { id: comment.id, name: comment.authorName };
+  void nextTick(() => {
+    const field = document.getElementById('square-comment-input') as HTMLInputElement | null;
+    field?.focus({ preventScroll: true });
+  });
+}
+function focusStoryComment() {
+  void nextTick(() => {
+    const field = document.getElementById('story-comment-input') as HTMLTextAreaElement | null;
+    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    field?.focus({ preventScroll: true });
+  });
+}
+function submitStoryComment() {
+  const text = storyCommentText.value.trim();
+  const post = selectedPost.value;
+  if (!post || !text || app.busy) return;
+  void app.run(async () => {
+    await app.addStoryComment(post.id, text, replyTarget.value?.id);
+    storyCommentText.value = '';
+    replyTarget.value = null;
+    app.status = '留言已发布。';
+  });
+}
+function submitSquareComment() {
+  const text = storyCommentText.value.trim();
+  const post = activeSquarePost.value;
+  if (!post || !text || app.busy) return;
+  void app.run(async () => {
+    await app.addStoryComment(post.id, text, replyTarget.value?.id);
+    storyCommentText.value = '';
+    replyTarget.value = null;
+  });
+}
+function openProfileChat(id: string) {
+  if (id !== app.currentId) {
+    app.select(id);
+    chatText.value = '';
+    chatPhotoDraft.value = '';
+    activeChatPanel.value = 'none';
+  }
+  go('chat', '?profileId=' + encodeURIComponent(id));
+}
 function toggle(key: 'public' | 'publicConsent', e: any) {
   form[key] = e.detail.value.length > 0;
 }
@@ -320,13 +565,17 @@ function create() {
     );
     if (!editing.value && app.session.userId)
       uni.removeStorageSync('yinghuo.profileDraft.' + app.session.userId);
-    replace('home', editing.value ? '' : '?saved=1');
+    replace(editing.value ? 'home' : 'chat', editing.value ? '' : profileQuery());
   });
 }
 function profileInitial(profile: { name: string; relationship?: string; nickname?: string }) {
   return (
     (profile.nickname || profile.name || profile.relationship || '萤').trim().charAt(0) || '萤'
   );
+}
+function editCurrentProfile() {
+  if (!app.currentId) return;
+  go('create', '?edit=1&profileId=' + encodeURIComponent(app.currentId));
 }
 function formInitial() {
   return profileDisplayName.value.charAt(0) || '萤';
@@ -354,6 +603,56 @@ async function compressAvatar(source: string) {
   if (result.length > 80_000) throw new Error('头像文件太大，请换一张图片');
   return result;
 }
+async function compressStoryPhoto(source: string) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  const maxSide = 840;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('当前浏览器无法处理照片');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  let quality = 0.76;
+  let result = canvas.toDataURL('image/jpeg', quality);
+  while (result.length > 150_000 && quality > 0.34) {
+    quality -= 0.07;
+    result = canvas.toDataURL('image/jpeg', quality);
+  }
+  if (result.length > 150_000) throw new Error('有一张照片太大，请更换或先裁剪');
+  return result;
+}
+function chooseStoryPhotos() {
+  const remaining = 9 - storyImages.value.length;
+  if (remaining <= 0 || storyPhotoProcessing.value) return;
+  uni.chooseImage({
+    count: remaining,
+    sizeType: ['compressed'],
+    success: (result) => {
+      void app.run(async () => {
+        storyPhotoProcessing.value = true;
+        try {
+          const next = [...storyImages.value];
+          for (const source of result.tempFilePaths.slice(0, remaining)) {
+            const photo = await compressStoryPhoto(source);
+            if ([...next, photo].reduce((sum, item) => sum + item.length, 0) > 1_100_000)
+              throw new Error('照片总大小超过限制，请减少一两张后再试');
+            next.push(photo);
+          }
+          storyImages.value = next;
+          app.status = `已选择 ${next.length} 张照片。`;
+        } finally {
+          storyPhotoProcessing.value = false;
+        }
+      });
+    },
+  });
+}
+function removeStoryPhoto(index: number) {
+  storyImages.value = storyImages.value.filter((_, current) => current !== index);
+}
 function chooseProfileAvatar() {
   uni.chooseImage({
     count: 1,
@@ -378,6 +677,10 @@ function switchProfile(id: string) {
   if (id === app.currentId || app.busy) return;
   app.select(id);
   selectedChatMemories.value = [];
+  chatText.value = '';
+  chatPhotoDraft.value = '';
+  activeChatPanel.value = 'none';
+  chatContextInitializedFor.value = '';
   replace(props.page, '?profileId=' + encodeURIComponent(id));
 }
 function memorySave() {
@@ -385,7 +688,7 @@ function memorySave() {
     const input = {
       title: memoryTitle(form.title, form.body),
       body: form.body,
-      useForAi: selectedMemory.value?.useForAi || false,
+      useForAi: memoryUseForAi.value,
     };
     const savedMemory =
       editingMemory.value && selectedMemory.value
@@ -399,6 +702,8 @@ function memorySave() {
         await app.publish({
           title: memoryTitle(form.title, form.body, 60),
           body: form.body,
+          profileId: app.currentId || null,
+          media: [],
           visibility: 'public',
           publicConsent: form.publicConsent,
         });
@@ -436,12 +741,24 @@ function chatDraftKey() {
     ? 'yinghuo.chatDraft.' + app.session.userId + '.' + app.currentId
     : '';
 }
+function initializeChatMemories() {
+  if (
+    !chatConversation.value ||
+    !app.currentId ||
+    chatContextInitializedFor.value === app.currentId
+  )
+    return;
+  const explicitlyEnabled = app.memories.filter((memory) => memory.useForAi);
+  const defaults = explicitlyEnabled.length ? explicitlyEnabled : app.memories;
+  selectedChatMemories.value = defaults.slice(0, 5).map((memory) => memory.id);
+  chatContextInitializedFor.value = app.currentId;
+}
 function restoreChatDraft() {
-  if (props.page !== 'chat' || !chatDraftKey() || chatText.value) return;
+  if (!chatConversation.value || !chatDraftKey() || chatText.value) return;
   chatText.value = (uni.getStorageSync(chatDraftKey()) as string) || '';
 }
 watch(chatText, (value) => {
-  if (props.page === 'chat' && chatDraftKey() && !chatReplyPending.value) {
+  if (chatConversation.value && chatDraftKey()) {
     if (value) storeDraft(chatDraftKey(), value);
     else {
       uni.removeStorageSync(chatDraftKey());
@@ -458,8 +775,146 @@ function toggleChatMemory(id: string) {
     ? selectedChatMemories.value.filter((current) => current !== id)
     : [...selectedChatMemories.value, id].slice(0, 5);
 }
-function useChatPrompt(prompt: string) {
-  if (!app.busy) chatText.value = prompt;
+function toggleChatPanel(panel: 'tools' | 'emoji' | 'memories') {
+  activeChatPanel.value = activeChatPanel.value === panel ? 'none' : panel;
+  scrollChatToEnd();
+}
+function appendEmoji(name: (typeof commonEmojis)[number]) {
+  chatText.value += emojiCharacters[name];
+}
+function openChatMemoryPanel() {
+  activeChatPanel.value = 'memories';
+}
+
+async function compressChatPhoto(source: string) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  const longest = Math.max(image.naturalWidth, image.naturalHeight);
+  const target = Math.min(640, longest);
+  const ratio = longest ? target / longest : 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('当前浏览器无法处理照片');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  let quality = 0.78;
+  let result = canvas.toDataURL('image/jpeg', quality);
+  while (result.length > 60_000 && quality > 0.38) {
+    quality -= 0.08;
+    result = canvas.toDataURL('image/jpeg', quality);
+  }
+  if (result.length > 60_000) {
+    const smaller = document.createElement('canvas');
+    const resizeRatio = Math.min(1, 420 / Math.max(canvas.width, canvas.height));
+    smaller.width = Math.max(1, Math.round(canvas.width * resizeRatio));
+    smaller.height = Math.max(1, Math.round(canvas.height * resizeRatio));
+    smaller.getContext('2d')?.drawImage(canvas, 0, 0, smaller.width, smaller.height);
+    result = smaller.toDataURL('image/jpeg', 0.58);
+  }
+  if (result.length > 60_000) throw new Error('照片仍然太大，请换一张再试');
+  return result;
+}
+
+function chooseChatPhoto(sourceType: 'album' | 'camera') {
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: [sourceType],
+    success: (result) => {
+      const source = result.tempFilePaths[0];
+      if (!source) return;
+      void (async () => {
+        try {
+          app.error = '';
+          chatPhotoProcessing.value = true;
+          chatPhotoDraft.value = await compressChatPhoto(source);
+          activeChatPanel.value = 'none';
+          app.status = '照片已选好，可以补充一句说明，也可以直接发送。';
+          scrollChatToEnd();
+        } catch (error) {
+          app.error = error instanceof Error ? error.message : '照片处理失败，请重新选择';
+        } finally {
+          chatPhotoProcessing.value = false;
+        }
+      })();
+    },
+  });
+}
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult:
+    | ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void)
+    | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+let speechRecognition: BrowserSpeechRecognition | null = null;
+function finishVoiceInput() {
+  const recognized = voiceTranscript.value.trim();
+  voiceListening.value = false;
+  speechRecognition = null;
+  if (!recognized) return;
+  chatText.value = [chatText.value.trim(), recognized].filter(Boolean).join('');
+  chatInputMode.value = 'text';
+  app.status = '语音已转成文字，检查后再发送。';
+}
+function startVoiceInput() {
+  if (voiceListening.value || app.busy) return;
+  if (!voiceSupported.value) {
+    app.status = '当前浏览器暂不支持语音识别，可以继续使用文字输入。';
+    return;
+  }
+  const scope = window as typeof window & {
+    SpeechRecognition?: new () => BrowserSpeechRecognition;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+  };
+  const Recognition = scope.SpeechRecognition || scope.webkitSpeechRecognition;
+  if (!Recognition) return;
+  voiceTranscript.value = '';
+  app.error = '';
+  const recognition = new Recognition();
+  speechRecognition = recognition;
+  recognition.lang = 'zh-CN';
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  recognition.onresult = (event) => {
+    let transcript = '';
+    for (let index = 0; index < event.results.length; index += 1)
+      transcript += event.results[index]?.[0]?.transcript || '';
+    voiceTranscript.value = transcript;
+  };
+  recognition.onerror = (event) => {
+    voiceListening.value = false;
+    speechRecognition = null;
+    if (event.error !== 'aborted') app.error = '没有听清，请按住后重新说一遍。';
+  };
+  recognition.onend = finishVoiceInput;
+  try {
+    recognition.start();
+    voiceListening.value = true;
+  } catch {
+    speechRecognition = null;
+    app.error = '麦克风暂时无法使用，请检查浏览器权限。';
+  }
+}
+function stopVoiceInput() {
+  if (!voiceListening.value || !speechRecognition) return;
+  speechRecognition.stop();
+}
+function cancelVoiceInput() {
+  if (!speechRecognition) return;
+  voiceTranscript.value = '';
+  speechRecognition.abort();
+  speechRecognition = null;
+  voiceListening.value = false;
 }
 function shareCurrentMemory() {
   if (selectedMemory.value)
@@ -468,62 +923,151 @@ function shareCurrentMemory() {
       '?memoryId=' + selectedMemory.value.id + '&profileId=' + selectedMemory.value.profileId,
     );
 }
-function sendChat() {
-  const text = chatText.value.trim();
-  if (!text || !chatConsent.value || app.busy) return;
+function performChatSend(text: string, imageDataUrl = '') {
+  if (app.busy) return;
+  activeMessageActionId.value = '';
   pendingChatText.value = text;
+  pendingChatPhoto.value = imageDataUrl;
   chatReplyPending.value = true;
   chatText.value = '';
+  chatPhotoDraft.value = '';
+  activeChatPanel.value = 'none';
   void app.run(async () => {
     try {
-      await app.send(text, selectedChatMemories.value);
-      uni.removeStorageSync(chatDraftKey());
-      localDraftSaved.value = false;
+      await app.send(text, selectedChatMemories.value, imageDataUrl || undefined);
+      if (!chatText.value) {
+        uni.removeStorageSync(chatDraftKey());
+        localDraftSaved.value = false;
+      }
     } catch (error) {
-      chatText.value = text;
+      chatText.value = [text, chatText.value].filter(Boolean).join('\n');
+      chatPhotoDraft.value = imageDataUrl;
       throw error;
     } finally {
       pendingChatText.value = '';
+      pendingChatPhoto.value = '';
       chatReplyPending.value = false;
     }
   });
 }
 
+function sendChat() {
+  const text = chatText.value.trim();
+  if ((!text && !chatPhotoDraft.value) || app.busy) return;
+  performChatSend(text, chatPhotoDraft.value);
+}
+
+function showContextInfo() {
+  if (props.page === 'square') {
+    uni.showModal({
+      title: '关于萤火广场',
+      content:
+        '这里只展示用户主动公开并审核通过的记忆副本。私密聊天、未公开草稿和手机号不会出现在这里。',
+      showCancel: false,
+      confirmText: '我知道了',
+    });
+    return;
+  }
+  uni.showModal({
+    title: '关于 AI 模拟回应',
+    content:
+      '这里会根据你主动提供的资料和记忆，以 TA 的口吻生成回应。它不是真人，也不代表 TA 的真实意识；记忆越完整，表达会越接近你熟悉的 TA。',
+    showCancel: false,
+    confirmText: '我知道了',
+  });
+}
+
 function scrollChatToEnd() {
-  if (props.page !== 'chat') return;
+  if (!chatConversation.value) return;
   void nextTick(() => {
     const thread = document.getElementById('chat-thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
   });
 }
 function onChatFocus() {
+  activeChatPanel.value = 'none';
   scrollChatToEnd();
   requestAnimationFrame(() => requestAnimationFrame(scrollChatToEnd));
 }
 watch(
-  () => [loading.value, app.messages.length, pendingChatText.value, chatReplyPending.value],
+  () => [
+    loading.value,
+    app.messages.length,
+    pendingChatText.value,
+    pendingChatPhoto.value,
+    chatReplyPending.value,
+    activeChatPanel.value,
+  ],
   scrollChatToEnd,
   {
     flush: 'post',
   },
 );
 
-function clearConversation() {
-  uni.showModal({
-    title: '开始一段新对话？',
-    content: '当前聊天会从页面隐藏并转为历史记录，仍会出现在数据导出中；私密记忆不会被删除。',
-    confirmText: '开始新对话',
-    cancelText: '取消',
-    success: (result) => {
-      if (!result.confirm) return;
-      void app.run(async () => {
-        await app.resetConversation();
-        selectedChatMemories.value = [];
-        chatConsent.value = false;
-        app.status = '已开始一段新对话。';
-      });
-    },
+function chatMessageAlreadySaved(text: string) {
+  const normalized = text.trim();
+  return Boolean(normalized && app.memories.some((memory) => memory.body.trim() === normalized));
+}
+
+function toggleMessageActions(id: string) {
+  if (app.busy) return;
+  activeMessageActionId.value = activeMessageActionId.value === id ? '' : id;
+}
+
+function saveChatMessageAsMemory(text: string) {
+  const body = text.trim();
+  if (!body || chatMessageAlreadySaved(body) || app.busy) return;
+  void app.run(async () => {
+    const memory = await app.addMemory({
+      title: memoryTitle('', body),
+      body,
+      useForAi: true,
+    });
+    if (!selectedChatMemories.value.includes(memory.id) && selectedChatMemories.value.length < 5)
+      selectedChatMemories.value = [...selectedChatMemories.value, memory.id];
+    app.status = '已保存为人物记忆，之后的回复会参考。';
   });
+}
+
+function splitAssistantMessage(text: string) {
+  const normalized = text.trim();
+  if (!normalized) return [''];
+  const paragraphParts = normalized
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (paragraphParts.length > 1) return paragraphParts.slice(0, 3);
+  const sentences = normalized.match(/[^。！？!?]+[。！？!?]?/g)?.map((part) => part.trim()) || [];
+  if (sentences.length <= 1) return [normalized];
+  if (sentences.length <= 3) return sentences;
+  return [sentences[0], sentences[1], sentences.slice(2).join('')];
+}
+
+function chatMessageTimeLabel(index: number) {
+  const message = realChatMessages.value[index];
+  if (!message) return '';
+  const current = new Date(message.createdAt);
+  if (Number.isNaN(current.getTime())) return '';
+  const previous = index > 0 ? new Date(realChatMessages.value[index - 1]!.createdAt) : null;
+  const sameDay =
+    previous &&
+    current.getFullYear() === previous.getFullYear() &&
+    current.getMonth() === previous.getMonth() &&
+    current.getDate() === previous.getDate();
+  if (sameDay && current.getTime() - previous.getTime() < 5 * 60 * 1000) return '';
+  const today = new Date();
+  const dateLabel =
+    current.getFullYear() === today.getFullYear() &&
+    current.getMonth() === today.getMonth() &&
+    current.getDate() === today.getDate()
+      ? '今天'
+      : `${current.getMonth() + 1}月${current.getDate()}日`;
+  const timeLabel = current.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${dateLabel} ${timeLabel}`;
 }
 
 function restoreProfileDraft() {
@@ -641,8 +1185,10 @@ function storyDraftKey() {
   return app.session.userId
     ? 'yinghuo.storyDraft.' +
         app.session.userId +
+        '.profile.' +
+        (app.currentId || 'none') +
         (props.query?.memoryId
-          ? '.profile.' + app.currentId + '.memory.' + props.query.memoryId
+          ? '.memory.' + props.query.memoryId
           : editingStory.value
             ? '.edit.' + props.query?.id
             : '')
@@ -659,76 +1205,102 @@ function restoreEditorDraft() {
         : '';
   if (!key || (!editingMemory.value && !editingStory.value && (form.title || form.body))) return;
   const draft = uni.getStorageSync(key) as
-    | { title?: string; body?: string; public?: boolean; publicConsent?: boolean }
+    | {
+        title?: string;
+        body?: string;
+        public?: boolean;
+        publicConsent?: boolean;
+        useForAi?: boolean;
+        media?: string[];
+      }
     | undefined;
   if (!draft || typeof draft !== 'object') return;
   form.title = typeof draft.title === 'string' ? draft.title : '';
   form.body = typeof draft.body === 'string' ? draft.body : '';
-  if (props.page === 'memory-edit' && !editingMemory.value) {
+  storyImages.value = Array.isArray(draft.media)
+    ? draft.media.filter((item) => typeof item === 'string').slice(0, 9)
+    : [];
+  if (props.page === 'compose') {
     form.public = draft.public === true;
     form.publicConsent = draft.publicConsent === true;
   }
-  localDraftSaved.value = Boolean(form.title || form.body);
-  if (form.title || form.body) app.status = '已恢复你未保存的草稿。';
+  if (props.page === 'memory-edit' && !editingMemory.value) {
+    form.public = draft.public === true;
+    form.publicConsent = draft.publicConsent === true;
+    memoryUseForAi.value = draft.useForAi === true;
+  }
+  localDraftSaved.value = Boolean(form.title || form.body || storyImages.value.length);
+  if (form.title || form.body || storyImages.value.length) app.status = '已恢复你未保存的草稿。';
 }
 
 function saveEditorDraft() {
   if (!editorDraftReady || !['memory-edit', 'compose'].includes(props.page)) return;
   const key = props.page === 'memory-edit' ? memoryDraftKey() : storyDraftKey();
   if (!key) return;
-  if (!form.title && !form.body) {
+  if (!form.title && !form.body && !storyImages.value.length) {
     uni.removeStorageSync(key);
     return;
   }
   storeDraft(key, {
     title: form.title,
     body: form.body,
+    ...(props.page === 'compose'
+      ? {
+          public: form.public,
+          publicConsent: form.publicConsent,
+          media: storyImages.value,
+        }
+      : {}),
     ...(props.page === 'memory-edit'
-      ? { public: form.public, publicConsent: form.publicConsent }
+      ? {
+          public: form.public,
+          publicConsent: form.publicConsent,
+          useForAi: memoryUseForAi.value,
+        }
       : {}),
   });
 }
 
 watch(
-  () => [app.session.userId, app.currentId, form.title, form.body, form.public, form.publicConsent],
+  () => [
+    app.session.userId,
+    app.currentId,
+    form.title,
+    form.body,
+    form.public,
+    form.publicConsent,
+    memoryUseForAi.value,
+  ],
   saveEditorDraft,
   {
     flush: 'sync',
   },
 );
+watch(storyImages, saveEditorDraft, { deep: true });
 
 function publish() {
-  const action = () =>
-    app.run(async () => {
-      const input = {
-        title: memoryTitle(form.title, form.body, 60),
+  void app.run(async () => {
+    const input = {
+      title: memoryTitle(form.title, form.body, 60),
+      body: form.body,
+      profileId: app.currentId || null,
+      media: storyImages.value,
+      visibility: form.public ? 'public' : 'private',
+      publicConsent: form.public ? true : form.publicConsent,
+    };
+    if (editingStory.value && selectedPost.value)
+      await app.updatePost(selectedPost.value.id, input);
+    else if (!form.public && app.current && !storyImages.value.length)
+      await app.addMemory({
+        title: memoryTitle(form.title, form.body),
         body: form.body,
-        visibility: form.public ? 'public' : 'private',
-        publicConsent: form.publicConsent,
-      };
-      if (editingStory.value && selectedPost.value)
-        await app.updatePost(selectedPost.value.id, input);
-      else if (!form.public && app.current)
-        await app.addMemory({
-          title: memoryTitle(form.title, form.body),
-          body: form.body,
-          useForAi: false,
-        });
-      else await app.publish(input);
-      const key = storyDraftKey();
-      if (key) uni.removeStorageSync(key);
-      replace(form.public ? 'square' : 'memories', form.public ? '?view=mine&saved=1' : '?saved=1');
-    });
-  if (form.public)
-    uni.showModal({
-      title: '确认提交到广场？',
-      content: '故事将在审核通过后展示。请确认已获得相关人物的分享许可。',
-      cancelText: '取消',
-      success: (r) => {
-        if (r.confirm) void action();
-      },
-    });
-  else void action();
+        useForAi: false,
+      });
+    else await app.publish(input);
+    const key = storyDraftKey();
+    if (key) uni.removeStorageSync(key);
+    replace(form.public ? 'shares' : 'memories', '?saved=1');
+  });
 }
 function editStory() {
   if (!selectedPost.value || !ownsSelectedPost.value) return;
@@ -746,7 +1318,7 @@ function confirmDeleteStory() {
       if (!result.confirm) return;
       void app.run(async () => {
         await app.deletePost(id);
-        replace('memories');
+        replace('shares');
       });
     },
   });
@@ -760,13 +1332,6 @@ function choosePhoto() {
     },
   });
 }
-watch(
-  () => props.query?.view,
-  (view) => {
-    if (props.page === 'square' && view === 'mine') squareView.value = '我的';
-  },
-  { immediate: true },
-);
 function info(title: string, content: string) {
   uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
 }
@@ -783,7 +1348,7 @@ function bindPhone() {
     await app.bindPhone({ phone });
     form.phone = '';
     phonePanelOpen.value = false;
-    app.status = '手机号尾号已记录（未验证）。账号找回仍需萤火号和安全恢复码。';
+    app.status = '手机号已安全记录。短信找回接入前，请同时保存备用找回卡。';
   });
 }
 function clearPhone() {
@@ -954,8 +1519,11 @@ watch(
     if (!editingStory.value || !selectedPost.value) return;
     form.title = selectedPost.value.title;
     form.body = selectedPost.value.body;
+    storyImages.value = selectedPost.value.media || [];
+    if (selectedPost.value.profileId && selectedPost.value.profileId !== app.currentId)
+      app.select(selectedPost.value.profileId);
     form.public = selectedPost.value.visibility === 'public';
-    form.publicConsent = false;
+    form.publicConsent = selectedPost.value.visibility === 'public';
   },
   { immediate: true },
 );
@@ -1037,7 +1605,22 @@ function confirmDeleteAccount() {
 }
 </script>
 <template>
-  <AppShell :page="page" :title="shellTitle">
+  <AppShell
+    :page="page"
+    :title="shellTitle"
+    :focused="chatConversation"
+    :subtitle="shellSubtitle"
+    :show-info="chatConversation || page === 'square'"
+    :heading-action-label="
+      chatConversation && app.current ? '编辑' + app.current.name + '的人物资料' : undefined
+    "
+    :heading-avatar-url="chatConversation ? app.current?.avatarUrl || undefined : undefined"
+    :heading-avatar-initial="
+      chatConversation && app.current ? profileInitial(app.current) : undefined
+    "
+    @info="showContextInfo"
+    @heading="editCurrentProfile"
+  >
     <view
       v-if="loading && page !== 'home'"
       class="loading-state"
@@ -1071,49 +1654,31 @@ function confirmDeleteAccount() {
           />
         </view>
         <template v-else-if="app.current">
-          <view class="returning-hero">
-            <view
-              class="sprite mascot returning-mascot"
-              role="img"
-              aria-label="一只发光的大萤火虫"
-            />
-            <view>
-              <small>继续留住你们的日常</small>
+          <view class="yh-home-hero">
+            <view class="yh-hero-copy">
+              <small>今天，也有人在等你想起</small>
               <h1>{{ app.current.name }}的萤火</h1>
-              <p>想起一句话，就回来记下来。</p>
+              <p>想起一句话，就回来记下来。小萤会替你把零散的记忆轻轻收好。</p>
             </view>
+            <view class="sprite mascot yh-home-mascot" role="img" aria-label="一只发光的大萤火虫" />
+            <i class="yh-spark one" /><i class="yh-spark two" /><i class="yh-spark three" />
           </view>
-          <view class="person-switch-heading">
-            <small>切换人物</small>
-            <button
-              role="button"
-              class="text-button"
-              @click="go('create', '?edit=1&profileId=' + app.currentId)"
+          <view class="yh-person-strip">
+            <image
+              v-if="app.current.avatarUrl"
+              class="profile-avatar yh-person-avatar"
+              :src="app.current.avatarUrl"
+              mode="aspectFill"
+              :aria-label="app.current.name + '的头像'"
+            />
+            <view v-else class="profile-avatar fallback yh-person-avatar">{{
+              profileInitial(app.current)
+            }}</view>
+            <view class="yh-person-copy"
+              ><strong>{{ app.current.name }}</strong
+              ><small>已留下 {{ app.memories.length }} 段记忆</small></view
             >
-              编辑当前人物
-            </button>
-          </view>
-          <view class="profile-tabs home-profile-tabs" aria-label="切换人物">
-            <button
-              role="button"
-              v-for="p in app.profiles"
-              :key="p.id"
-              class="profile-tab"
-              :class="{ active: app.currentId === p.id }"
-              :aria-pressed="app.currentId === p.id"
-              @click="switchProfile(p.id)"
-            >
-              <image
-                v-if="p.avatarUrl"
-                class="profile-avatar"
-                :src="p.avatarUrl"
-                mode="aspectFill"
-              /><view v-else class="profile-avatar fallback">{{ profileInitial(p) }}</view
-              ><text>{{ p.name }}</text>
-            </button>
-            <button role="button" class="profile-tab add-person-tab" @click="go('create')">
-              <AppIcon name="plus" /><text>添加人物</text>
-            </button>
+            <button role="button" class="text-button" @click="go('chat')">切换人物</button>
           </view>
           <view class="home-primary-actions">
             <button
@@ -1124,8 +1689,7 @@ function confirmDeleteAccount() {
               @click="needProfile('memory-edit')"
               :aria-disabled="app.busy"
             >
-              <AppIcon name="plus" />
-              <text><strong>记录一件小事</strong><small>默认仅自己可见</small></text>
+              <text><strong>记录一件小事</strong></text>
             </button>
             <button
               role="button"
@@ -1134,54 +1698,60 @@ function confirmDeleteAccount() {
               :aria-label="'和' + app.current.name + '聊聊'"
               @click="go('chat', profileQuery())"
             >
-              <AppIcon name="chat" />
               <text
-                ><strong>和{{ app.current.name }}聊聊</strong><small>AI 根据记忆生成</small></text
+                ><strong>和{{ app.current.name }}聊聊</strong></text
               >
             </button>
           </view>
-          <view v-if="query?.saved === '1'" class="saved-state" role="status"
-            >已保存到{{ app.current.name }}的记忆。</view
-          >
-          <view class="section"
-            ><h2>最近留下的记忆</h2>
-            <button role="button" class="text-button" @click="go('memories')">
-              查看全部
-            </button></view
-          >
+          <view v-if="query?.saved === '1'" class="saved-state" role="status">
+            已保存到{{ app.current.name }}的记忆。
+          </view>
+          <view class="section">
+            <h2>最近的记忆</h2>
+            <button role="button" class="text-button" @click="go('memories')">回忆册</button>
+          </view>
           <button
             role="button"
             v-if="app.memories[0]"
             class="memory-preview"
             @click="go('memory', '?id=' + app.memories[0].id + '&profileId=' + app.currentId)"
           >
+            <small>{{ app.current.name }} · 仅自己可见</small>
             <h3>{{ app.memories[0].title }}</h3>
             <p>{{ app.memories[0].body }}</p>
-            <small>已保存 · 仅自己可见</small>
           </button>
           <view v-else class="notice">还没有留下记忆，今天想到的一句话就可以。</view>
-          <view v-if="recoveryNeeded" class="recovery-reminder"
-            ><text>内容已保存，跨设备找回还未设置。</text
-            ><button role="button" class="text-button" @click="go('me')">设置找回方式</button></view
+          <view v-if="recoveryNeeded" class="recovery-reminder">
+            <text>内容已保存，跨设备找回还未设置。</text>
+            <button role="button" class="text-button" @click="go('me')">设置找回方式</button>
+          </view>
+          <view class="yh-privacy-note"
+            ><AppIcon name="lock" /><text
+              >记忆默认只属于你。只有主动开启“分享到广场”，它才会公开。</text
+            ></view
           >
         </template>
-        <view v-else class="hero first-visit">
-          <text class="wordmark">萤火</text>
-          <h1>把关于 TA 的小事，<br />慢慢留下。</h1>
-          <p>写下一句话，保存在自己的记忆空间。<br />以后想起时，可以回来看看。</p>
-          <view class="hero-art"
-            ><view class="sprite mascot" role="img" aria-label="小萤，萤火记忆伙伴"
-          /></view>
+        <view v-else class="hero first-visit yh-guest-home">
+          <small class="eyebrow">FIREFLY · 珍藏每一点光</small>
+          <h1>让想念，<br />有一个地方安放。</h1>
+          <p>无论 TA 是否在身边，都可以从一句话开始，珍藏你们的故事。</p>
+          <view class="yh-guest-art">
+            <view
+              class="sprite mascot yh-guest-mascot"
+              role="img"
+              aria-label="小萤，萤火记忆伙伴"
+            />
+          </view>
           <button
             role="button"
-            class="btn"
+            class="btn yh-guest-action"
             :disabled="app.busy || !app.bootstrap"
             @click="openHomePrimary"
             :aria-disabled="app.busy || !app.bootstrap"
           >
-            {{ app.busy ? '正在进入…' : '写下第一条记忆' }}
+            {{ app.busy ? '正在进入…' : '为 TA 建立记忆空间' }}
           </button>
-          <button role="button" class="text-button" @click="go('square')">先看看故事示例</button>
+          <button role="button" class="text-button" @click="go('square')">先看看广场故事</button>
           <p class="caption">无需先注册，内容默认仅自己可见。</p>
         </view>
         <button
@@ -1275,12 +1845,12 @@ function confirmDeleteAccount() {
         </button>
       </template>
       <template v-else-if="page === 'create'">
-        <h1>{{ editing ? '人物资料' : '为谁留下一条记忆？' }}</h1>
+        <h1>{{ editing ? '人物资料' : '添加想念的人' }}</h1>
         <p class="caption">
           {{
             editing
               ? '熟悉的称呼与故事，可以慢慢补充。'
-              : '选一个称呼，写一句话。其他资料以后再补。'
+              : '先选一个称呼，写下一件最熟悉的小事。其他资料可以以后再补。'
           }}
         </p>
         <view v-if="!app.session.userId" class="notice"
@@ -1322,7 +1892,7 @@ function confirmDeleteAccount() {
               placeholder="例如：妈妈、阿明、我的朋友"
           /></label>
           <label class="field"
-            ><text>{{ editing ? '关于 TA 的故事（选填）' : '想到的一件小事' }}</text
+            ><text>{{ editing ? '关于 TA 的故事（选填）' : '想到的一件小事（必填）' }}</text
             ><textarea
               v-model="form.story"
               aria-label="想到的一件小事"
@@ -1333,34 +1903,6 @@ function confirmDeleteAccount() {
           <view v-if="editing" class="caption"
             >这段资料也是 TA 的第一条记忆；保存后会同步更新。</view
           >
-          <view v-if="!editing" class="editor-actions">
-            <view v-if="app.error" class="notice error" role="alert"
-              >{{ app.error }} 内容还在，可以重试。</view
-            >
-            <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
-            <small class="draft-status" role="status">{{ draftStatus }}</small>
-            <button
-              role="button"
-              class="btn"
-              :disabled="app.busy || !form.relationship.trim() || !form.story.trim()"
-              :aria-disabled="app.busy || !form.relationship.trim() || !form.story.trim()"
-              @click="create"
-            >
-              {{ app.busy ? '正在保存…' : '保存第一条记忆' }}
-            </button>
-            <button
-              role="button"
-              class="text-button"
-              :disabled="app.busy || !form.relationship.trim()"
-              :aria-disabled="app.busy || !form.relationship.trim()"
-              @click="create"
-            >
-              先创建空间，稍后再写
-            </button>
-            <small v-if="!form.relationship.trim()" class="block"
-              >先选择人物称呼；列表里没有，可以点“其他”。</small
-            >
-          </view>
           <button
             role="button"
             class="disclosure-button"
@@ -1413,6 +1955,25 @@ function confirmDeleteAccount() {
               >
             </view>
           </view>
+          <view v-if="!editing" class="editor-actions create-final-actions">
+            <view v-if="app.error" class="notice error" role="alert"
+              >{{ app.error }} 内容还在，可以重试。</view
+            >
+            <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
+            <small class="draft-status" role="status">{{ draftStatus }}</small>
+            <button
+              role="button"
+              class="btn"
+              :disabled="app.busy || !form.relationship.trim() || !form.story.trim()"
+              :aria-disabled="app.busy || !form.relationship.trim() || !form.story.trim()"
+              @click="create"
+            >
+              {{ app.busy ? '正在创建…' : '创建并开始聊天' }}
+            </button>
+            <small v-if="!form.relationship.trim() || !form.story.trim()" class="block"
+              >先选择人物称呼，再写下一句 TA 常说的话或一件熟悉的小事。</small
+            >
+          </view>
           <view v-if="editing" class="editor-actions">
             <view v-if="app.error" class="notice error" role="alert"
               >{{ app.error }} 内容还在，可以修改后重试。</view
@@ -1430,7 +1991,7 @@ function confirmDeleteAccount() {
                 app.busy || !form.relationship.trim() || (!editing && !form.story.trim())
               "
             >
-              {{ app.busy ? '正在保存…' : editing ? '保存资料' : '保存第一条记忆' }}
+              {{ app.busy ? '正在保存…' : editing ? '保存资料' : '创建并开始聊天' }}
             </button>
             <button
               role="button"
@@ -1534,7 +2095,7 @@ function confirmDeleteAccount() {
             class="row"
             @click="go('create', '?edit=1&profileId=' + app.currentId)"
           >
-            补充人物资料 <AppIcon name="arrow" />
+            补充人物资料
           </button>
           <button role="button" class="row" @click="go('create')">
             添加另一位重要的人 <AppIcon name="plus" />
@@ -1615,14 +2176,23 @@ function confirmDeleteAccount() {
         <button role="button" class="btn" @click="recordFromLibrary">再记下一件小事</button>
       </template>
       <template v-else-if="page === 'memory-edit'">
-        <h1>{{ editingMemory ? '修改这段记忆' : '记下一件小事' }}</h1>
+        <h1>{{ editingMemory ? '修改这段记忆' : '记录一件小事' }}</h1>
         <template v-if="app.current">
-          <p class="caption editor-owner">关于 {{ app.current.name }} · 默认只保存在“我的记忆”</p>
+          <p class="caption editor-owner">写给 {{ app.current.name }} 的记忆 · 默认只属于你</p>
+          <view class="editor-progress" aria-label="记录步骤"><i class="active" /><i /><i /></view>
           <view v-if="query?.type" class="notice"
             >照片、声音和视频稍后开放，现在可以先记下一段文字。</view
           >
           <label class="field"
-            ><text>你想记住什么？（必填）</text
+            ><text>给这段记忆一个名字（选填）</text
+            ><input
+              v-model="form.title"
+              aria-label="记忆标题（选填）"
+              maxlength="120"
+              placeholder="留空时，用正文开头作为标题"
+          /></label>
+          <label class="field"
+            ><text>你记得什么？（必填）</text
             ><textarea
               v-model="form.body"
               aria-label="记忆内容"
@@ -1630,50 +2200,45 @@ function confirmDeleteAccount() {
               :placeholder="'一句关于' + app.current.name + '的话，或一件小事…'"
             />
           </label>
-          <label class="field"
-            ><text>标题（选填）</text
-            ><input
-              v-model="form.title"
-              aria-label="记忆标题（选填）"
-              maxlength="120"
-              placeholder="留空时，用正文开头作为标题"
-          /></label>
+          <view class="memory-option-row">
+            <view
+              ><strong>让 TA 在对话中记得</strong
+              ><small>用于生成更贴近 TA 的模拟回应，可随时关闭</small></view
+            >
+            <button
+              role="switch"
+              class="yh-switch"
+              :class="{ active: memoryUseForAi }"
+              :aria-checked="memoryUseForAi"
+              aria-label="让 TA 在对话中记得这段记忆"
+              @click="memoryUseForAi = !memoryUseForAi"
+            />
+          </view>
           <view
             v-if="!editingMemory && app.bootstrap?.features?.publicSquare"
-            class="visibility-picker memory-visibility"
+            class="memory-option-row"
           >
-            <text>保存后是否同时分享到广场？</text>
-            <view class="visibility-options">
-              <button
-                role="button"
-                :class="{ active: !form.public }"
-                :aria-pressed="!form.public"
-                @click="
-                  form.public = false;
-                  form.publicConsent = false;
-                "
-              >
-                <strong>仅自己可见</strong><small>默认，更安心</small>
-              </button>
-              <button
-                role="button"
-                :class="{ active: form.public }"
-                :aria-pressed="form.public"
-                @click="form.public = true"
-              >
-                <strong>同时分享到广场</strong><small>生成独立审核副本</small>
-              </button>
-            </view>
+            <view><strong>分享到萤火广场</strong><small>保存后提交审核，可随时撤回</small></view>
+            <button
+              role="switch"
+              class="yh-switch"
+              :class="{ active: form.public }"
+              :aria-checked="form.public"
+              aria-label="分享到萤火广场"
+              @click="
+                form.public = !form.public;
+                if (!form.public) form.publicConsent = false;
+              "
+            />
           </view>
           <checkbox-group
             v-if="!editingMemory && form.public"
             @change="toggle('publicConsent', $event)"
           >
-            <label class="check public-consent"
-              ><checkbox
-                value="yes"
-                :checked="form.publicConsent"
-              />我确认有权公开这些内容；原记忆仍保持私密。</label
+            <label class="check public-consent yh-share-consent"
+              ><checkbox value="yes" :checked="form.publicConsent" /><text
+                >我确认有权公开这些内容。广场只显示公开副本，私密对话和其他记忆不会展示。</text
+              ></label
             >
           </checkbox-group>
           <small v-if="!editingMemory && form.public && form.body.length > 3000" class="danger-text"
@@ -1769,90 +2334,179 @@ function confirmDeleteAccount() {
         >
       </template>
       <template v-else-if="page === 'chat'">
-        <template v-if="chatAvailable && app.current">
-          <view class="chat-layout">
-            <view id="chat-thread" class="chat-thread">
-              <view class="chat-heading">
+        <template v-if="!chatConversation">
+          <view class="chat-root-intro">
+            <view
+              ><h1>想和谁聊聊？</h1>
+              <p>选择你想念的人。进入后，对话对象会始终明确显示。</p></view
+            >
+          </view>
+          <view v-if="app.profiles.length" class="chat-profile-list">
+            <view v-for="p in app.profiles" :key="p.id" class="chat-profile-item">
+              <button
+                role="button"
+                class="chat-profile-row"
+                :disabled="!chatAvailable"
+                :aria-label="'和' + p.name + '聊聊'"
+                @click="openProfileChat(p.id)"
+              >
+                <image
+                  v-if="p.avatarUrl"
+                  class="profile-avatar chat-profile-avatar"
+                  :src="p.avatarUrl"
+                  mode="aspectFill"
+                  :aria-label="p.name + '的头像'"
+                />
+                <view v-else class="profile-avatar fallback chat-profile-avatar">{{
+                  profileInitial(p)
+                }}</view>
+                <view class="chat-profile-copy"
+                  ><view
+                    ><strong>{{ p.name }}</strong
+                    ><small>AI 模拟对话</small></view
+                  >
+                  <p>{{ p.story || '继续你们的对话，或从一件小事慢慢聊起。' }}</p></view
+                >
+              </button>
+              <button
+                role="button"
+                class="chat-profile-edit"
+                :aria-label="'编辑' + p.name + '的人物资料'"
+                @click="go('create', '?edit=1&profileId=' + encodeURIComponent(p.id))"
+              >
+                <AppIcon name="edit" /><text>资料</text>
+              </button>
+            </view>
+            <button role="button" class="chat-profile-row add-profile-row" @click="go('create')">
+              <view class="profile-avatar fallback chat-profile-avatar add"
+                ><AppIcon name="plus"
+              /></view>
+              <view class="chat-profile-copy"
+                ><strong>添加想念的人</strong>
+                <p>创建一段新的萤火空间</p></view
+              >
+            </button>
+          </view>
+          <view v-else class="empty chat-root-empty">
+            <view class="sprite mascot empty-mascot" aria-hidden="true" />
+            <h2>先添加一位想念的人</h2>
+            <p>称呼和一句小事，就能创建新的萤火空间。</p>
+            <button role="button" class="btn" @click="go('create')">添加人物</button>
+          </view>
+          <view v-if="!chatAvailable" class="notice"
+            >记忆对话暂时未开放，已经保存的记忆不会受到影响。</view
+          >
+          <p class="chat-root-note">回复会根据你留下的记忆，以 TA 的口吻模拟生成。</p>
+        </template>
+        <template v-else-if="chatAvailable && app.current">
+          <view class="chat-layout conversation-layout">
+            <view id="chat-thread" class="chat-thread conversation-thread">
+              <view v-if="!realChatMessages.length" class="chat-day">今天</view>
+              <view
+                v-if="!realChatMessages.length && !pendingChatText && !pendingChatPhoto"
+                class="message-row welcome-message"
+              >
                 <image
                   v-if="app.current.avatarUrl"
-                  class="profile-avatar large"
+                  class="profile-avatar chat-avatar"
                   :src="app.current.avatarUrl"
                   mode="aspectFill"
-                /><view v-else class="profile-avatar large fallback">{{
-                  profileInitial(app.current)
+                  :aria-label="app.current.name + '的头像'"
+                /><view
+                  v-else
+                  class="profile-avatar fallback chat-avatar"
+                  :aria-label="app.current.name + '的头像'"
+                  >{{ profileInitial(app.current) }}</view
+                >
+                <view class="bubble">{{
+                  app.current.callMe
+                    ? app.current.callMe + '，今天怎么想起我啦？'
+                    : '今天怎么想起我啦？慢慢说，我在听。'
                 }}</view>
-                <view
-                  ><h1>和{{ app.current.name }}聊聊 <small>· AI 生成</small></h1>
-                  <p :class="{ 'typing-status': chatReplyPending }">
-                    {{ chatReplyPending ? '正在组织回复…' : '从你们的记忆慢慢聊起' }}
-                  </p></view
-                >
-              </view>
-              <view class="chat-disclosure" role="note">
-                <view class="sprite mascot disclosure-mascot" aria-hidden="true" />
-                <text
-                  >AI 会根据你提供的内容回复，不是{{ app.current.name }}本人，也可能不准确。</text
-                >
-              </view>
-              <view
-                v-if="!app.messages.some((item) => !item.mock) && !pendingChatText"
-                class="chat-welcome"
-              >
-                <h2>这次想从哪里聊起？</h2>
-                <p class="caption">选一句开场，也可以写自己的话。</p>
-                <view class="prompt-list">
-                  <button
-                    role="button"
-                    class="prompt-button"
-                    @click="useChatPrompt('我想聊聊关于' + app.current.name + '的一件小事。')"
-                  >
-                    聊聊一件小事
-                  </button>
-                  <button
-                    role="button"
-                    class="prompt-button"
-                    @click="useChatPrompt('今天我又想起了' + app.current.name + '，想说一说。')"
-                  >
-                    今天又想起了 TA
-                  </button>
-                  <button
-                    role="button"
-                    class="prompt-button"
-                    @click="useChatPrompt('我想把刚想起的一件事整理成记忆。')"
-                  >
-                    整理一段记忆
-                  </button>
-                </view>
               </view>
               <view class="chat-list" aria-live="polite">
+                <template v-for="(message, messageIndex) in realChatMessages" :key="message.id">
+                  <view v-if="chatMessageTimeLabel(messageIndex)" class="chat-day message-time">{{
+                    chatMessageTimeLabel(messageIndex)
+                  }}</view>
+                  <view class="message-row" :class="{ user: message.role === 'user' }">
+                    <image
+                      v-if="message.role === 'assistant' && app.current.avatarUrl"
+                      class="profile-avatar chat-avatar"
+                      :src="app.current.avatarUrl"
+                      mode="aspectFill"
+                      :aria-label="app.current.name + '的头像'"
+                    /><view
+                      v-else-if="message.role === 'assistant'"
+                      class="profile-avatar fallback chat-avatar"
+                      :aria-label="app.current.name + '的头像'"
+                      >{{ profileInitial(app.current) }}</view
+                    >
+                    <view class="message-content" :class="{ user: message.role === 'user' }">
+                      <template v-if="message.role === 'assistant'">
+                        <view
+                          v-for="(segment, segmentIndex) in splitAssistantMessage(message.text)"
+                          :key="message.id + '-' + segmentIndex"
+                          class="bubble assistant-segment"
+                          ><text>{{ segment }}</text></view
+                        >
+                      </template>
+                      <view
+                        v-else
+                        class="bubble user"
+                        role="button"
+                        tabindex="0"
+                        :aria-expanded="activeMessageActionId === message.id"
+                        :aria-label="
+                          (message.imageUrl ? '照片，' : '') +
+                          (message.text || '') +
+                          '，点按显示消息操作'
+                        "
+                        @click="toggleMessageActions(message.id)"
+                        @longpress="toggleMessageActions(message.id)"
+                        @keydown.enter="toggleMessageActions(message.id)"
+                      >
+                        <image
+                          v-if="message.imageUrl"
+                          class="chat-message-photo"
+                          :src="message.imageUrl"
+                          mode="aspectFill"
+                          aria-label="聊天中发送的照片"
+                        />
+                        <text v-if="message.text">{{ message.text }}</text>
+                      </view>
+                      <button
+                        v-if="
+                          message.role === 'user' &&
+                          message.text &&
+                          activeMessageActionId === message.id
+                        "
+                        role="button"
+                        class="chat-memory-save"
+                        :disabled="app.busy || chatMessageAlreadySaved(message.text)"
+                        :aria-disabled="app.busy || chatMessageAlreadySaved(message.text)"
+                        @click.stop="saveChatMessageAsMemory(message.text)"
+                      >
+                        {{
+                          chatMessageAlreadySaved(message.text)
+                            ? '已保存为记忆'
+                            : '保存这句话为记忆'
+                        }}
+                      </button>
+                    </view>
+                  </view>
+                </template>
                 <view
-                  v-for="message in app.messages.filter((item) => !item.mock)"
-                  :key="message.id"
-                  class="message-row"
-                  :class="{ user: message.role === 'user' }"
-                >
-                  <image
-                    v-if="message.role === 'assistant' && app.current.avatarUrl"
-                    class="profile-avatar chat-avatar"
-                    :src="app.current.avatarUrl"
-                    mode="aspectFill"
-                    :aria-label="app.current.name + '的头像'"
-                  /><view
-                    v-else-if="message.role === 'assistant'"
-                    class="profile-avatar fallback chat-avatar"
-                    :aria-label="app.current.name + '的头像'"
-                    >{{ profileInitial(app.current) }}</view
-                  >
-                  <view class="bubble" :class="{ user: message.role === 'user' }"
-                    ><small>{{
-                      message.role === 'user' ? '我' : app.current.name + ' · AI 生成'
-                    }}</small
-                    ><text>{{ message.text }}</text></view
-                  >
-                </view>
-                <view v-if="pendingChatText" class="message-row user pending-message"
+                  v-if="pendingChatText || pendingChatPhoto"
+                  class="message-row user pending-message"
                   ><view class="bubble user"
-                    ><small>我</small><text>{{ pendingChatText }}</text></view
+                    ><image
+                      v-if="pendingChatPhoto"
+                      class="chat-message-photo"
+                      :src="pendingChatPhoto"
+                      mode="aspectFill"
+                      aria-label="正在发送的照片"
+                    /><text v-if="pendingChatText">{{ pendingChatText }}</text></view
                   ></view
                 >
                 <view v-if="chatReplyPending" class="message-row typing-row" role="status">
@@ -1871,39 +2525,67 @@ function confirmDeleteAccount() {
                   <view
                     class="bubble typing-bubble"
                     :aria-label="app.current.name + '的回复正在生成'"
-                    ><small>{{ app.current.name }} · AI 正在生成</small
                     ><view class="typing-dots" aria-hidden="true"><text /><text /><text /></view
                   ></view>
                 </view>
               </view>
-              <button
-                role="button"
-                v-if="app.messages.some((item) => !item.mock)"
-                class="text-button chat-reset"
-                :disabled="app.busy"
-                @click="clearConversation"
-                :aria-disabled="app.busy"
-              >
-                开始一段新对话
-              </button>
               <view id="chat-end" class="chat-end" aria-hidden="true" />
             </view>
-            <view class="chat-composer">
-              <button
-                role="button"
-                class="disclosure-button context-toggle"
-                :aria-expanded="chatMemoriesOpen"
-                @click="chatMemoriesOpen = !chatMemoriesOpen"
-              >
-                <text>{{
-                  selectedChatMemories.length
-                    ? '本次引用 ' + selectedChatMemories.length + ' 条记忆'
-                    : '本次未引用记忆'
-                }}</text
-                ><text>{{ chatMemoriesOpen ? '收起' : '选择' }}</text>
-              </button>
-              <view v-if="chatMemoriesOpen" class="chat-memory-picker">
-                <small>只发送你本次选中的内容，最多 5 条。</small>
+            <view class="chat-composer conversation-composer">
+              <view v-if="activeChatPanel === 'tools'" class="chat-tools-panel chat-action-panel">
+                <view class="chat-action-grid">
+                  <button
+                    role="button"
+                    :disabled="chatPhotoProcessing"
+                    @click="chooseChatPhoto('album')"
+                  >
+                    <view class="chat-action-icon"><AppIcon name="photo" /></view>
+                    <text>{{ chatPhotoProcessing ? '处理中…' : '照片' }}</text>
+                  </button>
+                  <button
+                    role="button"
+                    :disabled="chatPhotoProcessing"
+                    @click="chooseChatPhoto('camera')"
+                  >
+                    <view class="chat-action-icon"><AppIcon name="camera" /></view>
+                    <text>{{ chatPhotoProcessing ? '处理中…' : '拍摄' }}</text>
+                  </button>
+                  <button role="button" @click="openChatMemoryPanel">
+                    <view class="chat-action-icon"><AppIcon name="book" /></view>
+                    <text>人物记忆</text>
+                  </button>
+                </view>
+              </view>
+              <view v-else-if="activeChatPanel === 'emoji'" class="chat-tools-panel emoji-panel">
+                <button
+                  v-for="name in commonEmojis"
+                  :key="name"
+                  role="button"
+                  :aria-label="'插入' + name + '表情'"
+                  @click="appendEmoji(name)"
+                >
+                  {{ emojiCharacters[name] }}
+                </button>
+              </view>
+              <view v-else-if="activeChatPanel === 'memories'" class="chat-tools-panel">
+                <view class="chat-tools-heading">
+                  <view
+                    ><strong>本次对话参考</strong
+                    ><small>{{
+                      selectedChatMemories.length
+                        ? '已选择 ' + selectedChatMemories.length + ' 条，最多 5 条'
+                        : '没有选择时，回应会更日常'
+                    }}</small></view
+                  >
+                  <button
+                    role="button"
+                    class="panel-close"
+                    aria-label="关闭人物记忆"
+                    @click="activeChatPanel = 'none'"
+                  >
+                    <AppIcon name="close" />
+                  </button>
+                </view>
                 <view class="chips"
                   ><button
                     role="button"
@@ -1918,48 +2600,99 @@ function confirmDeleteAccount() {
                   </button></view
                 >
                 <p v-if="!app.memories.length" class="caption">
-                  还没有保存的记忆，可以直接说说你想聊的事。
+                  还没有人物记忆，也可以先正常聊天。
                 </p>
               </view>
-              <checkbox-group @change="chatConsent = $event.detail.value.length > 0"
-                ><label class="check chat-consent"
-                  ><checkbox
-                    value="agree"
-                    :checked="chatConsent"
-                  />允许使用本次对话和选中的记忆生成回复。</label
-                ></checkbox-group
-              >
+              <view v-if="chatPhotoDraft" class="chat-photo-draft">
+                <image :src="chatPhotoDraft" mode="aspectFill" aria-label="待发送的照片" />
+                <view
+                  ><strong>照片已准备好</strong
+                  ><small>{{
+                    chatText ? '会连同你的说明一起发送' : '可以直接发送，也可以补充一句说明'
+                  }}</small></view
+                >
+                <button
+                  role="button"
+                  class="panel-close"
+                  aria-label="移除待发送照片"
+                  @click="chatPhotoDraft = ''"
+                >
+                  <AppIcon name="close" />
+                </button>
+              </view>
               <view v-if="app.error" class="notice error" role="alert"
                 >{{ app.error }} 输入内容已保留，可以重试。</view
               >
               <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
               <view class="chat-input">
+                <button
+                  role="button"
+                  class="chat-mode-button"
+                  :aria-label="chatInputMode === 'voice' ? '切换到文字输入' : '切换到语音输入'"
+                  @click="chatInputMode = chatInputMode === 'voice' ? 'text' : 'voice'"
+                >
+                  <AppIcon :name="chatInputMode === 'voice' ? 'keyboard' : 'mic'" />
+                </button>
                 <input
+                  v-if="chatInputMode === 'text'"
                   v-model="chatText"
                   :aria-label="'想对' + app.current.name + '说的话'"
-                  :disabled="chatReplyPending"
                   maxlength="500"
                   :placeholder="
-                    chatReplyPending ? '正在生成回复…' : '想对' + app.current.name + '说点什么…'
+                    chatPhotoDraft ? '补充照片里的故事…' : '想对' + app.current.name + '说点什么…'
                   "
                   @focus="onChatFocus"
                   @confirm="sendChat"
                 />
                 <button
+                  v-else
+                  role="button"
+                  class="hold-to-talk"
+                  :class="{ listening: voiceListening }"
+                  :aria-label="voiceListening ? '松开结束语音识别' : '按住进行语音识别'"
+                  @mousedown.prevent="startVoiceInput"
+                  @mouseup.prevent="stopVoiceInput"
+                  @mouseleave="voiceListening && stopVoiceInput()"
+                  @touchstart.prevent="startVoiceInput"
+                  @touchend.prevent="stopVoiceInput"
+                  @touchcancel.prevent="cancelVoiceInput"
+                >
+                  {{ voiceListening ? voiceTranscript || '正在听…' : '按住 说话' }}
+                </button>
+                <button
+                  role="button"
+                  class="chat-emoji-button"
+                  :class="{ active: activeChatPanel === 'emoji' }"
+                  aria-label="选择表情"
+                  :aria-expanded="activeChatPanel === 'emoji'"
+                  @click="toggleChatPanel('emoji')"
+                >
+                  <AppIcon name="smile" />
+                </button>
+                <button
+                  v-if="chatText.trim() || chatPhotoDraft"
                   role="button"
                   class="send-button"
                   aria-label="发送消息"
-                  :disabled="app.busy || !chatText.trim() || !chatConsent"
+                  :disabled="app.busy"
                   @click="sendChat"
-                  :aria-disabled="app.busy || !chatText.trim() || !chatConsent"
+                  :aria-disabled="app.busy"
                 >
-                  {{ chatReplyPending ? '等待' : '发送' }}
+                  <AppIcon name="send" />
+                </button>
+                <button
+                  v-else
+                  role="button"
+                  class="chat-tools-button"
+                  :class="{ active: activeChatPanel === 'tools' }"
+                  aria-label="更多聊天功能"
+                  :aria-expanded="activeChatPanel === 'tools'"
+                  @click="toggleChatPanel('tools')"
+                >
+                  <AppIcon name="plus" />
                 </button>
               </view>
-              <small v-if="!chatConsent" class="composer-hint"
-                >勾选授权后可发送；未选中的记忆不会发送。</small
-              >
-              <small v-else-if="localDraftError" class="composer-hint"
+              <small v-if="localDraftError" class="composer-hint"
                 >本机暂存失败，请复制输入内容后再离开。</small
               >
               <small v-else-if="chatText" class="composer-hint"
@@ -2018,85 +2751,242 @@ function confirmDeleteAccount() {
         <view class="empty"><p>目前没有可购买的服务。</p></view>
       </template>
       <template v-else-if="page === 'square'">
-        <view class="section"
-          ><h1>广场</h1>
-          <button
-            role="button"
-            class="text-button"
-            :disabled="app.busy && !app.session.userId"
-            @click="needProfile('memory-edit')"
-            :aria-disabled="app.busy && !app.session.userId"
-          >
-            记录记忆
-          </button></view
-        >
-        <view class="chips"
-          ><button
-            role="button"
-            v-for="v in ['精选', '我的']"
-            :key="v"
-            class="chip"
-            :class="{ active: squareView === v }"
-            @click="squareView = v"
-          >
-            {{ v === '我的' ? '我的分享' : v }}
-          </button></view
-        >
-        <view v-if="squareView === '精选'">
-          <view v-for="story in app.publicPosts" :key="story.id" class="card">
-            <text class="badge">用户故事 · 已审核公开</text>
-            <h2>{{ story.title }}</h2>
-            <p class="prose story-excerpt">{{ story.body }}</p>
-            <button role="button" class="text-button" @click="go('story', '?id=' + story.id)">
-              读这个故事
-            </button>
-          </view>
-          <view v-if="!app.publicPosts.length" class="notice">
-            还没有已公开的用户故事，先看看示例，也可以写下你的第一篇。
-          </view>
+        <view class="square-welcome">
+          <strong>思念有回声</strong>
+          <p>看看大家写下的片段，也可以留下一句理解与陪伴。</p>
+        </view>
+        <view class="square-feed" aria-label="广场动态">
           <view
-            v-for="(story, index) in !app.publicPosts.length ? sampleStories : []"
+            v-for="story in app.publicPosts"
             :key="story.id"
-            class="card"
+            class="square-story"
+            :class="{ 'official-story': story.isOfficial }"
           >
-            <view
-              v-if="index === 0"
-              class="sprite flowers photo sample-image"
-              role="img"
-              aria-label="窗边的小雏菊"
-            />
-            <text class="badge">写作示例 · 非真实用户</text>
-            <h2>{{ story.title }}</h2>
-            <p class="prose story-excerpt">{{ story.excerpt }}</p>
-            <button role="button" class="text-button" @click="go('story', '?id=' + story.id)">
-              读这个故事
+            <view class="square-author">
+              <image
+                v-if="story.profileAvatarUrl"
+                :src="story.profileAvatarUrl"
+                class="profile-avatar"
+                mode="aspectFill"
+                :aria-label="story.profileName || story.profileRelationship || '纪念人物头像'"
+              />
+              <view v-else class="profile-avatar fallback">{{ storyAvatar(story) }}</view>
+              <view class="square-author-copy">
+                <view class="square-author-name">
+                  <strong>{{ storyAuthor(story) }}</strong>
+                  <text v-if="story.isOfficial" class="square-official-badge">萤火故事</text>
+                </view>
+                <small>{{ storyMemorialLabel(story) }} · {{ storyMeta(story) }}</small>
+              </view>
+            </view>
+            <button
+              role="button"
+              class="square-story-open"
+              :aria-label="'查看动态：' + story.title"
+              @click="openStory(story.id)"
+            >
+              <p v-if="story.body" class="square-post-body">{{ story.body }}</p>
+              <text v-if="story.body.length > 150" class="square-read-more">展开</text>
+              <view
+                v-if="story.media?.length"
+                class="square-media-grid"
+                :class="'count-' + Math.min(story.media.length, 4)"
+              >
+                <image
+                  v-for="(photo, photoIndex) in story.media.slice(0, 9)"
+                  :key="story.id + '-photo-' + photoIndex"
+                  :src="photo"
+                  mode="aspectFill"
+                  :aria-label="`动态照片 ${photoIndex + 1}`"
+                />
+              </view>
             </button>
+            <view v-if="story.commentPreview?.length" class="square-comment-preview">
+              <button
+                v-for="comment in story.commentPreview"
+                :key="comment.id"
+                role="button"
+                @click="openSquareComments(story.id)"
+              >
+                <strong>{{ comment.authorName }}</strong>
+                <text v-if="comment.replyToName"> 回复 {{ comment.replyToName }}</text>
+                <text>：{{ comment.body }}</text>
+              </button>
+              <button
+                v-if="(story.commentCount || 0) > story.commentPreview.length"
+                role="button"
+                class="square-all-comments"
+                @click="openSquareComments(story.id)"
+              >
+                查看全部 {{ story.commentCount }} 条留言
+              </button>
+            </view>
+            <view class="square-story-actions" aria-label="故事互动">
+              <button
+                role="button"
+                class="square-action"
+                :class="{ active: story.viewerHasLit }"
+                :aria-pressed="story.viewerHasLit"
+                :disabled="app.busy"
+                @click="toggleStoryLight(story)"
+              >
+                <AppIcon name="heart" />
+                <text
+                  >{{ story.viewerHasLit ? '已点亮' : '点亮' }} {{ story.lightCount || 0 }}</text
+                >
+              </button>
+              <button
+                role="button"
+                class="square-action"
+                :aria-label="'给这条动态留言'"
+                @click="openSquareComments(story.id)"
+              >
+                <AppIcon name="chat" />
+                <text>留言 {{ story.commentCount || 0 }}</text>
+              </button>
+            </view>
+          </view>
+          <view v-if="!app.publicPosts.length" class="empty square-empty">
+            <h2>广场还在等第一束萤火</h2>
+            <p>写下一句话或放上一张照片，就能留下第一份想念。</p>
+            <button role="button" class="btn" @click="openSquareComposer">发布第一份纪念</button>
           </view>
         </view>
-        <template v-else
-          ><button
+        <button
+          role="button"
+          class="square-fab"
+          :disabled="app.busy"
+          :aria-disabled="app.busy"
+          @click="openSquareComposer"
+        >
+          <AppIcon name="edit" /><text>{{ app.busy ? '正在准备' : '发帖' }}</text>
+        </button>
+        <view class="square-privacy-note"
+          ><AppIcon name="lock" /><text
+            >这里只展示主动公开并审核通过的内容，聊天和私密记忆不会出现。</text
+          ></view
+        >
+        <view
+          v-if="squareCommentSheetOpen"
+          class="square-sheet-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="square-comments-title"
+          @click.self="closeSquareComments"
+        >
+          <view class="square-comment-sheet">
+            <view class="square-sheet-heading">
+              <view
+                ><h2 id="square-comments-title">留言</h2>
+                <small>{{ activeSquareComments.length }} 条</small></view
+              >
+              <button
+                role="button"
+                class="icon-button"
+                aria-label="关闭留言"
+                @click="closeSquareComments"
+              >
+                <AppIcon name="close" />
+              </button>
+            </view>
+            <view v-if="activeSquareComments.length" class="square-sheet-comments">
+              <button
+                v-for="comment in activeSquareComments"
+                :key="comment.id"
+                role="button"
+                class="square-sheet-comment"
+                :aria-label="'回复' + comment.authorName"
+                @click="chooseReply(comment)"
+              >
+                <view class="profile-avatar fallback">{{ comment.isMine ? '我' : '萤' }}</view>
+                <view>
+                  <strong>{{ comment.authorName }}</strong>
+                  <p>
+                    <text v-if="comment.replyToName">回复 {{ comment.replyToName }}：</text
+                    >{{ comment.body }}
+                  </p>
+                  <small>{{ squareDate(comment.createdAt) }} · 回复</small>
+                </view>
+              </button>
+            </view>
+            <view v-else-if="app.busy" class="square-sheet-loading">正在打开留言…</view>
+            <view v-else class="square-sheet-empty">还没有留言，留下第一句温柔的话吧。</view>
+            <view class="square-comment-composer">
+              <view v-if="replyTarget" class="square-replying">
+                正在回复 {{ replyTarget.name }}
+                <button role="button" aria-label="取消回复" @click="replyTarget = null">
+                  <AppIcon name="close" />
+                </button>
+              </view>
+              <view class="square-comment-input-row">
+                <input
+                  id="square-comment-input"
+                  v-model="storyCommentText"
+                  maxlength="300"
+                  :placeholder="replyTarget ? '回复 ' + replyTarget.name : '留下一句理解或祝福'"
+                  aria-label="写下留言"
+                  confirm-type="send"
+                  @confirm="submitSquareComment"
+                />
+                <button
+                  role="button"
+                  :disabled="app.busy || !storyCommentText.trim()"
+                  :aria-disabled="app.busy || !storyCommentText.trim()"
+                  @click="submitSquareComment"
+                >
+                  发送
+                </button>
+              </view>
+            </view>
+          </view>
+        </view>
+      </template>
+      <template v-else-if="page === 'shares'">
+        <view v-if="query?.saved === '1'" class="saved-state" role="status">
+          已发布。公开内容审核通过后会进入广场，你无需停在这里等待。
+        </view>
+        <view class="shares-intro">
+          <h1>我的发布</h1>
+          <p>公开、审核中和仅自己可见的内容都在这里管理。</p>
+        </view>
+        <view v-if="myShares.length" class="shares-list">
+          <button
+            v-for="post in myShares"
+            :key="post.id"
             role="button"
-            v-for="p in myShares"
-            :key="p.id"
-            class="card memory-card"
-            @click="go('story', '?id=' + p.id)"
+            class="square-story mine-story"
+            @click="go('story', '?id=' + post.id)"
           >
-            <text class="badge">{{ postStatus(p) }}</text>
-            <h3>{{ p.title }}</h3>
-            <p>{{ p.body }}</p>
-            <small v-if="p.moderation === 'rejected' && p.moderationReason">{{
-              p.moderationReason
-            }}</small></button
-          ><view v-if="!myShares.length" class="empty"
-            ><p>还没有公开分享。自己的内容保存在“我的记忆”。</p>
-            <button role="button" class="text-button" @click="go('memories')">
-              从我的记忆选择分享
-            </button></view
-          ></template
-        >
-        <view class="notice"
-          >这里展示公开故事。自己的内容都在“我的记忆”；申请分享后，审核通过才会在广场展示。</view
-        >
+            <view class="square-author">
+              <image
+                v-if="post.profileAvatarUrl"
+                :src="post.profileAvatarUrl"
+                class="profile-avatar"
+                mode="aspectFill"
+              />
+              <view v-else class="profile-avatar fallback">{{
+                post.profileRelationship?.slice(0, 1) || '我'
+              }}</view>
+              <view class="square-author-copy">
+                <strong>{{ storyMemorialLabel(post) }}</strong
+                ><small>{{ squareDate(post.createdAt) }}</small>
+              </view>
+            </view>
+            <text class="share-status" :class="post.moderation">{{ postStatus(post) }}</text>
+            <p v-if="post.body">{{ post.body }}</p>
+            <view v-if="post.media?.length" class="square-media-grid count-1">
+              <image :src="post.media[0]" mode="aspectFill" aria-label="发布照片" />
+            </view>
+            <small v-if="post.moderation === 'rejected' && post.moderationReason">{{
+              post.moderationReason
+            }}</small>
+          </button>
+        </view>
+        <view v-else class="empty square-my-empty">
+          <h2>还没有发布内容</h2>
+          <p>可以直接写一句话，也可以从已有记忆中带入内容。</p>
+          <button role="button" class="btn" @click="openSquareComposer">发布第一份纪念</button>
+        </view>
       </template>
       <template v-else-if="page === 'story'">
         <view v-if="selectedSample"
@@ -2106,18 +2996,115 @@ function confirmDeleteAccount() {
           <h1>{{ selectedSample.title }}</h1>
           <p class="prose">{{ selectedSample.body }}</p></view
         >
-        <view v-else-if="selectedPost"
-          ><text class="badge">{{ postStatus(selectedPost) }}</text>
-          <h1>{{ selectedPost.title }}</h1>
-          <p class="prose">{{ selectedPost.body }}</p>
+        <view v-else-if="selectedPost" class="story-detail">
+          <view v-if="selectedPostIsInteractive" class="story-detail-author">
+            <image
+              v-if="selectedPost.profileAvatarUrl"
+              :src="selectedPost.profileAvatarUrl"
+              class="profile-avatar"
+              mode="aspectFill"
+            />
+            <view v-else class="profile-avatar fallback">{{ storyAvatar(selectedPost) }}</view>
+            <view
+              ><strong>{{ storyAuthor(selectedPost) }}</strong
+              ><small
+                >{{ storyMemorialLabel(selectedPost) }} · {{ storyMeta(selectedPost) }}</small
+              ></view
+            >
+          </view>
+          <text class="badge">{{ postStatus(selectedPost) }}</text>
+          <p class="prose story-detail-body">{{ selectedPost.body }}</p>
+          <view
+            v-if="selectedPost.media?.length"
+            class="square-media-grid story-media-grid"
+            :class="'count-' + Math.min(selectedPost.media.length, 4)"
+          >
+            <image
+              v-for="(photo, photoIndex) in selectedPost.media"
+              :key="selectedPost.id + '-detail-photo-' + photoIndex"
+              :src="photo"
+              mode="aspectFill"
+              :aria-label="`纪念照片 ${photoIndex + 1}`"
+            />
+          </view>
           <view
             v-if="selectedPost.moderation === 'rejected' && selectedPost.moderationReason"
             class="notice error"
           >
             {{ selectedPost.moderationReason }}
           </view>
+          <template v-if="selectedPostIsInteractive">
+            <view class="story-social-bar" aria-label="故事互动">
+              <button
+                role="button"
+                class="square-action"
+                :class="{ active: selectedPost.viewerHasLit }"
+                :aria-pressed="selectedPost.viewerHasLit"
+                :disabled="app.busy"
+                @click="toggleStoryLight(selectedPost)"
+              >
+                <AppIcon name="heart" />
+                <text
+                  >{{ selectedPost.viewerHasLit ? '已点亮' : '点亮' }}
+                  {{ selectedPost.lightCount || 0 }}</text
+                >
+              </button>
+              <button role="button" class="square-action" @click="focusStoryComment">
+                <AppIcon name="chat" />
+                <text>留言 {{ selectedPost.commentCount || 0 }}</text>
+              </button>
+            </view>
+            <view class="story-comments">
+              <view class="story-comments-title"
+                ><h2>大家的留言</h2>
+                <small>{{ selectedStoryComments.length }} 条</small></view
+              >
+              <view v-if="selectedStoryComments.length" class="story-comment-list">
+                <view
+                  v-for="comment in selectedStoryComments"
+                  :key="comment.id"
+                  class="story-comment"
+                >
+                  <view class="profile-avatar fallback">{{ comment.isMine ? '我' : '萤' }}</view>
+                  <view
+                    ><strong>{{ comment.authorName }}</strong>
+                    <p>
+                      <text v-if="comment.replyToName">回复 {{ comment.replyToName }}：</text
+                      >{{ comment.body }}
+                    </p>
+                    <button role="button" class="story-reply-button" @click="chooseReply(comment)">
+                      回复
+                    </button></view
+                  >
+                </view>
+              </view>
+              <p v-else class="story-comments-empty">还没有留言，留下第一句温柔的话吧。</p>
+              <label class="field story-comment-field">
+                <text>{{ replyTarget ? '回复 ' + replyTarget.name : '写下留言' }}</text>
+                <textarea
+                  id="story-comment-input"
+                  v-model="storyCommentText"
+                  maxlength="300"
+                  aria-label="写下故事留言"
+                  placeholder="一句共鸣或祝福就很好"
+                />
+              </label>
+              <view class="story-comment-submit">
+                <small>{{ storyCommentText.length }}/300</small>
+                <button
+                  role="button"
+                  class="btn"
+                  :disabled="app.busy || !storyCommentText.trim()"
+                  :aria-disabled="app.busy || !storyCommentText.trim()"
+                  @click="submitStoryComment"
+                >
+                  {{ app.busy ? '正在发布…' : '发布留言' }}
+                </button>
+              </view>
+            </view>
+          </template>
           <template v-if="ownsSelectedPost">
-            <button role="button" class="btn" @click="editStory">编辑这个故事</button>
+            <button role="button" class="btn secondary" @click="editStory">编辑这个故事</button>
             <button
               role="button"
               class="btn secondary"
@@ -2127,122 +3114,263 @@ function confirmDeleteAccount() {
             >
               删除这个故事
             </button>
-          </template></view
+          </template> </view
         ><view v-else class="notice">故事不存在或当前账号不可访问。</view>
-        <button
-          role="button"
-          class="btn secondary"
-          @click="go(ownsSelectedPost ? 'memories' : 'square')"
-        >
-          {{ ownsSelectedPost ? '返回我的记忆' : '返回广场' }}
-        </button>
       </template>
       <template v-else-if="page === 'compose'">
-        <h1>
-          {{ editingStory ? '修改这个故事' : query?.memoryId ? '分享一段记忆' : '记下一件小事' }}
-        </h1>
-        <p class="caption">
-          {{
-            query?.memoryId
-              ? '这是独立的分享副本。原记忆仍然私密，修改或删除原记忆不会自动更新副本。'
-              : editingStory
-                ? '修改历史内容，或调整它的可见范围。'
-                : '关于 ' + (app.current?.name || '重要的人') + '，先写给自己看。'
-          }}
-        </p>
         <template v-if="app.session.userId">
-          <label class="field"
-            ><text>正文（必填）</text
-            ><textarea
-              v-model="form.body"
-              aria-label="故事正文"
-              maxlength="3000"
-              placeholder="一句话、一件小事，都可以。"
-            />
-          </label>
-          <small v-if="form.body.length > 3000" class="danger-text"
-            >广场副本最多 3000 字，请缩短这份副本；原记忆不会改变。</small
-          >
-          <label class="field"
-            ><text>标题（选填）</text
-            ><input
-              v-model="form.title"
-              aria-label="故事标题（选填）"
-              maxlength="60"
-              placeholder="留空时，用正文开头作为标题"
-          /></label>
-          <view v-if="app.bootstrap?.features?.publicSquare" class="visibility-picker">
-            <text>谁可以看到</text>
-            <view class="visibility-options">
-              <button
-                role="button"
-                :class="{ active: !form.public }"
-                :aria-pressed="!form.public"
-                @click="form.public = false"
-              >
-                <strong>仅自己可见</strong><small>保存在“我的记忆”</small>
-              </button>
-              <button
-                role="button"
-                :class="{ active: form.public }"
-                :aria-pressed="form.public"
-                @click="form.public = true"
-              >
-                <strong>分享到广场</strong><small>审核通过后所有人可见</small>
-              </button>
-            </view>
+          <view class="publish-intro">
+            <strong>{{ editingStory ? '修改这份纪念' : '分享思念，传递怀念' }}</strong>
+            <p>一句话、一张照片，都可以成为被记住的片段。</p>
           </view>
-          <checkbox-group v-if="form.public" @change="toggle('publicConsent', $event)"
-            ><label class="check"
-              ><checkbox value="yes" :checked="form.publicConsent" />我确认有权公开这些内容。</label
-            ></checkbox-group
+          <button
+            role="button"
+            class="publish-person-row"
+            :disabled="editingStory"
+            :aria-disabled="editingStory"
+            @click="publishProfilePickerOpen = !editingStory"
           >
-          <view class="editor-actions">
-            <view v-if="app.error" class="notice error" role="alert"
-              >{{ app.error }} 内容已保留，可以重试。</view
+            <image
+              v-if="app.current?.avatarUrl"
+              :src="app.current.avatarUrl"
+              class="profile-avatar"
+              mode="aspectFill"
+            />
+            <view v-else class="profile-avatar fallback">{{
+              app.current ? profileInitial(app.current) : '萤'
+            }}</view>
+            <view>
+              <small>写给</small>
+              <strong>{{ app.current?.name || '选择一位重要的人' }}</strong>
+            </view>
+            <text v-if="!editingStory">更换人物</text>
+          </button>
+          <view class="publish-editor">
+            <textarea
+              v-model="form.body"
+              aria-label="纪念正文"
+              maxlength="3000"
+              placeholder="有什么话想与 Ta 说……"
+            />
+            <small>{{ form.body.length }}/3000</small>
+          </view>
+          <view class="publish-photos">
+            <view v-if="storyImages.length" class="publish-photo-grid">
+              <view
+                v-for="(photo, photoIndex) in storyImages"
+                :key="'draft-photo-' + photoIndex"
+                class="publish-photo-item"
+              >
+                <image
+                  :src="photo"
+                  mode="aspectFill"
+                  :aria-label="`待发布照片 ${photoIndex + 1}`"
+                />
+                <button
+                  role="button"
+                  :aria-label="`删除第 ${photoIndex + 1} 张照片`"
+                  @click="removeStoryPhoto(photoIndex)"
+                >
+                  <AppIcon name="close" />
+                </button>
+              </view>
+            </view>
+            <button
+              v-if="storyImages.length < 9"
+              role="button"
+              class="publish-photo-add"
+              :disabled="storyPhotoProcessing || app.busy"
+              :aria-disabled="storyPhotoProcessing || app.busy"
+              @click="chooseStoryPhotos"
             >
-            <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
-            <small class="draft-status" role="status">{{ draftStatus }}</small>
+              <AppIcon name="plus" />
+              <text>{{ storyPhotoProcessing ? '正在处理照片' : '添加照片' }}</text>
+              <small>{{ storyImages.length }}/9</small>
+            </button>
+          </view>
+          <button role="button" class="publish-import" @click="openSquareSharePicker">
+            <AppIcon name="book" /><text>从已有记忆中带入文字</text>
+          </button>
+          <view class="publish-settings">
+            <button
+              role="button"
+              @click="publishProfilePickerOpen = !editingStory"
+              :disabled="editingStory"
+            >
+              <text>纪念人物</text><strong>{{ app.current?.name || '请选择' }}</strong>
+            </button>
+            <button
+              v-if="app.bootstrap?.features?.publicSquare"
+              role="button"
+              @click="visibilityPickerOpen = true"
+            >
+              <text>可见范围</text><strong>{{ form.public ? '公开' : '仅自己可见' }}</strong>
+            </button>
+          </view>
+          <view v-if="app.error" class="notice error" role="alert"
+            >{{ app.error }} 内容已保留，可以重试。</view
+          >
+          <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
+          <small class="draft-status" role="status">{{ draftStatus }}</small>
+          <view class="publish-submit-area">
             <button
               role="button"
               class="btn"
               :disabled="
                 app.busy ||
-                !form.body.trim() ||
-                form.body.length > 3000 ||
-                (form.public && !form.publicConsent) ||
-                (!form.public && !editingStory && !app.current)
+                storyPhotoProcessing ||
+                (!form.body.trim() && !storyImages.length) ||
+                !app.current
               "
-              @click="publish"
               :aria-disabled="
                 app.busy ||
-                !form.body.trim() ||
-                form.body.length > 3000 ||
-                (form.public && !form.publicConsent) ||
-                (!form.public && !editingStory && !app.current)
+                storyPhotoProcessing ||
+                (!form.body.trim() && !storyImages.length) ||
+                !app.current
               "
+              @click="publish"
             >
-              {{
-                app.busy
-                  ? '正在保存…'
-                  : editingStory
-                    ? '保存修改'
-                    : form.public
-                      ? '确认并申请公开'
-                      : '保存到我的记忆'
-              }}
+              {{ app.busy ? '正在发布…' : editingStory ? '保存修改' : '发布纪念' }}
             </button>
-            <small v-if="form.public && !form.publicConsent" class="block"
-              >确认分享授权后，才能申请公开。</small
+            <small v-if="form.public"
+              >当前为公开发布。发布即表示你确认有权分享这些内容，审核通过后会进入广场。</small
             >
-            <button
-              role="button"
-              v-if="!form.public && !editingStory && !app.current"
-              class="text-button"
-              @click="start"
-            >
-              先选择一位人物，再保存记忆
-            </button>
+            <small v-else>仅自己可见，不会出现在广场。</small>
+          </view>
+
+          <view
+            v-if="visibilityPickerOpen"
+            class="square-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visibility-title"
+            @click.self="visibilityPickerOpen = false"
+          >
+            <view class="publish-choice-sheet">
+              <h2 id="visibility-title">谁可以看到</h2>
+              <button
+                role="button"
+                :class="{ active: form.public }"
+                @click="
+                  form.public = true;
+                  form.publicConsent = true;
+                  visibilityPickerOpen = false;
+                "
+              >
+                <strong>公开</strong><small>审核通过后，广场中的用户都能看到</small>
+              </button>
+              <button
+                role="button"
+                :class="{ active: !form.public }"
+                @click="
+                  form.public = false;
+                  form.publicConsent = false;
+                  visibilityPickerOpen = false;
+                "
+              >
+                <strong>仅自己可见</strong><small>保存在自己的记忆空间</small>
+              </button>
+              <button
+                role="button"
+                class="publish-sheet-cancel"
+                @click="visibilityPickerOpen = false"
+              >
+                取消
+              </button>
+            </view>
+          </view>
+
+          <view
+            v-if="publishProfilePickerOpen"
+            class="square-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="publish-profile-title"
+            @click.self="publishProfilePickerOpen = false"
+          >
+            <view class="publish-choice-sheet">
+              <view class="square-sheet-heading">
+                <h2 id="publish-profile-title">选择纪念人物</h2>
+                <button
+                  role="button"
+                  class="icon-button"
+                  aria-label="关闭人物选择"
+                  @click="publishProfilePickerOpen = false"
+                >
+                  <AppIcon name="close" />
+                </button>
+              </view>
+              <button
+                v-for="profile in app.profiles"
+                :key="profile.id"
+                role="button"
+                class="publish-profile-option"
+                :class="{ active: profile.id === app.currentId }"
+                @click="selectPublishProfile(profile.id)"
+              >
+                <image
+                  v-if="profile.avatarUrl"
+                  :src="profile.avatarUrl"
+                  class="profile-avatar"
+                  mode="aspectFill"
+                />
+                <view v-else class="profile-avatar fallback">{{ profileInitial(profile) }}</view>
+                <view
+                  ><strong>{{ profile.name }}</strong
+                  ><small>{{ profile.relationship }}</small></view
+                >
+                <i aria-hidden="true" />
+              </button>
+            </view>
+          </view>
+
+          <view
+            v-if="squareSharePickerOpen"
+            class="square-sheet-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="memory-import-title"
+            @click.self="squareSharePickerOpen = false"
+          >
+            <view class="square-picker-sheet">
+              <view class="square-picker-heading">
+                <view
+                  ><h2 id="memory-import-title">从记忆中带入</h2>
+                  <p>只带入文字，你仍可继续修改。</p></view
+                >
+                <button
+                  role="button"
+                  class="icon-button"
+                  aria-label="关闭记忆选择"
+                  @click="squareSharePickerOpen = false"
+                >
+                  <AppIcon name="close" />
+                </button>
+              </view>
+              <view v-if="app.libraryMemories.length" class="square-picker-list">
+                <button
+                  v-for="memory in app.libraryMemories"
+                  :key="memory.id"
+                  role="button"
+                  class="square-picker-item"
+                  @click="chooseSquareMemory(memory)"
+                >
+                  <small
+                    >{{ profileName(memory.profileId) }} · {{ squareDate(memory.createdAt) }}</small
+                  >
+                  <strong>{{ memory.title }}</strong>
+                  <p>{{ memory.body }}</p>
+                  <text>带入这段文字</text>
+                </button>
+              </view>
+              <view v-else class="empty square-picker-empty">
+                <h3>还没有可带入的记忆</h3>
+                <p>可以先直接写下这次想说的话。</p>
+                <button role="button" class="btn secondary" @click="squareSharePickerOpen = false">
+                  继续直接写
+                </button>
+              </view>
+            </view>
           </view>
         </template>
         <button role="button" v-else class="btn" @click="go('login', '?next=compose')">
@@ -2262,8 +3390,8 @@ function confirmDeleteAccount() {
         <view class="card legal-card">
           <h2>AI 如何使用数据</h2>
           <p>
-            只有当你主动发送对话时，本次输入和你勾选的最多 5
-            条记忆才会用于生成回复。未勾选的记忆不会被带入该次回复。
+            只有当你主动发送对话时，本次输入和对话页启用的最多 5
+            条记忆才会用于生成模拟回应。系统会优先启用你允许用于对话的记忆，你可以在发送前调整。
           </p>
         </view>
         <view v-if="app.session.userId" class="card legal-card">
@@ -2301,10 +3429,10 @@ function confirmDeleteAccount() {
       <template v-else-if="page === 'terms'">
         <h1>用户协议与 AI 说明</h1>
         <view class="card legal-card">
-          <h2>AI 不是 TA 本人</h2>
+          <h2>这是 AI 模拟回应</h2>
           <p>
-            萤火是整理记忆和表达想念的辅助工具。AI
-            回复由模型根据你授权的内容生成，可能不准确，不代表、不复活、也不冒充任何真实人物。
+            萤火会根据你主动提供的资料与记忆，以 TA 的称呼和口吻生成回应。它不是真人，不代表 TA
+            的真实意识，也无法证明 TA 现在的状态；生成内容可能不准确。
           </p>
         </view>
         <view class="card legal-card">
@@ -2365,144 +3493,202 @@ function confirmDeleteAccount() {
         <button role="button" v-else class="btn" @click="go('login')">进入体验空间后反馈</button>
       </template>
       <template v-else-if="page === 'me'">
-        <h1>我的空间</h1>
-        <p class="caption">管理自己的记忆和找回方式。</p>
-        <button role="button" class="row" @click="go('memories')">
-          查看我的全部记忆 <AppIcon name="arrow" />
-        </button>
+        <view class="me-profile-hero">
+          <view class="me-profile-main">
+            <view class="profile-avatar fallback me-avatar">我</view>
+            <view
+              ><h1>我的萤火</h1>
+              <p>
+                收藏着
+                {{ app.libraryReady ? app.libraryMemories.length : app.memories.length }} 段记忆 ·
+                {{ app.profiles.length }} 位重要的人
+              </p></view
+            >
+          </view>
+          <view class="me-firefly-glow" aria-hidden="true" />
+          <view class="sprite mascot me-firefly" role="img" aria-label="陪伴记忆的萤火虫" />
+        </view>
         <button role="button" v-if="!app.session.userId" class="btn" @click="go('login')">
           开始记录
         </button>
-        <view v-if="app.session.userId" class="card account-card">
-          <text class="badge">{{
-            app.bootstrap?.recoveryConfigured ? '跨设备找回已设置' : '跨设备找回未设置'
-          }}</text>
-          <h2>保护你的记忆</h2>
-          <p class="caption">内容已保存在空间。生成一张找回卡并存到手机，换设备时照着填写即可。</p>
-          <small>萤火号</small
-          ><button
-            role="button"
-            class="account-code"
-            :aria-label="'复制萤火号 ' + (app.session.familyCode || '')"
-            @click="copyText(app.session.familyCode || '', '萤火号')"
-          >
-            {{ app.session.familyCode || '正在识别…' }}
-          </button>
-          <template v-if="generatedRecoveryCode">
-            <view class="recovery-secret"
-              ><small>安全恢复码 · 只显示这一次</small
-              ><strong>{{ generatedRecoveryCode }}</strong></view
+        <template v-if="app.session.userId">
+          <view class="phone-protect-card">
+            <view class="phone-protect-copy"
+              ><strong>{{
+                app.bootstrap?.boundPhone ? '手机号已记录' : '绑定手机号，保护记忆'
+              }}</strong
+              ><small>{{
+                app.bootstrap?.boundPhone
+                  ? app.bootstrap.boundPhone + ' · 可随时更换'
+                  : '无需验证码；服务端只保存加密摘要和后四位'
+              }}</small></view
             >
-            <view class="recovery-actions">
+            <button role="button" class="text-button" @click="showPhoneBinding">
+              {{ phonePanelOpen ? '收起' : app.bootstrap?.boundPhone ? '管理' : '去绑定' }}
+            </button>
+          </view>
+          <view v-if="phonePanelOpen" class="phone-bind-panel">
+            <template v-if="!app.bootstrap?.boundPhone">
+              <h3>绑定常用手机号</h3>
+              <p class="caption">当前不会发送验证码；完整号码不会写入数据库。</p>
+              <label class="field"
+                ><text>手机号</text
+                ><input
+                  v-model.trim="form.phone"
+                  type="number"
+                  maxlength="11"
+                  aria-label="手机号"
+                  placeholder="请输入 11 位手机号"
+              /></label>
               <button
                 role="button"
-                class="btn secondary"
-                @click="
-                  copyText(
-                    '萤火号：' + app.session.familyCode + '\n安全恢复码：' + generatedRecoveryCode,
-                    '萤火号和安全恢复码',
-                  )
-                "
+                class="btn"
+                :disabled="app.busy || !/^1[3-9]\d{9}$/.test(form.phone.trim())"
+                :aria-disabled="app.busy || !/^1[3-9]\d{9}$/.test(form.phone.trim())"
+                @click="bindPhone"
               >
-                复制信息
+                {{ app.busy ? '正在绑定…' : '确认绑定' }}
               </button>
-              <button role="button" class="btn" @click="saveRecoveryCard">保存找回卡</button>
-            </view>
-            <image
-              v-if="recoveryCardDataUrl"
-              class="recovery-card-preview"
-              :src="recoveryCardDataUrl"
-              mode="widthFix"
-              aria-label="包含萤火号和安全恢复码的找回卡"
-            />
-            <p class="account-warning">
-              {{
-                isWeChat
-                  ? '微信内请长按找回卡图片保存。'
-                  : '请把找回卡存到安全的位置，不要转发给他人。'
-              }}
-            </p>
-          </template>
-          <template v-else>
-            <view v-if="app.bootstrap?.recoveryConfigured" class="notice"
-              >恢复码已生成。请确认你已妥善保存；重新生成会让旧码失效。</view
-            >
-            <button
-              role="button"
-              class="btn"
-              :class="{ secondary: app.bootstrap?.recoveryConfigured }"
-              :disabled="app.busy"
-              @click="createRecoveryCode"
-              :aria-disabled="app.busy"
-            >
-              {{
-                app.busy
-                  ? '正在生成…'
-                  : app.bootstrap?.recoveryConfigured
-                    ? '重新生成找回卡'
-                    : '生成找回卡'
-              }}
-            </button>
-            <p class="account-warning">
-              {{
-                app.bootstrap?.recoveryConfigured
-                  ? '重新生成会让旧找回卡失效；萤火不会通过客服索要恢复码。'
-                  : '未设置找回方式时，请保留当前登录；失去登录后可能无法找回。'
-              }}
-            </p>
-          </template>
-          <small class="block">设备登录通常保留 30 天，这是登录期限，不是内容保存期限。</small>
-          <template v-if="app.bootstrap?.boundPhone">
-            <button
-              role="button"
-              class="disclosure-button"
-              :aria-expanded="phonePanelOpen"
-              @click="showPhoneBinding"
-            >
-              <text>旧手机号记录（不能找回）</text
-              ><text>{{ phonePanelOpen ? '收起' : '管理' }}</text>
-            </button>
-            <view v-if="phonePanelOpen" class="notice"
-              ><p>尾号 {{ app.bootstrap.boundPhone }} 未经过验证，不能用于找回。</p>
+            </template>
+            <template v-else>
+              <p class="caption">
+                手机号已做不可逆加密记录。短信验证能力接入后，才能用于安全找回。
+              </p>
               <button
                 role="button"
-                class="text-button"
+                class="text-button danger-text"
                 :disabled="app.busy"
-                @click="clearPhone"
                 :aria-disabled="app.busy"
+                @click="clearPhone"
               >
-                移除旧记录
-              </button></view
+                移除手机号记录
+              </button>
+            </template>
+          </view>
+          <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
+          <view v-if="app.status" class="saved-state" role="status">{{ app.status }}</view>
+
+          <view class="me-settings">
+            <button role="button" class="me-setting-row" @click="go('chat')">
+              <view class="me-setting-icon"><AppIcon name="chat" /></view>
+              <view
+                ><strong>人物与萤火空间</strong
+                ><small>管理头像、称呼、人物故事与聊天对象</small></view
+              >
+            </button>
+            <button role="button" class="me-setting-row" @click="go('memories')">
+              <view class="me-setting-icon"><AppIcon name="book" /></view>
+              <view><strong>我的记忆</strong><small>查看、编辑与分享</small></view>
+            </button>
+            <button role="button" class="me-setting-row" @click="go('shares')">
+              <view class="me-setting-icon"><AppIcon name="community" /></view>
+              <view><strong>我的发布</strong><small>管理公开、审核中与私密内容</small></view>
+            </button>
+            <button
+              role="button"
+              class="me-setting-row"
+              :aria-expanded="backupPanelOpen"
+              @click="backupPanelOpen = !backupPanelOpen"
             >
-          </template>
-        </view>
-        <view class="card">
-          <button role="button" class="row" @click="go('square', '?view=mine')">
-            我的公开分享 <AppIcon name="arrow" />
+              <view class="me-setting-icon"><AppIcon name="lock" /></view>
+              <view><strong>备用找回卡</strong><small>保存到手机，不需要记住安全码</small></view>
+              <text class="setting-state">{{ backupPanelOpen ? '收起' : '查看' }}</text>
+            </button>
+            <button role="button" class="me-setting-row" @click="go('privacy')">
+              <view class="me-setting-icon"><AppIcon name="lock" /></view>
+              <view><strong>隐私与数据</strong><small>公开范围、备份与账号安全</small></view>
+            </button>
+          </view>
+
+          <view v-if="backupPanelOpen" class="card account-card backup-card">
+            <text class="badge">{{
+              app.bootstrap?.recoveryConfigured ? '备用卡已设置' : '备用卡未设置'
+            }}</text>
+            <h2>把找回卡保存到手机</h2>
+            <p class="caption">不用背安全码。换设备时，打开保存的图片照着填写即可。</p>
+            <small>萤火号</small
+            ><button
+              role="button"
+              class="account-code"
+              :aria-label="'复制萤火号 ' + (app.session.familyCode || '')"
+              @click="copyText(app.session.familyCode || '', '萤火号')"
+            >
+              {{ app.session.familyCode || '正在识别…' }}
+            </button>
+            <template v-if="generatedRecoveryCode">
+              <view class="recovery-secret"
+                ><small>安全恢复码 · 只显示这一次</small
+                ><strong>{{ generatedRecoveryCode }}</strong></view
+              >
+              <view class="recovery-actions">
+                <button
+                  role="button"
+                  class="btn secondary"
+                  @click="
+                    copyText(
+                      '萤火号：' +
+                        app.session.familyCode +
+                        '\n安全恢复码：' +
+                        generatedRecoveryCode,
+                      '萤火号和安全恢复码',
+                    )
+                  "
+                >
+                  复制信息
+                </button>
+                <button role="button" class="btn" @click="saveRecoveryCard">保存找回卡</button>
+              </view>
+              <image
+                v-if="recoveryCardDataUrl"
+                class="recovery-card-preview"
+                :src="recoveryCardDataUrl"
+                mode="widthFix"
+                aria-label="包含萤火号和安全恢复码的找回卡"
+              />
+              <p class="account-warning">
+                {{ isWeChat ? '微信内请长按图片保存。' : '请保存到安全的位置，不要转发给他人。' }}
+              </p>
+            </template>
+            <template v-else>
+              <view v-if="app.bootstrap?.recoveryConfigured" class="notice"
+                >以前生成的找回卡仍可使用；重新生成会让旧卡失效。</view
+              >
+              <button
+                role="button"
+                class="btn"
+                :class="{ secondary: app.bootstrap?.recoveryConfigured }"
+                :disabled="app.busy"
+                :aria-disabled="app.busy"
+                @click="createRecoveryCode"
+              >
+                {{
+                  app.busy
+                    ? '正在生成…'
+                    : app.bootstrap?.recoveryConfigured
+                      ? '重新生成找回卡'
+                      : '生成并保存找回卡'
+                }}
+              </button>
+            </template>
+            <button role="button" class="text-button" @click="go('login', '?mode=recover')">
+              用找回卡切换已有空间
+            </button>
+          </view>
+
+          <view class="me-secondary-links">
+            <button role="button" class="row" @click="go('terms')">用户协议与 AI 说明</button>
+            <button role="button" class="row" @click="go('support')">帮助与反馈</button>
+          </view>
+          <button
+            role="button"
+            class="text-button logout-button"
+            :disabled="app.busy"
+            @click="confirmLogout"
+            :aria-disabled="app.busy"
+          >
+            退出当前空间
           </button>
-          <button role="button" class="row" @click="go('login', '?mode=recover')">
-            找回或切换已有空间 <AppIcon name="arrow" />
-          </button>
-          <button role="button" class="row" @click="go('privacy')">
-            隐私、备份与数据 <AppIcon name="arrow" />
-          </button>
-          <button role="button" class="row" @click="go('terms')">
-            用户协议与 AI 说明 <AppIcon name="arrow" />
-          </button>
-          <button role="button" class="row" @click="go('support')">
-            帮助与反馈 <AppIcon name="arrow" />
-          </button>
-        </view>
-        <button
-          role="button"
-          v-if="app.session.userId"
-          class="text-button logout-button"
-          :disabled="app.busy"
-          @click="confirmLogout"
-          :aria-disabled="app.busy"
-        >
-          退出当前空间
-        </button>
+        </template>
       </template>
     </template>
   </AppShell>

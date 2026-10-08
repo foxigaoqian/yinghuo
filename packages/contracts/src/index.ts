@@ -26,24 +26,53 @@ export const memoryInput = z
   .strict();
 export const chatInput = z
   .object({
-    text: z.string().trim().min(1).max(2000),
+    text: z.string().trim().max(2000).default(''),
+    imageDataUrl: z
+      .string()
+      .max(65_000)
+      .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/)
+      .optional(),
     clientMessageId: z.string().uuid().optional(),
     aiConsent: z.boolean().optional(),
     memoryIds: z.array(z.string().uuid()).max(5).optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => Boolean(input.text || input.imageDataUrl), {
+    message: '请输入消息或选择照片',
+    path: ['text'],
+  });
 export const postInput = z
   .object({
-    title: z.string().trim().min(1).max(60),
-    body: z.string().trim().min(1).max(3000),
+    title: z.string().trim().max(60).default(''),
+    body: z.string().trim().max(3000).default(''),
+    profileId: z.string().uuid().nullable().optional(),
+    media: z
+      .array(
+        z
+          .string()
+          .max(160_000)
+          .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/),
+      )
+      .max(9)
+      .default([]),
     visibility: z.enum(['private', 'public']).default('private'),
     publicConsent: z.boolean().default(false),
   })
   .strict()
+  .refine((x) => Boolean(x.body || x.media.length), {
+    message: '写下一句话或选择一张照片',
+    path: ['body'],
+  })
   .refine((x) => x.visibility !== 'public' || x.publicConsent, {
     message: '公开前需要确认分享授权',
     path: ['publicConsent'],
   });
+export const storyCommentInput = z
+  .object({
+    body: z.string().trim().min(1, '请先写下留言').max(300, '留言最多 300 字'),
+    parentId: z.string().uuid().nullable().optional(),
+  })
+  .strict();
 export const feedbackInput = z
   .object({
     category: z.enum(['problem', 'suggestion', 'privacy']).default('suggestion'),
@@ -95,6 +124,7 @@ export type Message = {
   profileId: string;
   role: 'user' | 'assistant';
   text: string;
+  imageUrl?: string;
   createdAt: string;
   mock: boolean;
 };
@@ -103,9 +133,30 @@ export type Post = {
   ownerId: string;
   title: string;
   body: string;
+  profileId?: string | null;
+  profileName?: string;
+  profileRelationship?: string;
+  profileAvatarUrl?: string | null;
+  media?: string[];
+  commentPreview?: StoryComment[];
   visibility: 'private' | 'public';
   moderation: 'private' | 'pending' | 'published' | 'rejected';
   moderationReason?: string | null;
+  authorName?: string;
+  isOfficial?: boolean;
+  lightCount?: number;
+  commentCount?: number;
+  viewerHasLit?: boolean;
+  createdAt: string;
+};
+export type StoryComment = {
+  id: string;
+  storyId: string;
+  body: string;
+  authorName: string;
+  isMine: boolean;
+  parentId?: string | null;
+  replyToName?: string | null;
   createdAt: string;
 };
 export type Product = {

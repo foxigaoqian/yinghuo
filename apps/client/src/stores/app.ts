@@ -8,6 +8,7 @@ import type {
   Message,
   Order,
   Post,
+  StoryComment,
   Product,
 } from '@yinghuo/contracts';
 import { api, ApiRequestError, setCsrf, requestKey } from '../services/api';
@@ -25,6 +26,7 @@ export const useAppStore = defineStore('app', () => {
   const orders = ref<Order[]>([]);
   const posts = ref<Post[]>([]);
   const publicPosts = ref<Post[]>([]);
+  const storyComments = ref<Record<string, StoryComment[]>>({});
   const libraryMemories = ref<Memory[]>([]);
   const libraryReady = ref(false);
   const products = ref<Product[]>([]);
@@ -61,6 +63,7 @@ export const useAppStore = defineStore('app', () => {
     profileId: string;
     text: string;
     memoryIds: string[];
+    imageDataUrl?: string;
     clientMessageId: string;
   } | null = null;
 
@@ -198,6 +201,8 @@ export const useAppStore = defineStore('app', () => {
     memories.value = [];
     messages.value = [];
     posts.value = [];
+    publicPosts.value = [];
+    storyComments.value = {};
     libraryMemories.value = [];
     libraryReady.value = false;
     currentId.value = '';
@@ -307,25 +312,20 @@ export const useAppStore = defineStore('app', () => {
     memories.value = memories.value.filter((item) => item.id !== id);
     libraryMemories.value = libraryMemories.value.filter((item) => item.id !== id);
   }
-  async function resetConversation() {
-    await api<{ ok: true }>('/profiles/' + currentId.value + '/messages/reset', 'POST', {});
-    messages.value = [];
-    messagesHydrated.value = true;
-    messagesProfileId.value = currentId.value;
-    pendingMessage = null;
-  }
-  async function send(text: string, memoryIds: string[]) {
+  async function send(text: string, memoryIds: string[], imageDataUrl?: string) {
     const normalizedIds = [...memoryIds];
     const existing =
       pendingMessage &&
       pendingMessage.profileId === currentId.value &&
       pendingMessage.text === text &&
+      pendingMessage.imageDataUrl === imageDataUrl &&
       JSON.stringify(pendingMessage.memoryIds) === JSON.stringify(normalizedIds)
         ? pendingMessage
         : {
             profileId: currentId.value,
             text,
             memoryIds: normalizedIds,
+            ...(imageDataUrl ? { imageDataUrl } : {}),
             clientMessageId: requestKey(),
           };
     pendingMessage = existing;
@@ -334,6 +334,7 @@ export const useAppStore = defineStore('app', () => {
       'POST',
       {
         text,
+        ...(imageDataUrl ? { imageDataUrl } : {}),
         clientMessageId: existing.clientMessageId,
         memoryIds: normalizedIds,
         aiConsent: true,
@@ -361,11 +362,70 @@ export const useAppStore = defineStore('app', () => {
     const result = await api<{ items: Post[] }>('/square?view=public');
     publicPosts.value = result.items;
   }
+  async function fetchOwnPosts() {
+    const result = await api<{ items: Post[] }>('/square?view=mine');
+    posts.value = result.items;
+    postsHydrated.value = true;
+    return result.items;
+  }
   async function fetchPost(id: string) {
     const post = await api<Post>('/square/' + id);
     const target = post.ownerId === session.value.userId ? posts : publicPosts;
     target.value = [post, ...target.value.filter((item) => item.id !== post.id)];
     return post;
+  }
+  function updateStorySocial(id: string, changes: Partial<Post>) {
+    posts.value = posts.value.map((post) => (post.id === id ? { ...post, ...changes } : post));
+    publicPosts.value = publicPosts.value.map((post) =>
+      post.id === id ? { ...post, ...changes } : post,
+    );
+  }
+  async function setStoryLight(id: string, active: boolean) {
+    const current = [...posts.value, ...publicPosts.value].find((post) => post.id === id);
+    const previousActive = Boolean(current?.viewerHasLit);
+    const previousCount = current?.lightCount || 0;
+    updateStorySocial(id, {
+      viewerHasLit: active,
+      lightCount: Math.max(0, previousCount + (active === previousActive ? 0 : active ? 1 : -1)),
+    });
+    try {
+      const result = await api<{ active: boolean; lightCount: number }>(
+        '/square/' + id + '/light',
+        active ? 'PUT' : 'DELETE',
+        {},
+      );
+      updateStorySocial(id, {
+        viewerHasLit: result.active,
+        lightCount: result.lightCount,
+      });
+      return result;
+    } catch (error) {
+      updateStorySocial(id, {
+        viewerHasLit: previousActive,
+        lightCount: previousCount,
+      });
+      throw error;
+    }
+  }
+  async function fetchStoryComments(id: string) {
+    const result = await api<{ items: StoryComment[] }>('/square/' + id + '/comments');
+    storyComments.value = { ...storyComments.value, [id]: result.items };
+    updateStorySocial(id, { commentCount: result.items.length });
+    return result.items;
+  }
+  async function addStoryComment(id: string, body: string, parentId?: string) {
+    const comment = await api<StoryComment>('/square/' + id + '/comments', 'POST', {
+      body,
+      ...(parentId ? { parentId } : {}),
+    });
+    const items = [...(storyComments.value[id] || []), comment];
+    storyComments.value = { ...storyComments.value, [id]: items };
+    const source = [...posts.value, ...publicPosts.value].find((post) => post.id === id);
+    updateStorySocial(id, {
+      commentCount: items.length,
+      commentPreview: [...(source?.commentPreview || []), comment].slice(-2),
+    });
+    return comment;
   }
   async function updatePost(id: string, input: unknown) {
     const post = await api<Post>('/square/' + id, 'PATCH', input);
@@ -405,6 +465,7 @@ export const useAppStore = defineStore('app', () => {
     messages.value = [];
     posts.value = [];
     publicPosts.value = [];
+    storyComments.value = {};
     libraryMemories.value = [];
     libraryReady.value = false;
     hydrated.value = false;
@@ -433,6 +494,7 @@ export const useAppStore = defineStore('app', () => {
     orders,
     posts,
     publicPosts,
+    storyComments,
     libraryMemories,
     libraryReady,
     messagesReady,
@@ -459,12 +521,15 @@ export const useAppStore = defineStore('app', () => {
     addMemory,
     updateMemory,
     deleteMemory,
-    resetConversation,
     send,
     buy,
     publish,
     fetchPublicPosts,
+    fetchOwnPosts,
     fetchPost,
+    setStoryLight,
+    fetchStoryComments,
+    addStoryComment,
     updatePost,
     deletePost,
     exportAccount,
