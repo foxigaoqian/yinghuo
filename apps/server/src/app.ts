@@ -34,6 +34,7 @@ import {
 import type { BootstrapState } from '@yinghuo/contracts';
 import { DemoStore } from './demo-store';
 import { DemoAuth, SessionGuard, type UserRequest } from './auth';
+import { ChatRateLimitGuard } from './chat-rate-limit';
 import { MockChatProvider } from './providers';
 import { SupabaseApiModule } from './supabase-app';
 const read = <T extends z.ZodTypeAny>(schema: T, input: unknown): z.output<T> => {
@@ -269,7 +270,9 @@ export class ProfilesController {
       ),
     };
   }
-  @Post('profiles/:id/messages') async send(
+  @Post('profiles/:id/messages')
+  @UseGuards(ChatRateLimitGuard)
+  async send(
     @Req() req: UserRequest,
     @Param('id') id: string,
     @Body() body: unknown,
