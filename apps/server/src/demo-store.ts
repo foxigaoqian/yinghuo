@@ -32,12 +32,31 @@ export class DemoStore {
       configured === ':memory:'
         ? configured
         : resolve(__dirname, '../../..', configured || '.data/demo.json');
-    this.state =
-      this.file !== ':memory:' && existsSync(this.file)
-        ? JSON.parse(readFileSync(this.file, 'utf8'))
-        : empty();
+    this.state = this.load();
     if (this.state.version !== 1 || !Array.isArray(this.state.profiles) || !this.state.idempotency)
       throw new Error('Invalid demo data format');
+  }
+  /**
+   * 读取本地 JSON 数据。文件损坏（断电写一半、手动改错）时不让服务启动崩溃：
+   * 把坏文件重命名备份为 `.corrupt-<时间戳>`，用空状态启动并打日志告警。
+   */
+  private load(): State {
+    if (this.file === ':memory:' || !existsSync(this.file)) return empty();
+    try {
+      return JSON.parse(readFileSync(this.file, 'utf8')) as State;
+    } catch (err) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backup = `${this.file}.corrupt-${stamp}`;
+      try {
+        renameSync(this.file, backup);
+      } catch {
+        // 备份失败也不阻塞启动
+      }
+      console.warn(
+        `[demo-store] 数据文件损坏，已备份为 ${backup} 并以空状态启动：${(err as Error)?.message}`,
+      );
+      return empty();
+    }
   }
   save() {
     if (this.file === ':memory:') return;
