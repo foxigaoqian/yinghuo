@@ -4255,8 +4255,8 @@ button.text-button.danger-text {
     border-radius: 18px 18px 0 0;
   }
   .chat-screen {
-    top: calc(var(--chat-viewport-offset, 0px) + 24px);
-    height: calc(var(--chat-viewport-height, 100dvh) - 48px);
+    top: var(--chat-viewport-offset, 0px);
+    height: var(--chat-viewport-height, 100dvh);
     border-radius: 26px;
   }
 }
