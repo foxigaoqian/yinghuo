@@ -3,6 +3,6 @@ import './styles/base.css';
 </script>
 <style>
 page {
-  background: #f7f5f0;
+  background: linear-gradient(#e9e3d5, #e3dccb);
 }
 </style>

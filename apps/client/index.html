@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f7f5f0" />
+    <meta name="theme-color" content="#f7f4ec" />
     <meta name="description" content="萤火是一处珍藏人物、记忆与故事的私人空间。" />
     <meta property="og:title" content="萤火 · 珍藏每一点光" />
     <meta property="og:description" content="让想念，有一个地方安放。" />
     <meta property="og:type" content="website" />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%235f7359'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23f7d774'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f7f4ec'/%3E%3Ccircle cx='32' cy='32' r='29' fill='none' stroke='%23ddd3bf' stroke-width='2'/%3E%3Ccircle cx='32' cy='32' r='15' fill='%23f5c542' opacity='.22'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23f5c542'/%3E%3C/svg%3E"
     />
     <title>萤火 · 珍藏每一点光</title>
     <style>
@@ -19,8 +19,10 @@
       #app {
         min-height: 100%;
         margin: 0;
-        background: #f7f5f0;
-        color: #26372a;
+        background:
+          radial-gradient(90% 34% at 82% -4%, #fffdf2cc, transparent 70%),
+          linear-gradient(168deg, #f8f5ee 0%, #f7f3e9 46%, #f3eee0 100%);
+        color: #3a3222;
       }
       .boot-shell {
         box-sizing: border-box;
@@ -29,37 +31,75 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC',
+          'Microsoft YaHei', sans-serif;
         text-align: center;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.055' fill='%23806a4a'/%3E%3C/svg%3E");
       }
       .boot-shell__word {
-        display: block;
-        margin-bottom: 10px;
-        color: #5f7359;
-        font-size: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 14px;
+        color: #80601a;
+        font-family: 'Songti SC', STSong, 'Source Han Serif SC', 'SimSun', serif;
+        font-size: 17px;
+        font-weight: 700;
         letter-spacing: 0.35em;
+        text-indent: 0.35em;
+      }
+      .boot-shell__word::before {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #f5c542;
+        box-shadow:
+          0 0 10px 2px #f5c54299,
+          0 0 22px 6px #f5c54233;
       }
       .boot-shell h1 {
         max-width: 420px;
-        margin: 0 auto 16px;
-        font-family: serif;
-        font-size: 40px;
-        line-height: 1.28;
-        font-weight: 500;
+        margin: 0 auto 14px;
+        color: #2c2516;
+        font-family: 'Songti SC', STSong, 'Source Han Serif SC', 'SimSun', serif;
+        font-size: 36px;
+        line-height: 1.42;
+        font-weight: 700;
+        letter-spacing: 0.02em;
       }
       .boot-shell p {
         margin: 0;
-        color: #69756b;
+        color: #6b6353;
         font-size: 15px;
       }
       .boot-shell__status {
         display: inline-flex;
         margin-top: 28px;
-        padding: 12px 24px;
-        border: 1px solid #ccd4c8;
+        padding: 13px 26px;
+        border: 1px solid #99805c;
+        border-bottom-color: #8a7050;
         border-radius: 999px;
-        background: #fff;
-        color: #5f7359;
+        background: linear-gradient(176deg, #d2bd97, #b89c72);
+        color: #2c2113;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        box-shadow:
+          inset 0 1px 0 #fff8e980,
+          0 6px 18px #6b50221f;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .boot-shell__word::before {
+          animation: boot-glow 2.4s ease-in-out infinite alternate;
+        }
+        @keyframes boot-glow {
+          to {
+            box-shadow:
+              0 0 14px 4px #f5c542b3,
+              0 0 30px 9px #f5c54240;
+          }
+        }
       }
     </style>
   </head>

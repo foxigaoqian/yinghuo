@@ -15,7 +15,7 @@ export function setCsrf(token: string | null) {
 }
 export async function api<T>(
   path: string,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
   data?: unknown,
   headers: Record<string, string> = {},
 ): Promise<T> {
