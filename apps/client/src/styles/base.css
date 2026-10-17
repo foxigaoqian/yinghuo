@@ -2616,7 +2616,10 @@ html button.chat-memory-save[disabled] {
   position: relative;
   flex: 0 0 auto;
   z-index: 2;
-  padding: 8px 6px calc(10px + env(safe-area-inset-bottom));
+  width: 100%;
+  margin: 0;
+  padding: 8px max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
   border-top: 1px solid var(--line);
   background: #fdfaf3f5;
   backdrop-filter: blur(16px);
