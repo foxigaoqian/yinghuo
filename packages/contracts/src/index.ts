@@ -96,6 +96,19 @@ export const phoneBindInput = z
       .regex(/^1[3-9]\d{9}$/, '请输入正确的 11 位手机号'),
   })
   .strict();
+export const accountAvatarInput = z
+  .object({
+    removeAvatar: z.boolean().default(false),
+    avatarDataUrl: z
+      .string()
+      .max(90_000)
+      .regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/)
+      .optional(),
+  })
+  .strict()
+  .refine((input) => input.removeAvatar || Boolean(input.avatarDataUrl), {
+    message: '请选择头像或移除当前头像',
+  });
 export const idParam = z.string().uuid();
 export type Profile = {
   id: string;
@@ -137,6 +150,7 @@ export type Post = {
   profileName?: string;
   profileRelationship?: string;
   profileAvatarUrl?: string | null;
+  authorAvatarUrl?: string | null;
   media?: string[];
   commentPreview?: StoryComment[];
   visibility: 'private' | 'public';
@@ -154,6 +168,7 @@ export type StoryComment = {
   storyId: string;
   body: string;
   authorName: string;
+  authorAvatarUrl?: string | null;
   isMine: boolean;
   parentId?: string | null;
   replyToName?: string | null;
@@ -196,6 +211,7 @@ export type BootstrapState = {
   phoneVerified: boolean;
   gender: 'male' | 'female' | null;
   birthYear: number | null;
+  userAvatarUrl: string | null;
   profileCount: number;
   recentProfileId: string | null;
   recentConversationId: string | null;
