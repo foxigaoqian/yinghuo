@@ -22,6 +22,9 @@ function fakeSupabase() {
     profile_preferences: [],
     consents: [],
     private_stories: [],
+    story_reactions: [],
+    story_comments: [],
+    story_comment_reports: [],
     account_recovery_codes: recoveryRows,
     user_feedback: [],
   };
@@ -533,10 +536,10 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     );
     assert.match(prompts[0].input.messages[0].content, /一起做饭/);
     assert.doesNotMatch(prompts[0].input.messages[0].content, /第一次做饭/);
-    assert.match(prompts[0].input.messages[0].content, /对象对用户的称呼："小宇"/);
-    assert.match(prompts[0].input.messages[0].content, /不要先解释你的身份/);
-    assert.match(prompts[0].input.messages[0].content, /你们平时怎么联系/);
-    assert.match(prompts[0].input.messages[0].content, /今天是什么让你特别想起/);
+    assert.match(prompts[0].input.messages[0].content, /人物对用户的称呼："小宇"/);
+    assert.match(prompts[0].input.messages[0].content, /不要主动解释身份/);
+    assert.match(prompts[0].input.messages[0].content, /先直接回答用户字面上说的话/);
+    assert.match(prompts[0].input.messages[0].content, /不要分析用户情绪/);
     const again = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
       text: '今天怎么样',
       memoryIds: [selected.data.id],
