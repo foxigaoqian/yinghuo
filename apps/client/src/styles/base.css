@@ -717,6 +717,48 @@ html button.home-primary-action[disabled] {
   background: #f7e6e2;
   color: var(--danger);
 }
+.account-status-toast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(calc(100vw - 24px), 390px);
+  margin: 0;
+  padding: 11px 14px;
+  transform: translateX(-50%);
+  border: 1px solid #e4d5ae;
+  border-radius: 14px;
+  background: #fffcf4f5;
+  color: #51472f;
+  box-shadow: 0 8px 24px #49371824;
+  font-size: 13px;
+  line-height: 1.5;
+  animation: account-toast-in 180ms ease-out both;
+  pointer-events: none;
+}
+.account-status-toast .app-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+@keyframes account-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-status-toast {
+    animation: none;
+  }
+}
 .badge {
   display: inline-block;
   padding: 4px 9px;
@@ -2412,7 +2454,8 @@ checkbox:not([hidden]) .uni-checkbox-input:has(svg) {
   border: 5px solid #fffefb;
   border-radius: 8px;
   box-shadow: 0 4px 14px #5f482322;
-  object-fit: cover;
+  object-fit: contain;
+  background: #ece5d5;
 }
 .bubble.user .chat-message-photo:only-child {
   margin-bottom: -4px;
@@ -2573,7 +2616,7 @@ html button.chat-memory-save[disabled] {
   position: relative;
   flex: 0 0 auto;
   z-index: 2;
-  padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 8px 6px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: #fdfaf3f5;
   backdrop-filter: blur(16px);
@@ -2688,7 +2731,8 @@ html button.chat-memory-save[disabled] {
   width: 52px;
   height: 52px;
   border-radius: 10px;
-  object-fit: cover;
+  object-fit: contain;
+  background: #ece5d5;
 }
 .chat-photo-draft strong,
 .chat-photo-draft small {
@@ -3069,14 +3113,16 @@ html .conversation-composer button.send-button[disabled] {
   border: 4px solid #fffefb;
   border-radius: 6px;
   box-shadow: 0 2px 8px #5f482318;
-  object-fit: cover;
+  object-fit: contain;
 }
 .square-media-grid.count-1 {
   grid-template-columns: 1fr;
   max-width: 100%;
 }
 .square-media-grid.count-1 image {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: auto;
+  max-height: min(62dvh, 520px);
+  object-fit: contain;
 }
 .square-media-grid.count-2,
 .square-media-grid.count-4 {
@@ -3637,6 +3683,8 @@ html button.square-action[disabled] {
 .publish-photo-item > image {
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  background: #ece5d5;
 }
 .publish-photo-item > button {
   position: absolute;
