@@ -3124,7 +3124,8 @@ html .conversation-composer button.send-button[disabled] {
 }
 .square-media-grid.count-1 image {
   aspect-ratio: auto;
-  max-height: min(62dvh, 520px);
+  height: clamp(240px, 70dvh, 620px);
+  max-height: 620px;
   object-fit: contain;
 }
 .square-media-grid.count-2,

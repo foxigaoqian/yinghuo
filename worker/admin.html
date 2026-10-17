@@ -698,6 +698,27 @@
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
+      .story-media {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .story-media.one {
+        grid-template-columns: minmax(0, 420px);
+      }
+      .story-media img {
+        display: block;
+        width: 100%;
+        height: 150px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #eee7d9;
+        object-fit: contain;
+      }
+      .story-media.one img {
+        height: min(55vh, 480px);
+      }
       .reason {
         margin-top: 10px;
         color: var(--danger);
@@ -1576,6 +1597,22 @@
               '</h3><p>' +
               esc(item.body || '') +
               '</p>' +
+              (item.media?.length
+                ? '<div class="story-media ' +
+                  (item.media.length === 1 ? 'one' : '') +
+                  '">' +
+                  item.media
+                    .map(
+                      (photo, photoIndex) =>
+                        '<img src="' +
+                        esc(photo) +
+                        '" alt="故事照片 ' +
+                        (photoIndex + 1) +
+                        '" loading="lazy">',
+                    )
+                    .join('') +
+                  '</div>'
+                : '') +
               (item.moderationReason
                 ? '<div class="reason">审核说明：' + esc(item.moderationReason) + '</div>'
                 : '') +

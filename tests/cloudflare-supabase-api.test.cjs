@@ -469,6 +469,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     const publicStory = await a.request('POST', '/square', {
       title: '公开',
       body: '等待审核后展示',
+      media: ['data:image/jpeg;base64,/9j/2Q=='],
       visibility: 'public',
       publicConsent: true,
     });
@@ -508,10 +509,9 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
       'active',
     );
     assert.equal((await a.request('GET', '/admin/feedback', undefined, reviewer)).status, 200);
-    assert.equal(
-      (await a.request('GET', '/admin/stories', undefined, reviewer)).data.items.length,
-      1,
-    );
+    const reviewStories = await a.request('GET', '/admin/stories', undefined, reviewer);
+    assert.equal(reviewStories.data.items.length, 1);
+    assert.deepEqual(reviewStories.data.items[0].media, ['data:image/jpeg;base64,/9j/2Q==']);
     const published = await a.request(
       'PATCH',
       '/admin/stories/' + publicStory.data.id,
