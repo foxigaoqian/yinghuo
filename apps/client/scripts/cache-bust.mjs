@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const release = '20261006-ux';
+const release = '20261017-chat-spacing';
 const indexPath = resolve('dist/build/h5/index.html');
 const html = await readFile(indexPath, 'utf8');
 const next = html.replace(
