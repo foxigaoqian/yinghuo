@@ -47,6 +47,9 @@ test('Worker config sends API routes to code before SPA fallback', () => {
   const config = fs.readFileSync(path.join(__dirname, '..', 'wrangler.worker.jsonc'), 'utf8');
   assert.match(config, /"name": "yinghuo-h5-sg-v2"/);
   assert.match(config, /"not_found_handling": "single-page-application"/);
-  assert.match(config, /"run_worker_first": \["\/api\/v1\/\*", "\/admin", "\/admin\/"\]/);
+  assert.match(
+    config,
+    /"run_worker_first": \["\/api\/v1\/\*", "\/admin", "\/admin\/"(?:, [^\]]+)?\]/,
+  );
   assert.doesNotMatch(config, /SUPABASE_EDGE_SHARED_SECRET\s*":\s*"[^"]+"/);
 });

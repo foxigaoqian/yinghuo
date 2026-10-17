@@ -52,6 +52,8 @@ function fakeSupabase() {
         if (name === 'yinghuo_create_guest_session') {
           const user = {
             id: crypto.randomUUID(),
+            display_name: '',
+            status: 'active',
             account_kind: 'guest',
             family_code: 'TEST1234',
             free_slot_consumed_at: null,
@@ -60,6 +62,9 @@ function fakeSupabase() {
             phone_verified: false,
             gender: null,
             birth_year: null,
+            merged_into_user_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
             deleted_at: null,
           };
           users.push(user);
@@ -474,6 +479,35 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal((await a.request('GET', '/admin/stories')).status, 401);
     env.ADMIN_REVIEW_TOKEN = 'review-test-token-long-enough';
     const reviewer = { authorization: 'Bearer ' + env.ADMIN_REVIEW_TOKEN };
+    const overview = await a.request('GET', '/admin/overview', undefined, reviewer);
+    assert.equal(overview.status, 200);
+    assert.equal(overview.data.users.total, 2);
+    assert.equal(overview.data.profiles, 1);
+    assert.equal(overview.data.stories.pending, 1);
+    const managedUsers = await a.request('GET', '/admin/users', undefined, reviewer);
+    assert.equal(managedUsers.status, 200);
+    assert.equal(managedUsers.data.items.length, 2);
+    assert.ok(managedUsers.data.items.some((item) => item.profileCount === 1));
+    const suspended = await a.request(
+      'PATCH',
+      '/admin/users/' + another.data.userId,
+      { status: 'suspended' },
+      reviewer,
+    );
+    assert.equal(suspended.status, 200);
+    assert.equal(suspended.data.status, 'suspended');
+    assert.equal(
+      (
+        await a.request(
+          'PATCH',
+          '/admin/users/' + another.data.userId,
+          { status: 'active' },
+          reviewer,
+        )
+      ).data.status,
+      'active',
+    );
+    assert.equal((await a.request('GET', '/admin/feedback', undefined, reviewer)).status, 200);
     assert.equal(
       (await a.request('GET', '/admin/stories', undefined, reviewer)).data.items.length,
       1,
