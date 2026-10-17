@@ -24,6 +24,7 @@ const form = reactive({
   relationship: '',
   nickname: '',
   avatarDataUrl: '',
+  accountAvatarDataUrl: '',
   removeAvatar: false,
   callMe: '',
   story: '',
@@ -69,6 +70,7 @@ const selectedChatMemories = ref<string[]>([]);
 const generatedRecoveryCode = ref('');
 const recoveryCardDataUrl = ref('');
 const recoveryHelpOpen = ref(false);
+const recoveryMethod = ref<'phone' | 'card'>('card');
 const backupPanelOpen = ref(false);
 const phonePanelOpen = ref(false);
 const chatReplyPending = ref(false);
@@ -691,7 +693,30 @@ function chooseProfileAvatar() {
 function removeProfileAvatar() {
   form.avatarDataUrl = '';
   form.removeAvatar = true;
-  app.status = '保存资料后将恢复为首字头像。';
+  app.status = '';
+}
+function chooseAccountAvatar() {
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    success: (result) => {
+      const source = result.tempFilePaths[0];
+      if (!source) return;
+      void app.run(async () => {
+        form.accountAvatarDataUrl = await compressAvatar(source);
+        await app.updateAccountAvatar({ avatarDataUrl: form.accountAvatarDataUrl });
+        form.accountAvatarDataUrl = '';
+        app.status = '个人头像已更新，广场发布和留言会使用这个头像。';
+      });
+    },
+  });
+}
+function removeAccountAvatar() {
+  void app.run(async () => {
+    await app.updateAccountAvatar({ removeAvatar: true });
+    form.accountAvatarDataUrl = '';
+    app.status = '已恢复为“我”的首字头像。';
+  });
 }
 function switchProfile(id: string) {
   if (id === app.currentId || app.busy) return;
@@ -1748,9 +1773,7 @@ function confirmDeleteAccount() {
             <button role="button" class="text-button" @click="go('me')">设置找回方式</button>
           </view>
           <view v-if="!recoveryNeeded" class="yh-privacy-note"
-            ><AppIcon name="lock" /><text
-              >记忆默认只属于你，开启分享才会公开。</text
-            ></view
+            ><AppIcon name="lock" /><text>记忆默认只属于你，开启分享才会公开。</text></view
           >
         </template>
         <view v-else class="hero first-visit yh-guest-home">
@@ -1815,27 +1838,62 @@ function confirmDeleteAccount() {
           </button></view
         >
         <view class="recovery-card">
-          <h2 v-if="!recovering">已有记忆？找回原来的空间</h2>
-          <label class="field"
-            ><text>萤火号</text
-            ><input
-              v-model="form.familyCode"
-              aria-label="萤火号"
-              maxlength="24"
-              placeholder="输入找回卡上的萤火号"
-          /></label>
-          <label class="field"
-            ><text>安全恢复码</text
-            ><input
-              v-model="form.recoveryCode"
-              aria-label="安全恢复码"
-              :password="true"
-              maxlength="40"
-              placeholder="输入找回卡上的 YH- 开头安全恢复码"
-          /></label>
+          <h2>{{ recovering ? '选择找回方式' : '已有记忆？找回原来的空间' }}</h2>
+          <view class="recovery-method-tabs" role="tablist" aria-label="找回方式">
+            <button
+              role="tab"
+              :aria-selected="recoveryMethod === 'phone'"
+              :class="{ active: recoveryMethod === 'phone' }"
+              @click="recoveryMethod = 'phone'"
+            >
+              手机号找回
+            </button>
+            <button
+              role="tab"
+              :aria-selected="recoveryMethod === 'card'"
+              :class="{ active: recoveryMethod === 'card' }"
+              @click="recoveryMethod = 'card'"
+            >
+              找回卡找回
+            </button>
+          </view>
+          <template v-if="recoveryMethod === 'card'">
+            <label class="field"
+              ><text>萤火号</text
+              ><input
+                v-model="form.familyCode"
+                aria-label="萤火号"
+                maxlength="24"
+                placeholder="输入找回卡上的萤火号"
+            /></label>
+            <label class="field"
+              ><text>安全恢复码</text
+              ><input
+                v-model="form.recoveryCode"
+                aria-label="安全恢复码"
+                :password="true"
+                maxlength="40"
+                placeholder="输入 YH- 开头安全恢复码"
+            /></label>
+          </template>
+          <template v-else>
+            <label class="field"
+              ><text>手机号</text
+              ><input
+                v-model.trim="form.phone"
+                type="number"
+                maxlength="11"
+                aria-label="用于找回的手机号"
+                placeholder="输入绑定的 11 位手机号"
+            /></label>
+            <view class="notice recovery-phone-notice"
+              >短信验证能力正在接入，暂时请使用找回卡。</view
+            >
+          </template>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
           <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
           <button
+            v-if="recoveryMethod === 'card'"
             role="button"
             class="btn"
             :disabled="app.busy || !form.familyCode.trim() || !form.recoveryCode.trim()"
@@ -1844,7 +1902,9 @@ function confirmDeleteAccount() {
           >
             {{ app.busy ? '正在找回…' : '找回我的萤火' }}
           </button>
-          <small class="block recovery-hint">需要同时填写两项；手机号验证码找回尚未接通。</small>
+          <button v-else role="button" class="btn" disabled aria-disabled="true">
+            短信找回即将开放
+          </button>
           <button
             role="button"
             class="disclosure-button"
@@ -2062,7 +2122,7 @@ function confirmDeleteAccount() {
           </view>
           <view class="profile-heading space-heading">
             <image
-                aria-hidden="true"
+              aria-hidden="true"
               v-if="app.current.avatarUrl"
               class="profile-avatar large"
               :src="app.current.avatarUrl"
@@ -2138,9 +2198,7 @@ function confirmDeleteAccount() {
       </template>
       <template v-else-if="page === 'memories'">
         <p class="caption library-caption">自己留下的内容，都可以从这里找到。</p>
-        <view v-if="query?.saved === '1'" class="save-toast" role="status"
-          >已保存到我的记忆。</view
-        >
+        <view v-if="query?.saved === '1'" class="save-toast" role="status">已保存到我的记忆。</view>
         <view class="profile-tabs library-filters" aria-label="按人物筛选记忆">
           <button
             role="button"
@@ -2339,18 +2397,18 @@ function confirmDeleteAccount() {
         <template v-if="selectedMemory"
           ><view class="memory-sheet">
             <text class="badge">{{ app.current?.name }} · 仅自己可见</text>
-          <view
-            v-if="query?.saved === '1' && (query?.shared === '1' || query?.shareFailed === '1')"
-            class="save-toast"
-            role="status"
-          >
-            {{ query?.shared === '1' ? '公开副本已提交审核。' : '公开副本暂未提交。' }}
-          </view>
-          <view v-if="query?.shareFailed === '1'" class="notice error" role="alert"
-            >私密记忆没有丢失，也不会重复保存。网络恢复后，可在下方重新提交公开副本。</view
-          >
-          <h1>{{ selectedMemory.title }}</h1>
-          <p class="prose">{{ selectedMemory.body }}</p>
+            <view
+              v-if="query?.saved === '1' && (query?.shared === '1' || query?.shareFailed === '1')"
+              class="save-toast"
+              role="status"
+            >
+              {{ query?.shared === '1' ? '公开副本已提交审核。' : '公开副本暂未提交。' }}
+            </view>
+            <view v-if="query?.shareFailed === '1'" class="notice error" role="alert"
+              >私密记忆没有丢失，也不会重复保存。网络恢复后，可在下方重新提交公开副本。</view
+            >
+            <h1>{{ selectedMemory.title }}</h1>
+            <p class="prose">{{ selectedMemory.body }}</p>
             <small class="memory-meta">{{
               new Date(selectedMemory.createdAt).toLocaleDateString('zh-CN')
             }}</small>
@@ -2494,14 +2552,9 @@ function confirmDeleteAccount() {
                       >{{ profileInitial(app.current) }}</view
                     >
                     <view class="message-content" :class="{ user: message.role === 'user' }">
-                      <template v-if="message.role === 'assistant'">
-                        <view
-                          v-for="(segment, segmentIndex) in splitAssistantMessage(message.text)"
-                          :key="message.id + '-' + segmentIndex"
-                          class="bubble assistant-segment"
-                          ><text>{{ segment }}</text></view
-                        >
-                      </template>
+                      <view v-if="message.role === 'assistant'" class="bubble assistant-segment"
+                        ><text>{{ message.text }}</text></view
+                      >
                       <view
                         v-else
                         class="bubble user"
@@ -2676,53 +2729,50 @@ function confirmDeleteAccount() {
               >
               <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
               <view class="chat-input">
-                <view class="chat-input-main" role="group" aria-label="消息输入">
-                  <button
-                    role="button"
-                    class="chat-mode-button"
-                    :aria-label="chatInputMode === 'voice' ? '切换到文字输入' : '切换到语音输入'"
-                    @click="chatInputMode = chatInputMode === 'voice' ? 'text' : 'voice'"
-                  >
-                    <AppIcon :name="chatInputMode === 'voice' ? 'keyboard' : 'mic'" />
-                  </button>
-                  <input
-                    v-if="chatInputMode === 'text'"
-                    v-model="chatText"
-                    :aria-label="'想对' + app.current.name + '说的话'"
-                    maxlength="500"
-                    enterkeyhint="send"
-                    :placeholder="
-                      chatPhotoDraft ? '补充照片里的故事…' : '想对' + app.current.name + '说点什么…'
-                    "
-                    @focus="onChatFocus"
-                    @confirm="sendChat"
-                  />
-                  <button
-                    v-else
-                    role="button"
-                    class="hold-to-talk"
-                    :class="{ listening: voiceListening }"
-                    :aria-label="voiceListening ? '松开结束语音识别' : '按住进行语音识别'"
-                    @mousedown.prevent="startVoiceInput"
-                    @mouseup.prevent="stopVoiceInput"
-                    @mouseleave="voiceListening && stopVoiceInput()"
-                    @touchstart.prevent="startVoiceInput"
-                    @touchend.prevent="stopVoiceInput"
-                    @touchcancel.prevent="cancelVoiceInput"
-                  >
-                    {{ voiceListening ? voiceTranscript || '正在听…' : '按住 说话' }}
-                  </button>
-                  <button
-                    role="button"
-                    class="chat-emoji-button"
-                    :class="{ active: activeChatPanel === 'emoji' }"
-                    aria-label="选择表情"
-                    :aria-expanded="activeChatPanel === 'emoji'"
-                    @click="toggleChatPanel('emoji')"
-                  >
-                    <AppIcon name="smile" />
-                  </button>
-                </view>
+                <button
+                  role="button"
+                  class="chat-mode-button"
+                  :aria-label="chatInputMode === 'voice' ? '切换到文字输入' : '切换到语音输入'"
+                  @click="chatInputMode = chatInputMode === 'voice' ? 'text' : 'voice'"
+                >
+                  <AppIcon :name="chatInputMode === 'voice' ? 'keyboard' : 'mic'" />
+                </button>
+                <input
+                  v-if="chatInputMode === 'text'"
+                  v-model="chatText"
+                  :aria-label="'想对' + app.current.name + '说的话'"
+                  maxlength="500"
+                  :placeholder="
+                    chatPhotoDraft ? '补充照片里的故事…' : '想对' + app.current.name + '说点什么…'
+                  "
+                  @focus="onChatFocus"
+                  @confirm="sendChat"
+                />
+                <button
+                  v-else
+                  role="button"
+                  class="hold-to-talk"
+                  :class="{ listening: voiceListening }"
+                  :aria-label="voiceListening ? '松开结束语音识别' : '按住进行语音识别'"
+                  @mousedown.prevent="startVoiceInput"
+                  @mouseup.prevent="stopVoiceInput"
+                  @mouseleave="voiceListening && stopVoiceInput()"
+                  @touchstart.prevent="startVoiceInput"
+                  @touchend.prevent="stopVoiceInput"
+                  @touchcancel.prevent="cancelVoiceInput"
+                >
+                  {{ voiceListening ? voiceTranscript || '正在听…' : '按住 说话' }}
+                </button>
+                <button
+                  role="button"
+                  class="chat-emoji-button"
+                  :class="{ active: activeChatPanel === 'emoji' }"
+                  aria-label="选择表情"
+                  :aria-expanded="activeChatPanel === 'emoji'"
+                  @click="toggleChatPanel('emoji')"
+                >
+                  <AppIcon name="smile" />
+                </button>
                 <button
                   v-if="chatText.trim() || chatPhotoDraft"
                   role="button"
@@ -2817,12 +2867,18 @@ function confirmDeleteAccount() {
             :class="{ 'official-story': story.isOfficial }"
           >
             <view class="square-author">
+              <view
+                v-if="story.isOfficial"
+                class="profile-avatar square-ip-avatar"
+                role="img"
+                aria-label="萤火故事馆 IP 头像"
+              />
               <image
-                v-if="story.profileAvatarUrl"
-                :src="story.profileAvatarUrl"
+                v-else-if="story.authorAvatarUrl"
+                :src="story.authorAvatarUrl"
                 class="profile-avatar"
                 mode="aspectFill"
-                :aria-label="story.profileName || story.profileRelationship || '纪念人物头像'"
+                :aria-label="storyAuthor(story) + '的头像'"
               />
               <view v-else class="profile-avatar fallback">{{ storyAvatar(story) }}</view>
               <view class="square-author-copy">
@@ -2917,9 +2973,7 @@ function confirmDeleteAccount() {
           <AppIcon name="edit" /><text>{{ app.busy ? '正在准备' : '发帖' }}</text>
         </button>
         <view v-if="app.publicPosts.length" class="square-privacy-note"
-          ><AppIcon name="lock" /><text
-            >只展示主动公开并过审的内容。</text
-          ></view
+          ><AppIcon name="lock" /><text>只展示主动公开并过审的内容。</text></view
         >
         <view
           v-if="squareCommentSheetOpen"
@@ -2953,7 +3007,16 @@ function confirmDeleteAccount() {
                 :aria-label="'回复' + comment.authorName"
                 @click="chooseReply(comment)"
               >
-                <view class="profile-avatar fallback">{{ comment.isMine ? '我' : '萤' }}</view>
+                <image
+                  v-if="comment.authorAvatarUrl"
+                  :src="comment.authorAvatarUrl"
+                  class="profile-avatar"
+                  mode="aspectFill"
+                  :aria-label="comment.authorName + '的头像'"
+                />
+                <view v-else class="profile-avatar fallback">{{
+                  comment.isMine ? '我' : '萤'
+                }}</view>
                 <view>
                   <strong>{{ comment.authorName }}</strong>
                   <p>
@@ -2997,9 +3060,6 @@ function confirmDeleteAccount() {
         </view>
       </template>
       <template v-else-if="page === 'shares'">
-        <view v-if="query?.saved === '1'" class="save-toast" role="status">
-          已提交，审核通过后进入广场。
-        </view>
         <p class="caption shares-lead">公开、审核中和仅自己可见的内容都在这里管理。</p>
         <view v-if="myShares.length" class="shares-list">
           <button
@@ -3012,8 +3072,8 @@ function confirmDeleteAccount() {
             <view class="square-author">
               <image
                 aria-hidden="true"
-                v-if="post.profileAvatarUrl"
-                :src="post.profileAvatarUrl"
+                v-if="post.authorAvatarUrl"
+                :src="post.authorAvatarUrl"
                 class="profile-avatar"
                 mode="aspectFill"
               />
@@ -3051,43 +3111,49 @@ function confirmDeleteAccount() {
         >
         <view v-else-if="selectedPost" class="story-detail">
           <view class="story-sheet">
-          <view class="story-detail-author">
-            <image
-                aria-hidden="true"
-              v-if="selectedPost.profileAvatarUrl"
-              :src="selectedPost.profileAvatarUrl"
-              class="profile-avatar"
-              mode="aspectFill"
-            />
-            <view v-else class="profile-avatar fallback">{{ storyAvatar(selectedPost) }}</view>
+            <view class="story-detail-author">
+              <view
+                v-if="selectedPost.isOfficial"
+                class="profile-avatar square-ip-avatar"
+                role="img"
+                aria-label="萤火故事馆 IP 头像"
+              />
+              <image
+                v-else-if="selectedPost.authorAvatarUrl"
+                :src="selectedPost.authorAvatarUrl"
+                class="profile-avatar"
+                mode="aspectFill"
+                :aria-label="storyAuthor(selectedPost) + '的头像'"
+              />
+              <view v-else class="profile-avatar fallback">{{ storyAvatar(selectedPost) }}</view>
+              <view
+                ><strong>{{ storyAuthor(selectedPost) }}</strong
+                ><small
+                  >{{ storyMemorialLabel(selectedPost) }} · {{ storyMeta(selectedPost) }}</small
+                ></view
+              >
+            </view>
+            <text class="badge">{{ postStatus(selectedPost) }}</text>
+            <p class="prose story-detail-body">{{ selectedPost.body }}</p>
             <view
-              ><strong>{{ storyAuthor(selectedPost) }}</strong
-              ><small
-                >{{ storyMemorialLabel(selectedPost) }} · {{ storyMeta(selectedPost) }}</small
-              ></view
+              v-if="selectedPost.media?.length"
+              class="square-media-grid story-media-grid"
+              :class="'count-' + Math.min(selectedPost.media.length, 4)"
             >
-          </view>
-          <text class="badge">{{ postStatus(selectedPost) }}</text>
-          <p class="prose story-detail-body">{{ selectedPost.body }}</p>
-          <view
-            v-if="selectedPost.media?.length"
-            class="square-media-grid story-media-grid"
-            :class="'count-' + Math.min(selectedPost.media.length, 4)"
-          >
-            <image
-              v-for="(photo, photoIndex) in selectedPost.media"
-              :key="selectedPost.id + '-detail-photo-' + photoIndex"
-              :src="photo"
-              mode="aspectFill"
-              :aria-label="`纪念照片 ${photoIndex + 1}`"
-            />
-          </view>
-          <view
-            v-if="selectedPost.moderation === 'rejected' && selectedPost.moderationReason"
-            class="notice error"
-          >
-            {{ selectedPost.moderationReason }}
-          </view>
+              <image
+                v-for="(photo, photoIndex) in selectedPost.media"
+                :key="selectedPost.id + '-detail-photo-' + photoIndex"
+                :src="photo"
+                mode="aspectFill"
+                :aria-label="`纪念照片 ${photoIndex + 1}`"
+              />
+            </view>
+            <view
+              v-if="selectedPost.moderation === 'rejected' && selectedPost.moderationReason"
+              class="notice error"
+            >
+              {{ selectedPost.moderationReason }}
+            </view>
           </view>
           <template v-if="selectedPostIsInteractive">
             <view class="story-social-bar" aria-label="故事互动">
@@ -3121,7 +3187,16 @@ function confirmDeleteAccount() {
                   :key="comment.id"
                   class="story-comment"
                 >
-                  <view class="profile-avatar fallback">{{ comment.isMine ? '我' : '萤' }}</view>
+                  <image
+                    v-if="comment.authorAvatarUrl"
+                    :src="comment.authorAvatarUrl"
+                    class="profile-avatar"
+                    mode="aspectFill"
+                    :aria-label="comment.authorName + '的头像'"
+                  />
+                  <view v-else class="profile-avatar fallback">{{
+                    comment.isMine ? '我' : '萤'
+                  }}</view>
                   <view
                     ><strong>{{ comment.authorName }}</strong>
                     <p>
@@ -3184,7 +3259,7 @@ function confirmDeleteAccount() {
             @click="publishProfilePickerOpen = !editingStory"
           >
             <image
-                aria-hidden="true"
+              aria-hidden="true"
               v-if="app.current?.avatarUrl"
               :src="app.current.avatarUrl"
               class="profile-avatar"
@@ -3289,9 +3364,7 @@ function confirmDeleteAccount() {
             >
               {{ app.busy ? '正在发布…' : editingStory ? '保存修改' : '发布纪念' }}
             </button>
-            <small v-if="form.public"
-              >发布即确认有权分享；审核通过后进入广场。</small
-            >
+            <small v-if="form.public">发布即确认有权分享；审核通过后进入广场。</small>
             <small v-else>仅自己可见，不会出现在广场。</small>
           </view>
 
@@ -3366,7 +3439,7 @@ function confirmDeleteAccount() {
                 @click="selectPublishProfile(profile.id)"
               >
                 <image
-                aria-hidden="true"
+                  aria-hidden="true"
                   v-if="profile.avatarUrl"
                   :src="profile.avatarUrl"
                   class="profile-avatar"
@@ -3394,7 +3467,11 @@ function confirmDeleteAccount() {
               <view class="square-picker-heading">
                 <view
                   ><h2 id="memory-import-title">从记忆中带入</h2>
-                  <p>{{ app.current ? app.current.name + ' 的记忆，只带入文字' : '只带入文字' }}，你仍可继续修改。</p></view
+                  <p>
+                    {{
+                      app.current ? app.current.name + ' 的记忆，只带入文字' : '只带入文字'
+                    }}，你仍可继续修改。
+                  </p></view
                 >
                 <button
                   role="button"
@@ -3508,9 +3585,7 @@ function confirmDeleteAccount() {
             故事默认仅自己可见。选择公开时，你需确认拥有分享权限；内容通过自动检查后才会进入广场。
           </p>
         </view>
-        <p class="caption legal-foot">
-          2026年10月5日生效 · 萤火项目团队
-        </p>
+        <p class="caption legal-foot">2026年10月5日生效 · 萤火项目团队</p>
       </template>
       <template v-else-if="page === 'support'">
         <h1>帮助与反馈</h1>
@@ -3556,13 +3631,30 @@ function confirmDeleteAccount() {
       <template v-else-if="page === 'me'">
         <view class="me-profile-hero">
           <view class="me-profile-main">
-            <view class="profile-avatar fallback me-avatar">我</view>
+            <button
+              role="button"
+              class="me-avatar-button"
+              aria-label="上传或更换个人头像"
+              @click="chooseAccountAvatar"
+            >
+              <image
+                v-if="app.bootstrap?.userAvatarUrl"
+                :src="app.bootstrap.userAvatarUrl"
+                class="profile-avatar me-avatar"
+                mode="aspectFill"
+                aria-label="我的个人头像"
+              />
+              <view v-else class="profile-avatar fallback me-avatar">我</view>
+            </button>
             <view
               ><h1>我的萤火</h1>
               <p>
                 已点亮 {{ app.profiles.length }} 束萤火 ·
                 {{ app.libraryReady ? app.libraryMemories.length : app.memories.length }} 条记忆
-              </p></view
+              </p>
+              <button role="button" class="me-avatar-text" @click="chooseAccountAvatar">
+                {{ app.bootstrap?.userAvatarUrl ? '更换个人头像' : '上传个人头像' }}
+              </button></view
             >
           </view>
           <view class="me-firefly-glow" aria-hidden="true" />
@@ -3625,6 +3717,15 @@ function confirmDeleteAccount() {
           </view>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
           <view v-if="app.status" class="saved-state" role="status">{{ app.status }}</view>
+          <button
+            v-if="app.bootstrap?.userAvatarUrl"
+            role="button"
+            class="text-button me-avatar-remove"
+            :disabled="app.busy"
+            @click="removeAccountAvatar"
+          >
+            移除个人头像
+          </button>
 
           <view class="me-settings">
             <button role="button" class="me-setting-row" @click="go('chat')">
@@ -3710,8 +3811,8 @@ function confirmDeleteAccount() {
               </p>
             </template>
             <template v-else>
-              <view v-if="app.bootstrap?.recoveryConfigured" class="notice"
-                >以前生成的找回卡仍可使用；重新生成会让旧卡失效。</view
+              <view v-if="app.bootstrap?.recoveryConfigured" class="notice recovery-renew-note"
+                >旧找回卡仍有效；重新生成后旧卡会立即失效。</view
               >
               <button
                 role="button"
@@ -3737,9 +3838,9 @@ function confirmDeleteAccount() {
 
           <view class="me-secondary-links">
             <view class="me-foot-links">
-            <button role="button" class="row" @click="go('terms')">用户协议与 AI 说明</button>
-            <button role="button" class="row" @click="go('support')">帮助与反馈</button>
-          </view>
+              <button role="button" class="row" @click="go('terms')">用户协议与 AI 说明</button>
+              <button role="button" class="row" @click="go('support')">帮助与反馈</button>
+            </view>
           </view>
           <button
             role="button"
