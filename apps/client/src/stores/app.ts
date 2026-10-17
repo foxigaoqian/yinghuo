@@ -269,6 +269,11 @@ export const useAppStore = defineStore('app', () => {
     if (bootstrap.value) Object.assign(bootstrap.value, result);
     return result;
   }
+  async function updateAccountAvatar(input: { avatarDataUrl?: string; removeAvatar?: boolean }) {
+    const result = await api<{ userAvatarUrl: string | null }>('/account/avatar', 'PATCH', input);
+    if (bootstrap.value) bootstrap.value.userAvatarUrl = result.userAvatarUrl;
+    return result;
+  }
   async function addProfile(input: unknown, edit = false) {
     const p = await api<Profile>(
       '/profiles' + (edit ? '/' + currentId.value : ''),
@@ -516,6 +521,7 @@ export const useAppStore = defineStore('app', () => {
     recover,
     bindPhone,
     clearPhone,
+    updateAccountAvatar,
     addProfile,
     deleteProfile,
     addMemory,
