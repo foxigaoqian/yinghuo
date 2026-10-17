@@ -105,6 +105,7 @@ export class PublicController {
       phoneVerified: false,
       gender: null,
       birthYear: null,
+      userAvatarUrl: null,
       recoveryConfigured: false,
       recoveryUpdatedAt: null,
       profileCount: ownedProfiles.length,
