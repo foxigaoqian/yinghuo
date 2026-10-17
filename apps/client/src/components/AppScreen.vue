@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { useAppStore } from '../stores/app';
 import AppShell from './AppShell.vue';
@@ -266,6 +266,22 @@ const sampleStories = [
   },
 ];
 const selectedSample = computed(() => sampleStories.find((s) => s.id === props.query?.id));
+let accountStatusTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  () => [props.page, app.status] as const,
+  ([page, status]) => {
+    if (accountStatusTimer) clearTimeout(accountStatusTimer);
+    accountStatusTimer = undefined;
+    if (page !== 'me' || !status) return;
+    accountStatusTimer = setTimeout(() => {
+      if (props.page === 'me' && app.status === status) app.status = '';
+      accountStatusTimer = undefined;
+    }, 3200);
+  },
+);
+onBeforeUnmount(() => {
+  if (accountStatusTimer) clearTimeout(accountStatusTimer);
+});
 async function loadScreen() {
   app.error = '';
   app.status = '';
@@ -1393,7 +1409,7 @@ function bindPhone() {
     await app.bindPhone({ phone });
     form.phone = '';
     phonePanelOpen.value = false;
-    app.status = '手机号已安全记录。短信找回接入前，请同时保存找回卡。';
+    app.status = '手机号已记录。短信找回开放前，请保存找回卡。';
   });
 }
 function clearPhone() {
@@ -1688,10 +1704,14 @@ function confirmDeleteAccount() {
       >
       <view
         v-if="app.status && !['create', 'memory-edit', 'compose', 'chat', 'login'].includes(page)"
-        class="notice"
+        :class="['notice', { 'account-status-toast': page === 'me' }]"
         role="status"
-        >{{ app.status }}</view
+        aria-live="polite"
+        aria-atomic="true"
       >
+        <AppIcon v-if="page === 'me'" name="spark" />
+        <text>{{ app.status }}</text>
+      </view>
       <template v-if="page === 'home'">
         <view v-if="loading" class="loading-state" role="status" aria-label="正在打开你的萤火">
           <view class="loading-line short" /><view class="loading-line" /><view
@@ -2574,7 +2594,7 @@ function confirmDeleteAccount() {
                           v-if="message.imageUrl"
                           class="chat-message-photo"
                           :src="message.imageUrl"
-                          mode="aspectFill"
+                          mode="aspectFit"
                           aria-label="聊天中发送的照片"
                         />
                         <text v-if="message.text">{{ message.text }}</text>
@@ -2608,7 +2628,7 @@ function confirmDeleteAccount() {
                       v-if="pendingChatPhoto"
                       class="chat-message-photo"
                       :src="pendingChatPhoto"
-                      mode="aspectFill"
+                      mode="aspectFit"
                       aria-label="正在发送的照片"
                     /><text v-if="pendingChatText">{{ pendingChatText }}</text></view
                   ></view
@@ -2708,7 +2728,7 @@ function confirmDeleteAccount() {
                 </p>
               </view>
               <view v-if="chatPhotoDraft" class="chat-photo-draft">
-                <image :src="chatPhotoDraft" mode="aspectFill" aria-label="待发送的照片" />
+                <image :src="chatPhotoDraft" mode="aspectFit" aria-label="待发送的照片" />
                 <view
                   ><strong>照片已准备好</strong
                   ><small>{{
@@ -2906,7 +2926,7 @@ function confirmDeleteAccount() {
                   v-for="(photo, photoIndex) in story.media.slice(0, 9)"
                   :key="story.id + '-photo-' + photoIndex"
                   :src="photo"
-                  mode="aspectFill"
+                  mode="aspectFit"
                   :aria-label="`动态照片 ${photoIndex + 1}`"
                 />
               </view>
@@ -3088,7 +3108,7 @@ function confirmDeleteAccount() {
             <text class="share-status" :class="post.moderation">{{ postStatus(post) }}</text>
             <p v-if="post.body">{{ post.body }}</p>
             <view v-if="post.media?.length" class="square-media-grid count-1">
-              <image :src="post.media[0]" mode="aspectFill" aria-label="发布照片" />
+              <image :src="post.media[0]" mode="aspectFit" aria-label="发布照片" />
             </view>
             <small v-if="post.moderation === 'rejected' && post.moderationReason">{{
               post.moderationReason
@@ -3144,7 +3164,7 @@ function confirmDeleteAccount() {
                 v-for="(photo, photoIndex) in selectedPost.media"
                 :key="selectedPost.id + '-detail-photo-' + photoIndex"
                 :src="photo"
-                mode="aspectFill"
+                mode="aspectFit"
                 :aria-label="`纪念照片 ${photoIndex + 1}`"
               />
             </view>
@@ -3290,11 +3310,7 @@ function confirmDeleteAccount() {
                 :key="'draft-photo-' + photoIndex"
                 class="publish-photo-item"
               >
-                <image
-                  :src="photo"
-                  mode="aspectFill"
-                  :aria-label="`待发布照片 ${photoIndex + 1}`"
-                />
+                <image :src="photo" mode="aspectFit" :aria-label="`待发布照片 ${photoIndex + 1}`" />
                 <button
                   role="button"
                   :aria-label="`删除第 ${photoIndex + 1} 张照片`"
@@ -3716,7 +3732,6 @@ function confirmDeleteAccount() {
             </template>
           </view>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
-          <view v-if="app.status" class="saved-state" role="status">{{ app.status }}</view>
           <button
             v-if="app.bootstrap?.userAvatarUrl"
             role="button"
