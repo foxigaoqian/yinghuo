@@ -24,7 +24,7 @@ export default {
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'same-origin',
       'cache-control': path.endsWith('.html') ? 'no-cache' : 'public, max-age=31536000, immutable',
-      'x-yinghuo-release': '20261017-story-photo-v1',
+      'x-yinghuo-release': '20261017-story-ratio-v1',
     });
     if (path.startsWith('/admin')) headers.set('x-robots-tag', 'noindex, nofollow');
     if (request.headers.get('if-none-match') === `"${item.hash}"`)

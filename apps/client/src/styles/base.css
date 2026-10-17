@@ -3123,10 +3123,11 @@ html .conversation-composer button.send-button[disabled] {
   max-width: 100%;
 }
 .square-media-grid.count-1 image {
+  display: block;
   aspect-ratio: auto;
-  height: clamp(240px, 70dvh, 620px);
-  max-height: 620px;
-  object-fit: contain;
+  height: auto;
+  max-height: none;
+  background: transparent;
 }
 .square-media-grid.count-2,
 .square-media-grid.count-4 {

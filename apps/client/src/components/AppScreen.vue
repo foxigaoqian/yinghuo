@@ -2926,7 +2926,7 @@ function confirmDeleteAccount() {
                   v-for="(photo, photoIndex) in story.media.slice(0, 9)"
                   :key="story.id + '-photo-' + photoIndex"
                   :src="photo"
-                  mode="aspectFit"
+                  :mode="story.media.length === 1 ? 'widthFix' : 'aspectFit'"
                   :aria-label="`动态照片 ${photoIndex + 1}`"
                 />
               </view>
@@ -3108,7 +3108,7 @@ function confirmDeleteAccount() {
             <text class="share-status" :class="post.moderation">{{ postStatus(post) }}</text>
             <p v-if="post.body">{{ post.body }}</p>
             <view v-if="post.media?.length" class="square-media-grid count-1">
-              <image :src="post.media[0]" mode="aspectFit" aria-label="发布照片" />
+              <image :src="post.media[0]" mode="widthFix" aria-label="发布照片" />
             </view>
             <small v-if="post.moderation === 'rejected' && post.moderationReason">{{
               post.moderationReason
@@ -3164,7 +3164,7 @@ function confirmDeleteAccount() {
                 v-for="(photo, photoIndex) in selectedPost.media"
                 :key="selectedPost.id + '-detail-photo-' + photoIndex"
                 :src="photo"
-                mode="aspectFit"
+                :mode="selectedPost.media.length === 1 ? 'widthFix' : 'aspectFit'"
                 :aria-label="`纪念照片 ${photoIndex + 1}`"
               />
             </view>
