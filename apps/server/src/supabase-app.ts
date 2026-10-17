@@ -202,6 +202,7 @@ export class SupabasePublicController {
       phoneVerified: false,
       gender: null,
       birthYear: null,
+      userAvatarUrl: null,
       recoveryConfigured: false,
       recoveryUpdatedAt: null,
       profileCount: 0,
