@@ -2676,50 +2676,53 @@ function confirmDeleteAccount() {
               >
               <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
               <view class="chat-input">
-                <button
-                  role="button"
-                  class="chat-mode-button"
-                  :aria-label="chatInputMode === 'voice' ? '切换到文字输入' : '切换到语音输入'"
-                  @click="chatInputMode = chatInputMode === 'voice' ? 'text' : 'voice'"
-                >
-                  <AppIcon :name="chatInputMode === 'voice' ? 'keyboard' : 'mic'" />
-                </button>
-                <input
-                  v-if="chatInputMode === 'text'"
-                  v-model="chatText"
-                  :aria-label="'想对' + app.current.name + '说的话'"
-                  maxlength="500"
-                  :placeholder="
-                    chatPhotoDraft ? '补充照片里的故事…' : '想对' + app.current.name + '说点什么…'
-                  "
-                  @focus="onChatFocus"
-                  @confirm="sendChat"
-                />
-                <button
-                  v-else
-                  role="button"
-                  class="hold-to-talk"
-                  :class="{ listening: voiceListening }"
-                  :aria-label="voiceListening ? '松开结束语音识别' : '按住进行语音识别'"
-                  @mousedown.prevent="startVoiceInput"
-                  @mouseup.prevent="stopVoiceInput"
-                  @mouseleave="voiceListening && stopVoiceInput()"
-                  @touchstart.prevent="startVoiceInput"
-                  @touchend.prevent="stopVoiceInput"
-                  @touchcancel.prevent="cancelVoiceInput"
-                >
-                  {{ voiceListening ? voiceTranscript || '正在听…' : '按住 说话' }}
-                </button>
-                <button
-                  role="button"
-                  class="chat-emoji-button"
-                  :class="{ active: activeChatPanel === 'emoji' }"
-                  aria-label="选择表情"
-                  :aria-expanded="activeChatPanel === 'emoji'"
-                  @click="toggleChatPanel('emoji')"
-                >
-                  <AppIcon name="smile" />
-                </button>
+                <view class="chat-input-main" role="group" aria-label="消息输入">
+                  <button
+                    role="button"
+                    class="chat-mode-button"
+                    :aria-label="chatInputMode === 'voice' ? '切换到文字输入' : '切换到语音输入'"
+                    @click="chatInputMode = chatInputMode === 'voice' ? 'text' : 'voice'"
+                  >
+                    <AppIcon :name="chatInputMode === 'voice' ? 'keyboard' : 'mic'" />
+                  </button>
+                  <input
+                    v-if="chatInputMode === 'text'"
+                    v-model="chatText"
+                    :aria-label="'想对' + app.current.name + '说的话'"
+                    maxlength="500"
+                    enterkeyhint="send"
+                    :placeholder="
+                      chatPhotoDraft ? '补充照片里的故事…' : '想对' + app.current.name + '说点什么…'
+                    "
+                    @focus="onChatFocus"
+                    @confirm="sendChat"
+                  />
+                  <button
+                    v-else
+                    role="button"
+                    class="hold-to-talk"
+                    :class="{ listening: voiceListening }"
+                    :aria-label="voiceListening ? '松开结束语音识别' : '按住进行语音识别'"
+                    @mousedown.prevent="startVoiceInput"
+                    @mouseup.prevent="stopVoiceInput"
+                    @mouseleave="voiceListening && stopVoiceInput()"
+                    @touchstart.prevent="startVoiceInput"
+                    @touchend.prevent="stopVoiceInput"
+                    @touchcancel.prevent="cancelVoiceInput"
+                  >
+                    {{ voiceListening ? voiceTranscript || '正在听…' : '按住 说话' }}
+                  </button>
+                  <button
+                    role="button"
+                    class="chat-emoji-button"
+                    :class="{ active: activeChatPanel === 'emoji' }"
+                    aria-label="选择表情"
+                    :aria-expanded="activeChatPanel === 'emoji'"
+                    @click="toggleChatPanel('emoji')"
+                  >
+                    <AppIcon name="smile" />
+                  </button>
+                </view>
                 <button
                   v-if="chatText.trim() || chatPhotoDraft"
                   role="button"

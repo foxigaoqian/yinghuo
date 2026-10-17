@@ -2562,16 +2562,19 @@ html button.chat-memory-save[disabled] {
   pointer-events: none;
   background: url('/static/atlas.webp') no-repeat 100% 0 / 200% 200%;
   mix-blend-mode: multiply;
-  opacity: 0.4;
+  opacity: 0.3;
   mask-image: radial-gradient(120% 120% at 92% 96%, #000 28%, transparent 72%);
 }
 .conversation-composer {
   position: relative;
   flex: 0 0 auto;
   z-index: 2;
-  padding: 8px 10px calc(9px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  background: #fdfaf3;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid #e3dac8cc;
+  background: #fdfaf3f5;
+  box-shadow: 0 -8px 24px #4f3d1c0a;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 .chat-tools-panel {
   max-height: min(220px, 32vh);
@@ -2707,9 +2710,34 @@ html button.chat-memory-save[disabled] {
 }
 .conversation-composer .chat-input {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  align-items: center;
   gap: 8px;
+}
+.chat-input-main {
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #d9cfbc;
+  border-radius: 24px;
+  background: #fffdf8;
+  box-shadow:
+    0 2px 8px #5f482312,
+    inset 0 1px 0 #ffffffcc;
+  transition:
+    border-color var(--motion),
+    box-shadow var(--motion),
+    background-color var(--motion);
+}
+.chat-input-main:focus-within {
+  border-color: #b99547;
+  background: #fffefb;
+  box-shadow:
+    0 0 0 3px #e2ad3629,
+    0 3px 10px #5f482317;
 }
 .chat-input input,
 .conversation-composer .chat-input input {
@@ -2717,17 +2745,18 @@ html button.chat-memory-save[disabled] {
   flex: 1;
   width: 100%;
   min-height: 46px;
-  padding: 10px 16px;
-  height: auto;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f6f1e5;
+  padding: 10px 4px;
+  height: 46px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
   font-size: 16px;
   line-height: 24px;
-  box-shadow: inset 0 1px 3px #6b50210f;
+  box-shadow: none;
 }
 .chat-input input::placeholder {
-  color: #9a9183;
+  color: #918878;
 }
 .chat-tools-button,
 .chat-mode-button,
@@ -2748,6 +2777,11 @@ html button.chat-memory-save[disabled] {
 .chat-emoji-button {
   border-radius: 50%;
   background: transparent;
+  color: #745b2d;
+  transition:
+    background-color var(--motion),
+    color var(--motion),
+    opacity var(--motion);
 }
 .chat-tools-button .app-icon,
 .chat-mode-button .app-icon,
@@ -2759,14 +2793,20 @@ html button.chat-memory-save[disabled] {
 .chat-emoji-button.active {
   background: #ece4d4;
 }
+.chat-tools-button:active,
+.chat-mode-button:active,
+.chat-emoji-button:active {
+  background: #eee5d3;
+  color: var(--ink-strong);
+}
 .hold-to-talk {
   width: 100%;
   min-height: 46px;
   overflow: hidden;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f6f1e5;
+  padding: 9px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 15px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -2779,6 +2819,10 @@ html button.chat-memory-save[disabled] {
 }
 .send-button,
 .conversation-composer .send-button {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
   flex: 0 0 48px;
   border-radius: 50%;
   background: radial-gradient(circle at 32% 28%, #f9d668, var(--glow-deep) 78%);
@@ -2787,6 +2831,16 @@ html button.chat-memory-save[disabled] {
     0 0 0 1px #d9a62a55,
     0 3px 10px #c0871b33,
     0 0 9px #f5c54233;
+  transition:
+    box-shadow var(--motion),
+    filter var(--motion),
+    opacity var(--motion);
+}
+.conversation-composer .send-button:active {
+  filter: brightness(0.94);
+  box-shadow:
+    0 0 0 1px #d9a62a66,
+    0 1px 4px #c0871b2e;
 }
 .send-button .app-icon,
 .square-fab .app-icon {
@@ -2801,7 +2855,8 @@ html .conversation-composer button.send-button[disabled] {
   box-shadow: none;
 }
 .conversation-composer .composer-hint {
-  margin: 5px 53px 0;
+  margin: 6px 56px 0 12px;
+  text-align: left;
 }
 .composer-hint {
   display: block;
