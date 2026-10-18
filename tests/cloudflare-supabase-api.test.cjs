@@ -450,7 +450,11 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     });
     assert.equal(privateStory.status, 200);
     assert.equal(privateStory.data.moderation, 'private');
-    assert.equal((await a.request('GET', '/square?view=mine')).data.items[0].title, '窗边的下午');
+    assert.equal(privateStory.data.authorName, '我');
+    const ownStories = await a.request('GET', '/square?view=mine');
+    assert.equal(ownStories.data.items[0].title, '窗边的下午');
+    assert.equal(ownStories.data.items[0].authorName, '我');
+    assert.equal((await a.request('GET', '/square/' + privateStory.data.id)).data.authorName, '我');
     assert.equal((await a.request('GET', '/square')).data.items.length, 0);
     assert.equal((await b.request('GET', '/square?view=mine')).data.items.length, 0);
     const removable = await a.request('POST', '/profiles/' + profile.data.id + '/memories', {
@@ -519,7 +523,9 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
       reviewer,
     );
     assert.equal(published.status, 200);
-    assert.equal((await b.request('GET', '/square?view=public')).data.items.length, 1);
+    const publicStories = await b.request('GET', '/square?view=public');
+    assert.equal(publicStories.data.items.length, 1);
+    assert.equal(publicStories.data.items[0].authorName, '一位萤火朋友');
     const rejected = await a.request(
       'PATCH',
       '/admin/stories/' + publicStory.data.id,
