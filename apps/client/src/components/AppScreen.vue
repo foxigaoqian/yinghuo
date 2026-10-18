@@ -318,8 +318,7 @@ async function loadScreen() {
     if (
       ['story', 'compose'].includes(props.page) &&
       props.query?.id &&
-      !sampleStories.some((story) => story.id === props.query?.id) &&
-      !selectedPost.value
+      !sampleStories.some((story) => story.id === props.query?.id)
     )
       await app.fetchPost(props.query.id);
     if (props.page === 'story' && selectedPostIsInteractive.value && selectedPost.value)
