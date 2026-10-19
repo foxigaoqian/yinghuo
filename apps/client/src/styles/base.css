@@ -4150,26 +4150,22 @@ html button.square-action[disabled] {
   font-size: 15px;
 }
 .bound-phone-row {
-  min-height: 56px;
-}
-.bound-phone-copy {
   display: grid;
-  min-width: 0;
-  flex: 1;
-  grid-template-columns: 56px minmax(0, 1fr);
-  align-items: center;
+  min-height: 56px;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
   gap: 12px;
 }
-.bound-phone-copy small,
-.bound-phone-copy strong {
+.bound-phone-label,
+.bound-phone-value {
   margin: 0;
   white-space: nowrap;
 }
-.bound-phone-copy small {
+.bound-phone-label {
   color: var(--text-soft);
   font-size: 13px;
 }
-.bound-phone-copy strong {
+.bound-phone-value {
+  min-width: 0;
   overflow: hidden;
   font-size: 14px;
   font-weight: 600;
@@ -4179,6 +4175,7 @@ html button.square-action[disabled] {
   min-width: 48px;
   min-height: 44px;
   padding: 0 4px;
+  color: var(--danger);
   text-align: right;
   white-space: nowrap;
 }

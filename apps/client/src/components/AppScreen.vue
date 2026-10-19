@@ -3599,13 +3599,11 @@ function confirmDeleteAccount() {
             </template>
             <template v-else>
               <view class="bound-phone-row">
-                <view class="bound-phone-copy">
-                  <small>手机号</small>
-                  <strong>{{ app.bootstrap.boundPhone }}</strong>
-                </view>
+                <small class="bound-phone-label">手机号</small>
+                <strong class="bound-phone-value">{{ app.bootstrap.boundPhone }}</strong>
                 <button
                   role="button"
-                  class="text-button danger-text bound-phone-remove"
+                  class="text-button bound-phone-remove"
                   :disabled="app.busy"
                   :aria-disabled="app.busy"
                   @click="clearPhone"
