@@ -4149,6 +4149,39 @@ html button.square-action[disabled] {
   color: var(--text);
   font-size: 15px;
 }
+.bound-phone-row {
+  min-height: 56px;
+}
+.bound-phone-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.bound-phone-copy small,
+.bound-phone-copy strong {
+  margin: 0;
+  white-space: nowrap;
+}
+.bound-phone-copy small {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+.bound-phone-copy strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.bound-phone-remove {
+  min-width: 48px;
+  min-height: 44px;
+  padding: 0 4px;
+  text-align: right;
+  white-space: nowrap;
+}
 .account-identifier-row {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line-soft);
