@@ -96,6 +96,16 @@ export const phoneBindInput = z
       .regex(/^1[3-9]\d{9}$/, '请输入正确的 11 位手机号'),
   })
   .strict();
+export const recoveryPasswordInput = z
+  .object({
+    password: z
+      .string()
+      .trim()
+      .min(8, '找回密码至少 8 位')
+      .max(64, '找回密码最多 64 位')
+      .regex(/^[^\u0000-\u001f\u007f]+$/, '找回密码不能包含控制字符'),
+  })
+  .strict();
 export const accountAvatarInput = z
   .object({
     removeAvatar: z.boolean().default(false),

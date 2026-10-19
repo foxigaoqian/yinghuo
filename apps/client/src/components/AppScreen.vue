@@ -33,8 +33,9 @@ const form = reactive({
   body: '',
   public: false,
   publicConsent: false,
-  familyCode: '',
-  recoveryCode: '',
+  recoveryIdentifier: '',
+  recoveryPassword: '',
+  recoveryPasswordConfirm: '',
   phone: '',
   gender: null as 'male' | 'female' | null,
   birthYear: '',
@@ -67,12 +68,7 @@ const chatText = ref('');
 const storyCommentText = ref('');
 const activeMessageActionId = ref('');
 const selectedChatMemories = ref<string[]>([]);
-const generatedRecoveryCode = ref('');
-const recoveryCardDataUrl = ref('');
-const recoveryHelpOpen = ref(false);
-const recoveryMethod = ref<'phone' | 'card'>('card');
-const backupPanelOpen = ref(false);
-const phonePanelOpen = ref(false);
+const accountPanelOpen = ref(false);
 const chatReplyPending = ref(false);
 const pendingChatText = ref('');
 const memoryUseForAi = ref(true);
@@ -1396,7 +1392,7 @@ function info(title: string, content: string) {
   uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
 }
 function showPhoneBinding() {
-  phonePanelOpen.value = !phonePanelOpen.value;
+  accountPanelOpen.value = !accountPanelOpen.value;
 }
 function bindPhone() {
   const phone = form.phone.trim();
@@ -1407,16 +1403,14 @@ function bindPhone() {
   void app.run(async () => {
     await app.bindPhone({ phone });
     form.phone = '';
-    phonePanelOpen.value = false;
-    app.status = '手机号已记录。短信找回开放前，请保存找回卡。';
+    app.status = '手机号已绑定，可以作为找回账号。';
   });
 }
 function clearPhone() {
   void app.run(async () => {
     await app.clearPhone();
     form.phone = '';
-    phonePanelOpen.value = false;
-    app.status = '未验证手机号记录已移除。';
+    app.status = '手机号已移除。';
   });
 }
 function copyText(value: string, label: string) {
@@ -1428,105 +1422,35 @@ function copyText(value: string, label: string) {
     },
   });
 }
-function createRecoveryCode() {
-  const action = () =>
-    app.run(async () => {
-      const bundle = await app.createRecoveryCode();
-      generatedRecoveryCode.value = bundle.recoveryCode;
-      recoveryCardDataUrl.value = '';
-      app.status = '找回卡信息已生成，请在离开前复制或保存图片。';
-    });
-  if (!app.bootstrap?.recoveryConfigured) {
-    void action();
+function setRecoveryPassword() {
+  const password = form.recoveryPassword.trim();
+  if (password.length < 8) {
+    app.error = '找回密码至少 8 位';
     return;
   }
-  uni.showModal({
-    title: '生成新的找回卡？',
-    content: '新的安全恢复码只显示这一次；再次生成会让旧找回卡失效。请生成后立即保存图片。',
-    confirmText: '生成找回卡',
-    cancelText: '取消',
-    success: (result) => {
-      if (!result.confirm) return;
-      void action();
-    },
+  if (password !== form.recoveryPasswordConfirm.trim()) {
+    app.error = '两次输入的找回密码不一致';
+    return;
+  }
+  void app.run(async () => {
+    await app.setRecoveryPassword({ password });
+    form.recoveryPassword = '';
+    form.recoveryPasswordConfirm = '';
+    app.status = '找回密码已设置。';
   });
 }
-function saveRecoveryCard() {
-  if (!generatedRecoveryCode.value || !app.session.familyCode) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = 1080;
-  canvas.height = 1440;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    app.error = '当前浏览器暂时无法生成找回卡，请先复制找回信息。';
-    return;
-  }
-  const gradient = context.createLinearGradient(0, 0, 1080, 1440);
-  gradient.addColorStop(0, '#fffaf0');
-  gradient.addColorStop(1, '#f5e2a7');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = '#40382f';
-  context.textAlign = 'center';
-  context.font = '700 76px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('萤火找回卡', 540, 190);
-  context.fillStyle = '#756e64';
-  context.font = '36px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('换手机或登录失效时，用这两项找回记忆', 540, 270);
-  context.fillStyle = '#fffdf9';
-  context.strokeStyle = '#dfbd63';
-  context.lineWidth = 4;
-  context.beginPath();
-  context.roundRect(100, 360, 880, 650, 42);
-  context.fill();
-  context.stroke();
-  context.fillStyle = '#756e64';
-  context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('萤火号', 540, 480);
-  context.fillStyle = '#4e3a14';
-  context.font = '700 62px ui-monospace, SFMono-Regular, Menlo, monospace';
-  context.fillText(app.session.familyCode, 540, 575);
-  context.fillStyle = '#756e64';
-  context.font = '34px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('安全恢复码', 540, 720);
-  context.fillStyle = '#4e3a14';
-  context.font = '700 42px ui-monospace, SFMono-Regular, Menlo, monospace';
-  const code = generatedRecoveryCode.value;
-  const lines = code.length > 24 ? [code.slice(0, 24), code.slice(24)] : [code];
-  lines.forEach((line, index) => context.fillText(line, 540, 815 + index * 64));
-  context.fillStyle = '#8a5a28';
-  context.font = '32px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('请勿转发给他人，也不要交给客服', 540, 1120);
-  context.fillStyle = '#756e64';
-  context.font = '28px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-  context.fillText('生成日期：' + new Date().toLocaleDateString('zh-CN'), 540, 1195);
-  context.fillText('萤火不会通过客服索要安全恢复码', 540, 1250);
-  const dataUrl = canvas.toDataURL('image/png');
-  recoveryCardDataUrl.value = dataUrl;
-  if (isWeChat.value) {
-    app.status = '找回卡已生成，请长按下方图片保存到手机。';
-    return;
-  }
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = '萤火找回卡.png';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  app.status = '找回卡图片已保存；也可以长按下方图片再次保存。';
-}
 function recoverAccount() {
-  const familyCode = form.familyCode.trim().toUpperCase();
-  const recoveryCode = form.recoveryCode.trim().toUpperCase();
-  if (!familyCode || !recoveryCode) {
-    app.error = '请输入萤火号和安全恢复码';
+  const identifier = form.recoveryIdentifier.trim();
+  const password = form.recoveryPassword.trim();
+  if (!identifier || password.length < 8) {
+    app.error = '请输入萤火号或手机号，以及至少 8 位找回密码';
     return;
   }
   const action = () =>
     app.run(async () => {
       await app.recover({
-        familyCode,
-        recoveryCode,
+        identifier,
+        password,
         mergeGuest: Boolean(app.session.userId),
       });
       replace(nextAfterLogin.value);
@@ -1589,15 +1513,12 @@ watch(
 );
 function confirmLogout() {
   if (!app.bootstrap?.recoveryConfigured) {
-    info(
-      '请先保存找回卡',
-      '当前空间还没有找回卡。请先生成并妥善保存，否则退出后将无法找回这些记忆。',
-    );
+    info('请先设置找回密码', '当前空间还没有找回密码。设置后才能在换设备时找回这些记忆。');
     return;
   }
   uni.showModal({
     title: '离开当前空间？',
-    content: '退出会清除这台设备的登录。只有保存过找回卡，才能重新找回这个空间。',
+    content: '退出会清除这台设备的登录。之后可用萤火号或已绑定手机号，配合找回密码重新进入。',
     confirmText: '确认退出',
     cancelText: '取消',
     success: (result) => {
@@ -1835,7 +1756,7 @@ function confirmDeleteAccount() {
         <p class="caption">
           {{
             recovering
-              ? '打开以前保存的“萤火找回卡”，输入上面的两项信息。'
+              ? '用萤火号或已绑定的手机号找回原来的空间。'
               : '无需先注册。留下记忆后，再设置跨设备找回。'
           }}
         </p>
@@ -1856,94 +1777,43 @@ function confirmDeleteAccount() {
             {{ app.busy ? '正在进入…' : '开始记录' }}
           </button></view
         >
-        <view class="recovery-card">
-          <h2>{{ recovering ? '选择找回方式' : '已有记忆？找回原来的空间' }}</h2>
-          <view class="recovery-method-tabs" role="tablist" aria-label="找回方式">
-            <button
-              role="tab"
-              :aria-selected="recoveryMethod === 'phone'"
-              :class="{ active: recoveryMethod === 'phone' }"
-              @click="recoveryMethod = 'phone'"
-            >
-              手机号找回
-            </button>
-            <button
-              role="tab"
-              :aria-selected="recoveryMethod === 'card'"
-              :class="{ active: recoveryMethod === 'card' }"
-              @click="recoveryMethod = 'card'"
-            >
-              找回卡找回
-            </button>
-          </view>
-          <template v-if="recoveryMethod === 'card'">
-            <label class="field"
-              ><text>萤火号</text
-              ><input
-                v-model="form.familyCode"
-                aria-label="萤火号"
-                maxlength="24"
-                placeholder="输入找回卡上的萤火号"
-            /></label>
-            <label class="field"
-              ><text>安全恢复码</text
-              ><input
-                v-model="form.recoveryCode"
-                aria-label="安全恢复码"
-                :password="true"
-                maxlength="40"
-                placeholder="输入 YH- 开头安全恢复码"
-            /></label>
-          </template>
-          <template v-else>
-            <label class="field"
-              ><text>手机号</text
-              ><input
-                v-model.trim="form.phone"
-                type="number"
-                maxlength="11"
-                aria-label="用于找回的手机号"
-                placeholder="输入绑定的 11 位手机号"
-            /></label>
-            <view class="notice recovery-phone-notice"
-              >短信验证能力正在接入，暂时请使用找回卡。</view
-            >
-          </template>
+        <view class="recovery-card compact-recovery-card">
+          <h2>{{ recovering ? '输入账号信息' : '已有记忆？找回原来的空间' }}</h2>
+          <label class="field"
+            ><text>萤火号或手机号</text
+            ><input
+              v-model.trim="form.recoveryIdentifier"
+              aria-label="萤火号或手机号"
+              maxlength="24"
+              autocomplete="username"
+              placeholder="输入萤火号或已绑定手机号"
+          /></label>
+          <label class="field"
+            ><text>找回密码</text
+            ><input
+              v-model="form.recoveryPassword"
+              aria-label="找回密码"
+              :password="true"
+              maxlength="64"
+              autocomplete="current-password"
+              placeholder="输入找回密码"
+          /></label>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
           <view v-if="app.status" class="caption" role="status">{{ app.status }}</view>
           <button
-            v-if="recoveryMethod === 'card'"
             role="button"
             class="btn"
-            :disabled="app.busy || !form.familyCode.trim() || !form.recoveryCode.trim()"
+            :disabled="
+              app.busy || !form.recoveryIdentifier.trim() || form.recoveryPassword.trim().length < 8
+            "
             @click="recoverAccount"
-            :aria-disabled="app.busy || !form.familyCode.trim() || !form.recoveryCode.trim()"
+            :aria-disabled="
+              app.busy || !form.recoveryIdentifier.trim() || form.recoveryPassword.trim().length < 8
+            "
           >
             {{ app.busy ? '正在找回…' : '找回我的萤火' }}
           </button>
-          <button v-else role="button" class="btn" disabled aria-disabled="true">
-            短信找回即将开放
-          </button>
-          <button
-            role="button"
-            class="disclosure-button"
-            :aria-expanded="recoveryHelpOpen"
-            @click="recoveryHelpOpen = !recoveryHelpOpen"
-          >
-            <text>没有保存找回卡怎么办？</text><text>{{ recoveryHelpOpen ? '收起' : '查看' }}</text>
-          </button>
-          <view v-if="recoveryHelpOpen" class="notice"
-            >如果旧设备仍能打开原来的空间，请在那里进入“我的”重新生成并保存找回卡。如果已经失去登录、也没有找回卡，目前无法安全验证账号归属。</view
-          >
         </view>
-        <button
-          role="button"
-          v-if="recovering && app.session.userId"
-          class="text-button"
-          @click="replace('me')"
-        >
-          返回当前空间
-        </button>
       </template>
       <template v-else-if="page === 'create'">
         <h1 v-if="editing">人物资料</h1>
@@ -2468,7 +2338,7 @@ function confirmDeleteAccount() {
           <view v-if="app.profiles.length" class="chat-root-intro">
             <view
               ><h1>想和谁聊聊？</h1>
-              <p>选择你想念的人。进入后，对话对象会始终明确显示。</p></view
+              <p>选择你想念的人。进入对话，TA 会一直在这里陪着你。</p></view
             >
           </view>
           <view v-if="app.profiles.length" class="chat-profile-list">
@@ -2851,7 +2721,7 @@ function confirmDeleteAccount() {
           ><h2>基础空间</h2>
           <text class="price">¥0</text>
           <p>现在可体验：创建 TA、保存私密文字记忆、写故事。</p>
-          <small>当前设备登录通常保留 30 天；安全恢复码可用于换设备找回。</small></view
+          <small>当前设备登录通常保留 30 天；设置找回密码后可跨设备找回。</small></view
         >
         <view class="card highlight"
           ><text class="badge">尚未开放</text>
@@ -3532,7 +3402,7 @@ function confirmDeleteAccount() {
           <h2>我们保存什么</h2>
           <p>你主动填写的人物资料、文字记忆、对话、故事和头像，以及用于保持登录的随机会话标识。</p>
           <p>
-            如果填写联系手机号，服务端只保存不可逆摘要和后四位；未经短信验证，不作为可信登录凭据。
+            如果绑定手机号，服务端只保存不可逆摘要和后四位。手机号只用于识别账号，找回时仍需输入找回密码。
           </p>
         </view>
         <view class="card legal-card">
@@ -3681,20 +3551,32 @@ function confirmDeleteAccount() {
         <template v-if="app.session.userId">
           <view class="phone-protect-card">
             <view class="phone-protect-copy"
-              ><strong>{{
-                app.bootstrap?.boundPhone ? '手机号已记录' : '绑定手机号，保护记忆'
-              }}</strong
+              ><strong>账号与找回</strong
               ><small>{{
-                app.bootstrap?.boundPhone
-                  ? app.bootstrap.boundPhone + ' · 可随时更换'
-                  : '绑定手机号，换手机也能找回你的萤火。'
+                '萤火号 ' +
+                (app.session.familyCode || '正在识别…') +
+                ' · ' +
+                (app.bootstrap?.boundPhone || '手机号未绑定')
               }}</small></view
             >
             <button role="button" class="text-button" @click="showPhoneBinding">
-              {{ phonePanelOpen ? '收起' : app.bootstrap?.boundPhone ? '管理' : '去绑定' }}
+              {{ accountPanelOpen ? '收起' : '管理' }}
             </button>
           </view>
-          <view v-if="phonePanelOpen" class="phone-bind-panel">
+          <view v-if="accountPanelOpen" class="phone-bind-panel account-recovery-panel">
+            <view class="account-identifier-row">
+              <view
+                ><small>萤火号</small
+                ><strong>{{ app.session.familyCode || '正在识别…' }}</strong></view
+              >
+              <button
+                role="button"
+                class="text-button"
+                @click="copyText(app.session.familyCode || '', '萤火号')"
+              >
+                复制
+              </button>
+            </view>
             <template v-if="!app.bootstrap?.boundPhone">
               <h3>绑定常用手机号</h3>
               <label class="field"
@@ -3716,19 +3598,78 @@ function confirmDeleteAccount() {
               </button>
             </template>
             <template v-else>
-              <p class="caption">
-                手机号已做不可逆加密记录。短信验证能力接入后，才能用于安全找回。
-              </p>
+              <view class="bound-phone-row">
+                <view
+                  ><small>已绑定手机号</small><strong>{{ app.bootstrap.boundPhone }}</strong></view
+                >
+                <button
+                  role="button"
+                  class="text-button danger-text"
+                  :disabled="app.busy"
+                  :aria-disabled="app.busy"
+                  @click="clearPhone"
+                >
+                  移除
+                </button>
+              </view>
+            </template>
+            <view class="recovery-password-section">
+              <h3>{{ app.bootstrap?.recoveryConfigured ? '修改找回密码' : '设置找回密码' }}</h3>
+              <p class="caption">换设备时，用萤火号或已绑定手机号配合密码找回。</p>
+              <label class="field"
+                ><text>找回密码</text
+                ><input
+                  v-model="form.recoveryPassword"
+                  :password="true"
+                  maxlength="64"
+                  autocomplete="new-password"
+                  aria-label="设置找回密码"
+                  placeholder="至少 8 位"
+              /></label>
+              <label class="field"
+                ><text>再输入一次</text
+                ><input
+                  v-model="form.recoveryPasswordConfirm"
+                  :password="true"
+                  maxlength="64"
+                  autocomplete="new-password"
+                  aria-label="确认找回密码"
+                  placeholder="再次输入找回密码"
+              /></label>
               <button
                 role="button"
-                class="text-button danger-text"
-                :disabled="app.busy"
-                :aria-disabled="app.busy"
-                @click="clearPhone"
+                class="btn"
+                :disabled="
+                  app.busy ||
+                  form.recoveryPassword.trim().length < 8 ||
+                  !form.recoveryPasswordConfirm.trim()
+                "
+                :aria-disabled="
+                  app.busy ||
+                  form.recoveryPassword.trim().length < 8 ||
+                  !form.recoveryPasswordConfirm.trim()
+                "
+                @click="setRecoveryPassword"
               >
-                移除手机号记录
+                {{
+                  app.busy
+                    ? '正在保存…'
+                    : app.bootstrap?.recoveryConfigured
+                      ? '保存新密码'
+                      : '设置找回密码'
+                }}
               </button>
-            </template>
+            </view>
+            <view v-if="app.status" class="notice success-notice" role="status">{{
+              app.status
+            }}</view>
+            <button
+              role="button"
+              class="text-button account-switch-link"
+              @click="go('login', '?mode=recover')"
+            >
+              找回其他萤火账号
+            </button>
           </view>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
           <button
@@ -3760,93 +3701,10 @@ function confirmDeleteAccount() {
               <view><strong>我的发布</strong><small>管理公开、审核中与私密内容</small></view>
               <AppIcon name="chevron" class="row-chevron" />
             </button>
-            <button
-              role="button"
-              class="me-setting-row"
-              :aria-expanded="backupPanelOpen"
-              @click="backupPanelOpen = !backupPanelOpen"
-            >
-              <view class="me-setting-icon"><AppIcon name="card" /></view>
-              <view><strong>找回卡</strong><small>保存到手机，不需要记住安全码</small></view>
-              <text class="setting-state">{{ backupPanelOpen ? '收起' : '查看' }}</text>
-            </button>
             <button role="button" class="me-setting-row" @click="go('privacy')">
               <view class="me-setting-icon"><AppIcon name="shield" /></view>
               <view><strong>隐私与数据</strong><small>公开范围、备份与账号安全</small></view>
               <AppIcon name="chevron" class="row-chevron" />
-            </button>
-          </view>
-
-          <view v-if="backupPanelOpen" class="card account-card backup-card">
-            <text class="badge">{{
-              app.bootstrap?.recoveryConfigured ? '找回卡已设置' : '找回卡未设置'
-            }}</text>
-            <small>萤火号</small
-            ><button
-              role="button"
-              class="account-code"
-              :aria-label="'复制萤火号 ' + (app.session.familyCode || '')"
-              @click="copyText(app.session.familyCode || '', '萤火号')"
-            >
-              {{ app.session.familyCode || '正在识别…' }}
-            </button>
-            <template v-if="generatedRecoveryCode">
-              <view class="recovery-secret"
-                ><small>安全恢复码 · 只显示这一次</small
-                ><strong>{{ generatedRecoveryCode }}</strong></view
-              >
-              <view class="recovery-actions">
-                <button
-                  role="button"
-                  class="btn secondary"
-                  @click="
-                    copyText(
-                      '萤火号：' +
-                        app.session.familyCode +
-                        '\n安全恢复码：' +
-                        generatedRecoveryCode,
-                      '萤火号和安全恢复码',
-                    )
-                  "
-                >
-                  复制信息
-                </button>
-                <button role="button" class="btn" @click="saveRecoveryCard">保存找回卡</button>
-              </view>
-              <image
-                v-if="recoveryCardDataUrl"
-                class="recovery-card-preview"
-                :src="recoveryCardDataUrl"
-                mode="widthFix"
-                aria-label="包含萤火号和安全恢复码的找回卡"
-              />
-              <p class="account-warning">
-                {{ isWeChat ? '微信内请长按图片保存。' : '请保存到安全的位置，不要转发给他人。' }}
-              </p>
-            </template>
-            <template v-else>
-              <view v-if="app.bootstrap?.recoveryConfigured" class="notice recovery-renew-note"
-                >旧找回卡仍有效；重新生成后旧卡会立即失效。</view
-              >
-              <button
-                role="button"
-                class="btn"
-                :class="{ secondary: app.bootstrap?.recoveryConfigured }"
-                :disabled="app.busy"
-                :aria-disabled="app.busy"
-                @click="createRecoveryCode"
-              >
-                {{
-                  app.busy
-                    ? '正在生成…'
-                    : app.bootstrap?.recoveryConfigured
-                      ? '重新生成找回卡'
-                      : '生成并保存找回卡'
-                }}
-              </button>
-            </template>
-            <button role="button" class="text-button" @click="go('login', '?mode=recover')">
-              用找回卡切换已有空间
             </button>
           </view>
 

@@ -227,11 +227,20 @@ export const useAppStore = defineStore('app', () => {
     session.value.familyCode = bundle.familyCode;
     return bundle;
   }
-  async function recover(input: {
-    familyCode: string;
-    recoveryCode: string;
-    mergeGuest?: boolean;
-  }) {
+  async function setRecoveryPassword(input: { password: string }) {
+    const result = await api<{
+      familyCode: string;
+      recoveryConfigured: boolean;
+      recoveryUpdatedAt: string;
+    }>('/auth/recovery-password', 'POST', input);
+    if (bootstrap.value) {
+      bootstrap.value.recoveryConfigured = true;
+      bootstrap.value.recoveryUpdatedAt = result.recoveryUpdatedAt;
+    }
+    session.value.familyCode = result.familyCode;
+    return result;
+  }
+  async function recover(input: { identifier: string; password: string; mergeGuest?: boolean }) {
     const oldUserId = session.value.userId;
     const s = await api<SessionInfo & { merged?: boolean }>('/auth/recover', 'POST', input);
     const conflicts =
@@ -518,6 +527,7 @@ export const useAppStore = defineStore('app', () => {
     login,
     logout,
     createRecoveryCode,
+    setRecoveryPassword,
     recover,
     bindPhone,
     clearPhone,

@@ -260,26 +260,24 @@ test('chat identifies the assistant, requires consent and sends only selected me
   }
 });
 
-test('recovery information can be saved as a phone-friendly recovery card', async ({ page }) => {
+test('recovery password can be managed in the combined account panel', async ({ page }) => {
   await firstMemory(page);
-  await page.route('**/api/v1/auth/recovery-code', async (route) => {
+  await page.route('**/api/v1/auth/recovery-password', async (route) => {
     await route.fulfill({
       json: {
         familyCode: 'YH-TEST-CARD',
-        recoveryCode: 'YH-RECOVERY-CARD-123456',
         recoveryConfigured: true,
         recoveryUpdatedAt: new Date().toISOString(),
       },
     });
   });
   await page.goto('/pages/me/index');
-  await page.getByRole('button', { name: '生成找回卡', exact: true }).click();
-  await expect(page.locator('.recovery-secret')).toBeVisible();
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: '保存找回卡', exact: true }).click();
-  await download;
-  await expect(page.locator('.recovery-card-preview')).toBeVisible();
-  await expect(page.getByText(/请把找回卡存到安全的位置/)).toBeVisible();
+  await page.getByRole('button', { name: '管理', exact: true }).click();
+  await expect(page.getByText('萤火号', { exact: true })).toBeVisible();
+  await page.getByLabel('设置找回密码').fill('灯下的晚风2026');
+  await page.getByLabel('确认找回密码').fill('灯下的晚风2026');
+  await page.getByRole('button', { name: '设置找回密码', exact: true }).click();
+  await expect(page.getByText('找回密码已设置。', { exact: true })).toBeVisible();
 });
 
 test('loading remains distinct from an empty library', async ({ page }) => {

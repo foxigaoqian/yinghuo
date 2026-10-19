@@ -2850,16 +2850,13 @@ html button.chat-memory-save[disabled] {
 .conversation-composer .send-button {
   flex: 0 0 48px;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #f9d668, var(--glow-deep) 78%);
-  color: var(--on-glow);
-  box-shadow:
-    0 0 0 1px #d9a62a55,
-    0 3px 10px #c0871b33,
-    0 0 9px #f5c54233;
+  background: var(--ink-strong);
+  color: #fffdf8;
+  box-shadow: 0 3px 12px #2c251638;
 }
 .send-button .app-icon,
 .square-fab .app-icon {
-  filter: brightness(0.5) sepia(0.4);
+  filter: brightness(0) invert(1);
 }
 .conversation-composer .send-button .app-icon {
   width: 23px;
@@ -3218,13 +3215,11 @@ html button.square-action[disabled] {
   gap: 7px;
   margin: 0;
   padding: 0 17px;
-  border: 1px solid #d9a62a66;
+  border: 1px solid var(--ink-strong);
   border-radius: 999px;
-  background: radial-gradient(circle at 32% 24%, #f9d668, var(--glow-deep) 85%);
-  box-shadow:
-    0 8px 24px #80580b30,
-    0 0 12px #f5c54233;
-  color: var(--on-glow);
+  background: var(--ink-strong);
+  box-shadow: 0 8px 24px #2c251630;
+  color: #fffdf8;
   font-size: 14px;
   font-weight: 750;
 }
@@ -3551,7 +3546,7 @@ html button.square-action[disabled] {
 }
 .square-comment-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 58px;
+  grid-template-columns: minmax(0, 1fr) 48px;
   gap: 8px;
 }
 .square-comment-input-row input {
@@ -3564,17 +3559,18 @@ html button.square-action[disabled] {
 .square-comment-input-row button {
   display: grid;
   place-items: center;
-  min-height: 44px;
+  width: 48px;
+  min-height: 48px;
   margin: 0;
-  padding: 0 10px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: radial-gradient(circle at 32% 24%, #f9d668, var(--glow-deep) 85%);
-  color: var(--on-glow);
-  font-size: 13px;
+  background: var(--ink-strong);
+  color: #fffdf8;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 3px 10px #c0871b33;
+  box-shadow: 0 3px 12px #2c251638;
 }
 
 /* 发布纪念 */
@@ -4129,6 +4125,56 @@ html button.square-action[disabled] {
 .phone-bind-panel .field {
   margin: 12px 0;
 }
+.account-recovery-panel {
+  display: grid;
+  gap: 18px;
+}
+.account-identifier-row,
+.bound-phone-row {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-identifier-row small,
+.account-identifier-row strong,
+.bound-phone-row small,
+.bound-phone-row strong {
+  display: block;
+}
+.account-identifier-row strong,
+.bound-phone-row strong {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 15px;
+}
+.account-identifier-row {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.account-recovery-panel > h3,
+.recovery-password-section h3 {
+  margin: 0;
+}
+.recovery-password-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.recovery-password-section .caption {
+  margin: 5px 0 10px;
+}
+.recovery-password-section .field {
+  margin: 10px 0;
+}
+.account-switch-link {
+  justify-self: center;
+  margin: -4px 0 0;
+}
+.success-notice {
+  margin: -2px 0 0;
+  color: var(--text);
+}
 .phone-safety-note {
   margin-top: 8px;
 }
@@ -4215,6 +4261,15 @@ html button.square-action[disabled] {
 .account-card,
 .recovery-card {
   margin-top: 18px;
+}
+.compact-recovery-card {
+  padding-top: 18px;
+}
+.compact-recovery-card h2 {
+  margin-bottom: 14px;
+}
+.compact-recovery-card .field {
+  margin: 12px 0;
 }
 .account-card h2 {
   margin-top: 14px;

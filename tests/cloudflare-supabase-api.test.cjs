@@ -355,11 +355,11 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
       phone: '13800138000',
     });
     assert.equal(bound.status, 200);
-    assert.equal(bound.data.boundPhone, '未验证 · 尾号 8000');
+    assert.equal(bound.data.boundPhone, '尾号 8000');
     assert.equal(bound.data.phoneVerified, false);
     const boundBootstrap = await a.request('GET', '/bootstrap');
     assert.equal(boundBootstrap.data.accountState, 'guest');
-    assert.equal(boundBootstrap.data.boundPhone, '未验证 · 尾号 8000');
+    assert.equal(boundBootstrap.data.boundPhone, '尾号 8000');
     assert.ok(
       backend.calls.every((call) => !JSON.stringify(call.input || '').includes('13800138000')),
       'the full phone number is never persisted to Supabase',
@@ -403,12 +403,19 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(restored.status, 200);
     assert.equal(restored.data.userId, opened.data.userId);
     assert.equal((await recovered.request('GET', '/profiles')).data.items.length, 1);
+    const recoveryPassword = '灯下的晚风2026';
+    const passwordSet = await a.request('POST', '/auth/recovery-password', {
+      password: recoveryPassword,
+    });
+    assert.equal(passwordSet.status, 200);
+    assert.equal(passwordSet.data.recoveryConfigured, true);
     const phoneRecovered = client();
     const restoredByPhone = await phoneRecovered.request('POST', '/auth/recover', {
-      familyCode: '13800138000',
-      recoveryCode: recoveryBundle.data.recoveryCode,
+      identifier: '13800138000',
+      password: recoveryPassword,
     });
-    assert.equal(restoredByPhone.status, 400);
+    assert.equal(restoredByPhone.status, 200);
+    assert.equal(restoredByPhone.data.userId, opened.data.userId);
     assert.equal((await a.request('GET', '/bootstrap')).data.canCreateFreeProfile, false);
     const memories = await a.request('GET', '/profiles/' + profile.data.id + '/memories');
     assert.equal(memories.data.items[0].body, '第一次做饭');
@@ -439,7 +446,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.notEqual(another.data.userId, opened.data.userId);
     assert.equal(
       (await b.request('POST', '/auth/bind-phone', { phone: '13800138000' })).status,
-      200,
+      409,
     );
     assert.equal((await b.request('GET', '/profiles/' + profile.data.id)).status, 404);
     assert.equal((await b.request('GET', '/profiles')).data.items.length, 0);
