@@ -762,6 +762,51 @@ test('Supabase H5 Pages adapter auto-detects a scoped Edge gateway without a dat
   }
 });
 
+test('OpenAI moderation publishes safe stories and routes flagged content to review', async () => {
+  const { moderatePublicStory } = await import('../lib/pages-supabase-h5.js');
+  const previousFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return Response.json({ results: [{ flagged: false }] });
+  };
+  try {
+    const safe = await moderatePublicStory(
+      { OPENAI_API_KEY: 'test-openai-secret' },
+      '窗边的花',
+      '今天也想起了你。',
+      ['data:image/jpeg;base64,/9j/2Q=='],
+    );
+    assert.deepEqual(safe, { moderation: 'published', reason: '自动审核通过' });
+    assert.equal(requests[0].url, 'https://api.openai.com/v1/moderations');
+    assert.equal(requests[0].options.headers.authorization, 'Bearer test-openai-secret');
+    const sent = JSON.parse(requests[0].options.body);
+    assert.equal(sent.model, 'omni-moderation-latest');
+    assert.equal(sent.input[0].type, 'text');
+    assert.equal(sent.input[1].type, 'image_url');
+    assert.doesNotMatch(requests[0].options.body, /test-openai-secret/);
+
+    global.fetch = async () => Response.json({ results: [{ flagged: true }] });
+    const flagged = await moderatePublicStory(
+      { OPENAI_API_KEY: 'test-openai-secret' },
+      '需要确认',
+      '这段内容需要进一步审核。',
+    );
+    assert.equal(flagged.moderation, 'pending');
+    assert.match(flagged.reason, /人工审核/);
+
+    global.fetch = async () => new Response('unauthorized', { status: 401 });
+    const unavailable = await moderatePublicStory(
+      { OPENAI_API_KEY: 'test-openai-secret' },
+      '接口异常',
+      '内容不会被误放行。',
+    );
+    assert.equal(unavailable.moderation, 'pending');
+  } finally {
+    global.fetch = previousFetch;
+  }
+});
+
 test('AI router prefers SquareFace and falls back to Workers AI without exposing the key', async () => {
   const { aiProvider, generateAiReply } = await import('../lib/yinghuo-ai.js');
   const previousFetch = global.fetch;
