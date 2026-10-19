@@ -60,6 +60,8 @@ const publishProfilePickerOpen = ref(false);
 const visibilityPickerOpen = ref(false);
 const squareCommentSheetOpen = ref(false);
 const activeSquarePostId = ref('');
+const lightingStoryId = ref('');
+const squareComposerOpening = ref(false);
 const replyTarget = ref<{ id: string; name: string } | null>(null);
 const storyImages = ref<string[]>([]);
 const storyPhotoProcessing = ref(false);
@@ -125,6 +127,11 @@ const profileDisplayName = computed(
 const recoveryNeeded = computed(
   () => app.profiles.length > 0 && !app.bootstrap?.recoveryConfigured,
 );
+const boundPhoneDisplay = computed(() => {
+  const value = String(app.bootstrap?.boundPhone || '');
+  const lastFour = value.match(/(\d{4})\s*$/)?.[1];
+  return lastFour ? `尾号 ${lastFour}` : value || '手机号未绑定';
+});
 const draftStatus = computed(() => {
   if (app.busy) return '正在保存到空间…';
   if (localDraftError.value) return '本机草稿暂存失败，请先保存内容再离开。';
@@ -175,28 +182,18 @@ function openLibraryItem(item: { id: string; profileId: string; source: string }
   );
 }
 const libraryProfilePickerOpen = ref(false);
-const recordTargetName = computed(() => {
-  if (libraryFilter.value !== 'all')
-    return app.profiles.find((p) => p.id === libraryFilter.value)?.name || '';
-  if (app.profiles.length === 1) return app.profiles[0].name;
-  return '';
-});
 function recordFromLibrary() {
-  if (libraryFilter.value !== 'all') {
-    if (libraryFilter.value !== app.currentId) app.select(libraryFilter.value);
-    needProfile('memory-edit');
+  if (app.busy) return;
+  if (!app.profiles.length) {
+    go('create');
     return;
   }
-  if (app.profiles.length > 1) {
-    libraryProfilePickerOpen.value = true;
-    return;
-  }
-  needProfile('memory-edit');
+  libraryProfilePickerOpen.value = true;
 }
 function recordForProfile(id: string) {
   libraryProfilePickerOpen.value = false;
   if (id !== app.currentId) app.select(id);
-  needProfile('memory-edit');
+  go('compose', '?from=memories&profileId=' + encodeURIComponent(id));
 }
 function storeDraft(key: string, value: unknown) {
   try {
@@ -462,12 +459,21 @@ function openStory(id: string, comment = false) {
   go('story', '?id=' + encodeURIComponent(id) + (comment ? '&comment=1' : ''));
 }
 function toggleStoryLight(post: { id: string; viewerHasLit?: boolean }) {
-  if (app.busy) return;
+  if (app.busy || lightingStoryId.value) return;
   const nextActive = !post.viewerHasLit;
-  void app.run(async () => {
-    await app.setStoryLight(post.id, nextActive);
-    app.status = nextActive ? '已为这段故事点亮。' : '已收回这束萤火。';
-  });
+  lightingStoryId.value = post.id;
+  void app
+    .run(async () => {
+      await app.setStoryLight(post.id, nextActive);
+      app.status = nextActive ? '已为这段故事点亮。' : '已收回这束萤火。';
+    })
+    .finally(() => {
+      lightingStoryId.value = '';
+    });
+}
+function storyLightLabel(post: { id: string; viewerHasLit?: boolean; lightCount?: number }) {
+  if (lightingStoryId.value === post.id) return post.viewerHasLit ? '正在收回…' : '点亮中…';
+  return `${post.viewerHasLit ? '已点亮' : '点亮'} ${post.lightCount || 0}`;
 }
 function chooseSquareMemory(memory: { id: string; profileId: string }) {
   squareSharePickerOpen.value = false;
@@ -499,16 +505,21 @@ function openSquareSharePicker() {
   });
 }
 function openSquareComposer() {
-  if (app.busy) return;
-  void app.run(async () => {
-    if (!app.session.userId) await app.login();
-    if (!app.current && app.profiles[0]) app.select(app.profiles[0].id);
-    if (!app.current) {
-      go('create');
-      return;
-    }
-    go('compose', '?from=square&profileId=' + encodeURIComponent(app.currentId));
-  });
+  if (app.busy || squareComposerOpening.value) return;
+  squareComposerOpening.value = true;
+  void app
+    .run(async () => {
+      if (!app.session.userId) await app.login();
+      if (!app.current && app.profiles[0]) app.select(app.profiles[0].id);
+      if (!app.current) {
+        go('create');
+        return;
+      }
+      go('compose', '?from=square&profileId=' + encodeURIComponent(app.currentId));
+    })
+    .finally(() => {
+      squareComposerOpening.value = false;
+    });
 }
 function selectPublishProfile(id: string) {
   if (id !== app.currentId) app.select(id);
@@ -2131,8 +2142,14 @@ function confirmDeleteAccount() {
           ><h2>{{ libraryFilter === 'all' ? '还没有留下记忆' : '这位人物还没有记忆' }}</h2>
           <p>一句话、一件小事，都值得留下。</p></view
         >
-        <button role="button" class="btn" @click="recordFromLibrary">
-          {{ recordTargetName ? '为' + recordTargetName + '再记一件小事' : '记下一件小事' }}
+        <button
+          role="button"
+          class="square-fab memory-post-fab"
+          :disabled="app.busy"
+          :aria-disabled="app.busy"
+          @click="recordFromLibrary"
+        >
+          <AppIcon name="edit" /><text>发帖</text>
         </button>
         <view
           v-if="libraryProfilePickerOpen"
@@ -2144,7 +2161,7 @@ function confirmDeleteAccount() {
         >
           <view class="publish-choice-sheet">
             <view class="square-sheet-heading">
-              <h2 id="library-profile-title">记给谁</h2>
+              <h2 id="library-profile-title">选择你想念的人</h2>
               <button
                 role="button"
                 class="icon-button"
@@ -2824,15 +2841,16 @@ function confirmDeleteAccount() {
               <button
                 role="button"
                 class="square-action"
-                :class="{ active: story.viewerHasLit }"
+                :class="{
+                  active: story.viewerHasLit,
+                  'is-loading': lightingStoryId === story.id,
+                }"
                 :aria-pressed="story.viewerHasLit"
-                :disabled="app.busy"
+                :disabled="lightingStoryId === story.id"
                 @click="toggleStoryLight(story)"
               >
                 <AppIcon name="heart" />
-                <text
-                  >{{ story.viewerHasLit ? '已点亮' : '点亮' }} {{ story.lightCount || 0 }}</text
-                >
+                <text>{{ storyLightLabel(story) }}</text>
               </button>
               <button
                 role="button"
@@ -2855,11 +2873,11 @@ function confirmDeleteAccount() {
           role="button"
           v-if="app.publicPosts.length"
           class="square-fab"
-          :disabled="app.busy"
-          :aria-disabled="app.busy"
+          :disabled="squareComposerOpening"
+          :aria-disabled="squareComposerOpening"
           @click="openSquareComposer"
         >
-          <AppIcon name="edit" /><text>{{ app.busy ? '正在准备' : '发帖' }}</text>
+          <AppIcon name="edit" /><text>{{ squareComposerOpening ? '正在准备' : '发帖' }}</text>
         </button>
         <view v-if="app.publicPosts.length" class="square-privacy-note"
           ><AppIcon name="lock" /><text>只展示主动公开并过审的内容。</text></view
@@ -2937,6 +2955,7 @@ function confirmDeleteAccount() {
                 />
                 <button
                   role="button"
+                  class="square-comment-send"
                   :disabled="app.busy || !storyCommentText.trim()"
                   :aria-disabled="app.busy || !storyCommentText.trim()"
                   @click="submitSquareComment"
@@ -3049,16 +3068,16 @@ function confirmDeleteAccount() {
               <button
                 role="button"
                 class="square-action"
-                :class="{ active: selectedPost.viewerHasLit }"
+                :class="{
+                  active: selectedPost.viewerHasLit,
+                  'is-loading': lightingStoryId === selectedPost.id,
+                }"
                 :aria-pressed="selectedPost.viewerHasLit"
-                :disabled="app.busy"
+                :disabled="lightingStoryId === selectedPost.id"
                 @click="toggleStoryLight(selectedPost)"
               >
                 <AppIcon name="heart" />
-                <text
-                  >{{ selectedPost.viewerHasLit ? '已点亮' : '点亮' }}
-                  {{ selectedPost.lightCount || 0 }}</text
-                >
+                <text>{{ storyLightLabel(selectedPost) }}</text>
               </button>
               <button role="button" class="square-action" @click="focusStoryComment">
                 <AppIcon name="chat" />
@@ -3553,10 +3572,7 @@ function confirmDeleteAccount() {
             <view class="phone-protect-copy"
               ><strong>账号与找回</strong
               ><small>{{
-                '萤火号 ' +
-                (app.session.familyCode || '正在识别…') +
-                ' · ' +
-                (app.bootstrap?.boundPhone || '手机号未绑定')
+                '萤火号 ' + (app.session.familyCode || '正在识别…') + ' · ' + boundPhoneDisplay
               }}</small></view
             >
             <button role="button" class="text-button" @click="showPhoneBinding">
@@ -3599,8 +3615,10 @@ function confirmDeleteAccount() {
             </template>
             <template v-else>
               <view class="bound-phone-row">
-                <small class="bound-phone-label">手机号</small>
-                <strong class="bound-phone-value">{{ app.bootstrap.boundPhone }}</strong>
+                <view class="bound-phone-info">
+                  <small class="bound-phone-label">手机号</small>
+                  <strong class="bound-phone-value">{{ boundPhoneDisplay }}</strong>
+                </view>
                 <button
                   role="button"
                   class="text-button bound-phone-remove"
