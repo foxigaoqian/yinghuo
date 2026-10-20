@@ -338,7 +338,7 @@ async function loadScreen() {
     restoreChatDraft();
     initializeChatMemories();
     restoreEditorDraft();
-    if (props.page === 'me') form.communityName = app.bootstrap?.communityName || '';
+    if (props.page === 'profile') form.communityName = app.bootstrap?.communityName || '';
     if (
       props.page === 'compose' &&
       props.query?.memoryId &&
@@ -3580,6 +3580,72 @@ function confirmDeleteAccount() {
           进入自己的记忆空间
         </button>
       </template>
+      <template v-else-if="page === 'profile'">
+        <p class="caption">管理你的个人头像，以及在广场公开展示的昵称。</p>
+        <view class="card profile-settings-card">
+          <view class="profile-settings-heading">
+            <image
+              v-if="app.bootstrap?.userAvatarUrl"
+              :src="app.bootstrap.userAvatarUrl"
+              class="profile-avatar account-profile-avatar"
+              mode="aspectFill"
+              aria-label="我的个人头像"
+            />
+            <view v-else class="profile-avatar fallback account-profile-avatar">我</view>
+            <view>
+              <strong>个人头像</strong>
+              <small>用于广场发布和留言</small>
+            </view>
+          </view>
+          <view class="profile-settings-actions">
+            <button
+              role="button"
+              class="btn secondary"
+              :disabled="app.busy"
+              @click="chooseAccountAvatar"
+            >
+              {{ app.bootstrap?.userAvatarUrl ? '更换头像' : '上传头像' }}
+            </button>
+            <button
+              v-if="app.bootstrap?.userAvatarUrl"
+              role="button"
+              class="text-button"
+              :disabled="app.busy"
+              @click="removeAccountAvatar"
+            >
+              移除头像
+            </button>
+          </view>
+        </view>
+        <view class="card profile-settings-card">
+          <view>
+            <strong>广场昵称</strong>
+            <small>只用于公开故事和留言，不会使用纪念人物的称呼。</small>
+          </view>
+          <label class="field profile-nickname-field">
+            <text>昵称</text>
+            <input
+              v-model.trim="form.communityName"
+              maxlength="20"
+              aria-label="广场昵称"
+              placeholder="萤火朋友"
+              @confirm="saveCommunityName"
+            />
+          </label>
+          <button
+            role="button"
+            class="btn"
+            :disabled="
+              app.busy || form.communityName.trim() === (app.bootstrap?.communityName || '')
+            "
+            @click="saveCommunityName"
+          >
+            {{ app.busy ? '正在保存…' : '保存昵称' }}
+          </button>
+        </view>
+        <view v-if="app.status" class="notice" role="status">{{ app.status }}</view>
+        <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
+      </template>
       <template v-else-if="page === 'privacy'">
         <h1 class="sr-only">隐私与数据</h1>
         <p class="caption">你可以查看、导出或删除自己在萤火中的数据。</p>
@@ -3734,29 +3800,6 @@ function confirmDeleteAccount() {
           开始记录
         </button>
         <template v-if="app.session.userId">
-          <view class="community-name-card">
-            <view>
-              <strong>广场昵称</strong>
-              <small>只用于公开故事和留言，不会使用纪念人物的称呼。</small>
-            </view>
-            <view class="community-name-row">
-              <input
-                v-model.trim="form.communityName"
-                maxlength="20"
-                aria-label="广场昵称"
-                placeholder="萤火朋友"
-                @confirm="saveCommunityName"
-              />
-              <button
-                role="button"
-                class="btn"
-                :disabled="
-                  app.busy || form.communityName.trim() === (app.bootstrap?.communityName || '')
-                "
-                @click="saveCommunityName"
-              >保存</button>
-            </view>
-          </view>
           <view class="phone-protect-card">
             <view class="phone-protect-copy"
               ><strong>账号与找回</strong
@@ -3887,6 +3930,14 @@ function confirmDeleteAccount() {
           </button>
 
           <view class="me-settings">
+            <button role="button" class="me-setting-row" @click="go('profile')">
+              <view class="me-setting-icon"><AppIcon name="edit" /></view>
+              <view>
+                <strong>个人资料</strong>
+                <small>管理个人头像与公开身份</small>
+              </view>
+              <AppIcon name="chevron" class="row-chevron" />
+            </button>
             <button role="button" class="me-setting-row" @click="go('chat')">
               <view class="me-setting-icon"><AppIcon name="user" /></view>
               <view
