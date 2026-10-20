@@ -132,7 +132,7 @@ const isWeChat = computed(
 );
 const relationshipOptions = ['爸爸', '妈妈', '爷爷', '奶奶', '外公', '外婆', '爱人', '朋友'];
 const profileDisplayName = computed(
-  () => form.relationship.trim() || form.name.trim() || form.nickname.trim(),
+  () => form.nickname.trim() || form.relationship.trim() || form.name.trim(),
 );
 const recoveryNeeded = computed(
   () => app.profiles.length > 0 && !app.bootstrap?.recoveryConfigured,
@@ -1974,10 +1974,10 @@ function confirmDeleteAccount() {
             </button>
           </view>
           <label v-if="editing || customRelationship" class="field"
-            ><text>人物称呼（必填）</text
+            ><text>TA 与你的关系（必填）</text
             ><input
               v-model="form.relationship"
-              aria-label="人物称呼"
+                aria-label="TA 与你的关系"
               maxlength="40"
               placeholder="例如：老师、阿明"
           /></label>
@@ -2299,7 +2299,7 @@ function confirmDeleteAccount() {
               <view v-else class="profile-avatar fallback">{{ profileInitial(profile) }}</view>
               <view
                 ><strong>{{ profile.name }}</strong
-                ><small>{{ profile.relationship }}</small></view
+                ><small v-if="profile.nickname">{{ profile.relationship }}</small></view
               >
               <i aria-hidden="true" />
             </button>
@@ -3518,7 +3518,7 @@ function confirmDeleteAccount() {
                 <view v-else class="profile-avatar fallback">{{ profileInitial(profile) }}</view>
                 <view
                   ><strong>{{ profile.name }}</strong
-                  ><small>{{ profile.relationship }}</small></view
+                  ><small v-if="profile.nickname">{{ profile.relationship }}</small></view
                 >
                 <i aria-hidden="true" />
               </button>
