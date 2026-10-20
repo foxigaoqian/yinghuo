@@ -25,6 +25,7 @@ const form = reactive({
   nickname: '',
   avatarDataUrl: '',
   accountAvatarDataUrl: '',
+  communityName: '',
   removeAvatar: false,
   callMe: '',
   story: '',
@@ -66,6 +67,10 @@ const squareComposerOpening = ref(false);
 const replyTarget = ref<{ id: string; name: string } | null>(null);
 const storyImages = ref<string[]>([]);
 const storyPhotoProcessing = ref(false);
+const storyPhotoProgress = reactive({ done: 0, total: 0 });
+const avatarCropSource = ref('');
+const avatarCropY = ref(50);
+const avatarCropTarget = ref<'profile' | 'account'>('profile');
 const preview = ref('');
 const chatText = ref('');
 const storyCommentText = ref('');
@@ -80,6 +85,10 @@ const environmentNoticeDismissed = ref(false);
 const chatAvailable = computed(() => Boolean(app.bootstrap?.features?.textChat));
 const chatConversation = computed(() => props.page === 'chat' && Boolean(props.query?.profileId));
 const realChatMessages = computed(() => app.messages.filter((item) => !item.mock));
+const safetyCheckActive = computed(() => {
+  const last = [...realChatMessages.value].reverse().find((item) => item.role === 'assistant');
+  return Boolean(last && /现在安全|正在危险中/.test(last.text));
+});
 const commonEmojis = [
   '微笑',
   '想念',
@@ -329,6 +338,7 @@ async function loadScreen() {
     restoreChatDraft();
     initializeChatMemories();
     restoreEditorDraft();
+    if (props.page === 'me') form.communityName = app.bootstrap?.communityName || '';
     if (
       props.page === 'compose' &&
       props.query?.memoryId &&
@@ -570,7 +580,8 @@ function submitStoryComment() {
     await app.addStoryComment(post.id, text, replyTarget.value?.id);
     storyCommentText.value = '';
     replyTarget.value = null;
-    app.status = '留言已发布。';
+    const latest = app.storyComments[post.id]?.at(-1);
+    app.status = latest?.moderation === 'pending' ? '留言已提交审核。' : '留言已发布。';
   });
 }
 function submitSquareComment() {
@@ -582,6 +593,64 @@ function submitSquareComment() {
     storyCommentText.value = '';
     replyTarget.value = null;
   });
+}
+function sendSafetyAnswer(text: '现在安全' | '正在危险中') {
+  if (app.busy) return;
+  performChatSend(text, '');
+}
+function callEmergencySupport() {
+  if (typeof window !== 'undefined') window.location.href = 'tel:12356';
+}
+function manageComment(comment: {
+  id: string;
+  storyId: string;
+  canDelete?: boolean;
+  canHide?: boolean;
+  canReport?: boolean;
+}) {
+  const actions = [
+    ...(comment.canDelete || comment.canHide ? ['删除或隐藏'] : []),
+    ...(comment.canReport ? ['举报'] : []),
+  ];
+  if (!actions.length) return;
+  uni.showActionSheet({
+    itemList: actions,
+    success: ({ tapIndex }) => {
+      const action = actions[tapIndex];
+      void app.run(async () => {
+        if (action === '举报') {
+          await app.reportStoryComment(comment.storyId, comment.id);
+          app.status = '已提交举报，管理员会尽快查看。';
+        } else {
+          await app.deleteStoryComment(comment.storyId, comment.id);
+          app.status = comment.canDelete ? '留言已删除。' : '留言已隐藏。';
+        }
+      });
+    },
+  });
+}
+function saveCommunityName() {
+  if (app.busy) return;
+  void app.run(async () => {
+    await app.updateCommunityName(form.communityName.trim());
+    app.status = form.communityName.trim()
+      ? '广场昵称已保存。'
+      : '已恢复默认昵称“萤火朋友”。';
+  });
+}
+async function shareStoryLink() {
+  if (!selectedPost.value || typeof window === 'undefined') return;
+  const url = window.location.origin + '/pages/story/index?id=' + encodeURIComponent(selectedPost.value.id);
+  try {
+    if (navigator.share) await navigator.share({ title: selectedPost.value.title || '萤火故事', url });
+    else {
+      await navigator.clipboard.writeText(url);
+      app.status = '故事链接已复制。';
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    app.error = '暂时无法分享，请稍后重试。';
+  }
 }
 function openProfileChat(id: string) {
   if (id !== app.currentId) {
@@ -628,7 +697,7 @@ function editCurrentProfile() {
 function formInitial() {
   return profileDisplayName.value.charAt(0) || '萤';
 }
-async function compressAvatar(source: string) {
+async function compressAvatar(source: string, focusY = 50) {
   const image = new Image();
   image.src = source;
   await image.decode();
@@ -641,7 +710,13 @@ async function compressAvatar(source: string) {
   const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
   const width = image.naturalWidth * scale;
   const height = image.naturalHeight * scale;
-  context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+  context.drawImage(
+    image,
+    (size - width) / 2,
+    ((size - height) * Math.max(0, Math.min(100, focusY))) / 100,
+    width,
+    height,
+  );
   let quality = 0.78;
   let result = canvas.toDataURL('image/jpeg', quality);
   while (result.length > 80_000 && quality > 0.42) {
@@ -681,6 +756,8 @@ function chooseStoryPhotos() {
     success: (result) => {
       void app.run(async () => {
         storyPhotoProcessing.value = true;
+        storyPhotoProgress.total = result.tempFilePaths.slice(0, remaining).length;
+        storyPhotoProgress.done = 0;
         try {
           const next = [...storyImages.value];
           for (const source of result.tempFilePaths.slice(0, remaining)) {
@@ -688,10 +765,13 @@ function chooseStoryPhotos() {
             if ([...next, photo].reduce((sum, item) => sum + item.length, 0) > 1_100_000)
               throw new Error('照片总大小超过限制，请减少一两张后再试');
             next.push(photo);
+            storyPhotoProgress.done += 1;
           }
           storyImages.value = next;
         } finally {
           storyPhotoProcessing.value = false;
+          storyPhotoProgress.total = 0;
+          storyPhotoProgress.done = 0;
         }
       });
     },
@@ -708,11 +788,9 @@ function chooseProfileAvatar() {
     success: (result) => {
       const source = result.tempFilePaths[0];
       if (!source) return;
-      void app.run(async () => {
-        form.avatarDataUrl = await compressAvatar(source);
-        form.removeAvatar = false;
-        app.status = '头像已选好，保存资料后生效。';
-      });
+      avatarCropSource.value = source;
+      avatarCropY.value = 50;
+      avatarCropTarget.value = 'profile';
     },
   });
 }
@@ -728,13 +806,31 @@ function chooseAccountAvatar() {
     success: (result) => {
       const source = result.tempFilePaths[0];
       if (!source) return;
-      void app.run(async () => {
-        form.accountAvatarDataUrl = await compressAvatar(source);
-        await app.updateAccountAvatar({ avatarDataUrl: form.accountAvatarDataUrl });
-        form.accountAvatarDataUrl = '';
-        app.status = '个人头像已更新，广场发布和留言会使用这个头像。';
-      });
+      avatarCropSource.value = source;
+      avatarCropY.value = 50;
+      avatarCropTarget.value = 'account';
     },
+  });
+}
+function cancelAvatarCrop() {
+  avatarCropSource.value = '';
+}
+function confirmAvatarCrop() {
+  const source = avatarCropSource.value;
+  if (!source || app.busy) return;
+  void app.run(async () => {
+    const result = await compressAvatar(source, avatarCropY.value);
+    if (avatarCropTarget.value === 'profile') {
+      form.avatarDataUrl = result;
+      form.removeAvatar = false;
+      app.status = '头像已选好，保存资料后生效。';
+    } else {
+      form.accountAvatarDataUrl = result;
+      await app.updateAccountAvatar({ avatarDataUrl: result });
+      form.accountAvatarDataUrl = '';
+      app.status = '个人头像已更新，广场发布和留言会使用这个头像。';
+    }
+    avatarCropSource.value = '';
   });
 }
 function removeAccountAvatar() {
@@ -1647,6 +1743,17 @@ function confirmDeleteAccount() {
         <AppIcon v-if="page === 'me'" name="spark" />
         <text>{{ app.status }}</text>
       </view>
+      <view
+        v-if="recoveryNeeded && ['memories', 'memory', 'me'].includes(page)"
+        class="recovery-reminder recovery-reminder-prominent"
+        role="status"
+      >
+        <view>
+          <strong>先设置账号找回，避免换设备后找不到这些记忆</strong>
+          <small>当前登录通常保留 30 天；设置找回密码后可用萤火号或手机号恢复。</small>
+        </view>
+        <button role="button" class="text-button" @click="go('me')">现在设置</button>
+      </view>
       <template v-if="page === 'home'">
         <view v-if="loading" class="loading-state" role="status" aria-label="正在打开你的萤火">
           <view class="loading-line short" /><view class="loading-line" /><view
@@ -1767,7 +1874,7 @@ function confirmDeleteAccount() {
       </template>
       <template v-else-if="page === 'login'">
         <view class="sprite2 pose-fly login-mascot" role="img" aria-label="小萤" />
-        <h1>{{ recovering ? '找回我的萤火' : '从一句话开始' }}</h1>
+        <h1 :class="{ 'sr-only': recovering }">{{ recovering ? '找回我的萤火' : '从一句话开始' }}</h1>
         <p class="caption">
           {{
             recovering
@@ -1831,7 +1938,7 @@ function confirmDeleteAccount() {
         </view>
       </template>
       <template v-else-if="page === 'create'">
-        <h1 v-if="editing">人物资料</h1>
+        <h1 v-if="editing" class="sr-only">人物资料</h1>
         <p class="caption">
           {{ editing ? '熟悉的称呼与故事，可以慢慢补充。' : '选一个称呼，写一件最熟悉的小事。' }}
         </p>
@@ -2153,7 +2260,7 @@ function confirmDeleteAccount() {
           :aria-disabled="app.busy"
           @click="recordFromLibrary"
         >
-          <AppIcon name="edit" /><text>发帖</text>
+          <AppIcon name="edit" /><text>发布纪念</text>
         </button>
         <view
           v-if="libraryProfilePickerOpen"
@@ -2200,7 +2307,7 @@ function confirmDeleteAccount() {
         </view>
       </template>
       <template v-else-if="page === 'memory-edit'">
-        <h1>{{ editingMemory ? '修改这段记忆' : '记录一件小事' }}</h1>
+        <h1 class="sr-only">{{ editingMemory ? '修改这段记忆' : '记录一件小事' }}</h1>
         <template v-if="app.current">
           <p class="caption editor-owner">写给 {{ app.current.name }} 的记忆 · 默认只属于你</p>
           <view class="editor-progress" aria-label="记录步骤"><i class="active" /><i /><i /></view>
@@ -2336,7 +2443,7 @@ function confirmDeleteAccount() {
             class="btn secondary"
             @click="shareCurrentMemory"
           >
-            {{ query?.shareFailed === '1' ? '重试分享到广场' : '分享到广场' }}
+            {{ query?.shareFailed === '1' ? '重试公开到广场' : '公开到广场' }}
           </button>
           <button
             role="button"
@@ -2420,6 +2527,15 @@ function confirmDeleteAccount() {
         <template v-else-if="chatAvailable && app.current">
           <view class="chat-layout conversation-layout">
             <view id="chat-thread" class="chat-thread conversation-thread">
+              <button
+                v-if="app.messagesHasMore"
+                role="button"
+                class="chat-load-older"
+                :disabled="app.messagesLoadingOlder"
+                @click="app.fetchOlderMessages()"
+              >
+                {{ app.messagesLoadingOlder ? '正在加载…' : '查看更早的对话' }}
+              </button>
               <view v-if="!realChatMessages.length" class="chat-day">今天</view>
               <view
                 v-if="!realChatMessages.length && !pendingChatText && !pendingChatPhoto"
@@ -2542,6 +2658,17 @@ function confirmDeleteAccount() {
                     ><view class="typing-dots" aria-hidden="true"><text /><text /><text /></view
                   ></view>
                 </view>
+              </view>
+              <view v-if="safetyCheckActive" class="safety-quick-actions" role="group" aria-label="安全状态快捷回复">
+                <button role="button" :disabled="app.busy" @click="sendSafetyAnswer('现在安全')">
+                  我现在安全
+                </button>
+                <button role="button" :disabled="app.busy" @click="sendSafetyAnswer('正在危险中')">
+                  我正在危险中
+                </button>
+                <button role="button" class="support-call" @click="callEmergencySupport">
+                  拨打 12356
+                </button>
               </view>
               <view id="chat-end" class="chat-end" aria-hidden="true" />
             </view>
@@ -2722,7 +2849,7 @@ function confirmDeleteAccount() {
         >
       </template>
       <template v-else-if="page === 'restore'">
-        <h1>让旧照片，重新清晰。</h1>
+        <h1 class="sr-only">让旧照片，重新清晰。</h1>
         <p class="caption">照片修复正在准备。现在只支持在本机预览一张照片。</p>
         <image
           v-if="preview"
@@ -2736,7 +2863,7 @@ function confirmDeleteAccount() {
         ><view class="notice">不会上传照片，也不会生成修复结果或产生费用。</view>
       </template>
       <template v-else-if="page === 'plans'">
-        <h1>服务方案</h1>
+        <h1 class="sr-only">服务方案</h1>
         <p class="caption">现在可以免费体验文字记忆；付费服务尚未开放。</p>
         <view class="card"
           ><h2>基础空间</h2>
@@ -2761,7 +2888,7 @@ function confirmDeleteAccount() {
         >
       </template>
       <template v-else-if="page === 'orders'">
-        <h1>订单</h1>
+        <h1 class="sr-only">订单</h1>
         <view class="empty"><p>目前没有可购买的服务。</p></view>
       </template>
       <template v-else-if="page === 'square'">
@@ -2874,6 +3001,15 @@ function confirmDeleteAccount() {
           </view>
         </view>
         <button
+          v-if="app.publicPosts.length && app.publicPostsHasMore"
+          role="button"
+          class="btn secondary square-load-more"
+          :disabled="app.publicPostsLoadingMore"
+          @click="app.fetchPublicPosts(false)"
+        >
+          {{ app.publicPostsLoadingMore ? '正在加载…' : '查看更多故事' }}
+        </button>
+        <button
           role="button"
           v-if="app.publicPosts.length"
           class="square-fab"
@@ -2881,7 +3017,7 @@ function confirmDeleteAccount() {
           :aria-disabled="squareComposerOpening"
           @click="openSquareComposer"
         >
-          <AppIcon name="edit" /><text>{{ squareComposerOpening ? '正在准备' : '发帖' }}</text>
+          <AppIcon name="edit" /><text>{{ squareComposerOpening ? '正在准备' : '发布纪念' }}</text>
         </button>
         <view v-if="app.publicPosts.length" class="square-privacy-note"
           ><AppIcon name="lock" /><text>只展示主动公开并过审的内容。</text></view
@@ -2910,13 +3046,16 @@ function confirmDeleteAccount() {
               </button>
             </view>
             <view v-if="activeSquareComments.length" class="square-sheet-comments">
-              <button
+              <view
                 v-for="comment in activeSquareComments"
                 :key="comment.id"
                 role="button"
+                tabindex="0"
                 class="square-sheet-comment"
                 :aria-label="'回复' + comment.authorName"
                 @click="chooseReply(comment)"
+                @keydown.enter="chooseReply(comment)"
+                @longpress.stop="manageComment(comment)"
               >
                 <image
                   v-if="comment.authorAvatarUrl"
@@ -2935,8 +3074,16 @@ function confirmDeleteAccount() {
                     >{{ comment.body }}
                   </p>
                   <small>{{ squareDate(comment.createdAt) }} · 回复</small>
+                  <small v-if="comment.moderation === 'pending'" class="comment-pending">审核中 · 仅你可见</small>
+                  <button
+                    v-if="comment.canDelete || comment.canHide || comment.canReport"
+                    role="button"
+                    class="comment-more"
+                    aria-label="留言操作"
+                    @click.stop="manageComment(comment)"
+                  >操作</button>
                 </view>
-              </button>
+              </view>
             </view>
             <view v-else-if="app.busy" class="square-sheet-loading">正在打开留言…</view>
             <view v-else class="square-sheet-empty">还没有留言，留下第一句温柔的话吧。</view>
@@ -3087,6 +3234,10 @@ function confirmDeleteAccount() {
                 <AppIcon name="chat" />
                 <text>留言 {{ selectedPost.commentCount || 0 }}</text>
               </button>
+              <button role="button" class="square-action" @click="shareStoryLink">
+                <AppIcon name="share" />
+                <text>分享</text>
+              </button>
             </view>
             <view class="story-comments">
               <view class="story-comments-title"
@@ -3111,13 +3262,20 @@ function confirmDeleteAccount() {
                   }}</view>
                   <view
                     ><strong>{{ comment.authorName }}</strong>
+                    <small v-if="comment.moderation === 'pending'" class="comment-pending">审核中 · 仅你可见</small>
                     <p>
                       <text v-if="comment.replyToName">回复 {{ comment.replyToName }}：</text
                       >{{ comment.body }}
                     </p>
                     <button role="button" class="story-reply-button" @click="chooseReply(comment)">
                       回复
-                    </button></view
+                    </button>
+                    <button
+                      v-if="comment.canDelete || comment.canHide || comment.canReport"
+                      role="button"
+                      class="story-reply-button"
+                      @click="manageComment(comment)"
+                    >操作</button></view
                   >
                 </view>
               </view>
@@ -3232,7 +3390,11 @@ function confirmDeleteAccount() {
               @click="chooseStoryPhotos"
             >
               <AppIcon name="plus" />
-              <text>{{ storyPhotoProcessing ? '正在处理照片' : '添加照片' }}</text>
+              <text>{{
+                storyPhotoProcessing
+                  ? '正在处理 ' + storyPhotoProgress.done + '/' + storyPhotoProgress.total
+                  : '添加照片'
+              }}</text>
               <small>{{ storyImages.length }}/9</small>
             </button>
           </view>
@@ -3419,7 +3581,7 @@ function confirmDeleteAccount() {
         </button>
       </template>
       <template v-else-if="page === 'privacy'">
-        <h1>隐私与数据</h1>
+        <h1 class="sr-only">隐私与数据</h1>
         <p class="caption">你可以查看、导出或删除自己在萤火中的数据。</p>
         <view class="card legal-card">
           <h2>我们保存什么</h2>
@@ -3472,7 +3634,7 @@ function confirmDeleteAccount() {
         </button>
       </template>
       <template v-else-if="page === 'terms'">
-        <h1>用户协议与 AI 说明</h1>
+        <h1 class="sr-only">用户协议与 AI 说明</h1>
         <view class="card legal-card">
           <h2>这是 AI 模拟回应</h2>
           <p>
@@ -3496,7 +3658,7 @@ function confirmDeleteAccount() {
         <p class="caption legal-foot">2026年10月5日生效 · 萤火项目团队</p>
       </template>
       <template v-else-if="page === 'support'">
-        <h1>帮助与反馈</h1>
+        <h1 class="sr-only">帮助与反馈</h1>
         <p class="caption">请描述遇到的问题或期望的改进，内容只用于处理本次反馈。</p>
         <view v-if="app.session.userId" class="card">
           <view class="chips">
@@ -3572,6 +3734,29 @@ function confirmDeleteAccount() {
           开始记录
         </button>
         <template v-if="app.session.userId">
+          <view class="community-name-card">
+            <view>
+              <strong>广场昵称</strong>
+              <small>只用于公开故事和留言，不会使用纪念人物的称呼。</small>
+            </view>
+            <view class="community-name-row">
+              <input
+                v-model.trim="form.communityName"
+                maxlength="20"
+                aria-label="广场昵称"
+                placeholder="萤火朋友"
+                @confirm="saveCommunityName"
+              />
+              <button
+                role="button"
+                class="btn"
+                :disabled="
+                  app.busy || form.communityName.trim() === (app.bootstrap?.communityName || '')
+                "
+                @click="saveCommunityName"
+              >保存</button>
+            </view>
+          </view>
           <view class="phone-protect-card">
             <view class="phone-protect-copy"
               ><strong>账号与找回</strong
@@ -3745,5 +3930,39 @@ function confirmDeleteAccount() {
         </template>
       </template>
     </template>
+    <view
+      v-if="avatarCropSource"
+      class="avatar-crop-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="avatar-crop-title"
+      @click.self="cancelAvatarCrop"
+    >
+      <view class="avatar-crop-card">
+        <h2 id="avatar-crop-title">调整头像位置</h2>
+        <p>上下拖动滑杆，让脸部或主体完整显示在圆形区域内。</p>
+        <view class="avatar-crop-preview">
+          <image
+            :src="avatarCropSource"
+            mode="aspectFill"
+            :style="{ objectPosition: '50% ' + avatarCropY + '%' }"
+            aria-label="头像裁剪预览"
+          />
+        </view>
+        <input
+          v-model.number="avatarCropY"
+          type="range"
+          min="0"
+          max="100"
+          aria-label="调整头像上下位置"
+        />
+        <view class="avatar-crop-actions">
+          <button role="button" class="btn secondary" @click="cancelAvatarCrop">取消</button>
+          <button role="button" class="btn" :disabled="app.busy" @click="confirmAvatarCrop">
+            {{ app.busy ? '正在处理…' : '使用这个位置' }}
+          </button>
+        </view>
+      </view>
+    </view>
   </AppShell>
 </template>
