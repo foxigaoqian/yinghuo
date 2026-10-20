@@ -4103,7 +4103,7 @@ html button.square-comment-send[disabled] {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  margin-top: -35px;
+  margin-top: 0;
   padding: 14px 16px;
   border: 1px solid #e3cc8f80;
   border-radius: var(--radius-lg);
@@ -5260,7 +5260,7 @@ button.text-button.danger-text {
 .community-name-card {
   display: grid;
   gap: 12px;
-  margin: 14px 0;
+  margin: 14px 0 10px;
   padding: 16px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-md);
