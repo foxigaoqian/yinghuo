@@ -25,6 +25,8 @@ function fakeSupabase() {
     story_reactions: [],
     story_comments: [],
     story_comment_reports: [],
+    comment_reports: [],
+    admin_audit_logs: [],
     account_recovery_codes: recoveryRows,
     user_feedback: [],
   };
@@ -493,7 +495,10 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal((await a.request('GET', '/square?view=public')).data.items.length, 0);
     assert.equal((await a.request('GET', '/admin/stories')).status, 401);
     env.ADMIN_REVIEW_TOKEN = 'review-test-token-long-enough';
-    const reviewer = { authorization: 'Bearer ' + env.ADMIN_REVIEW_TOKEN };
+    const reviewer = {
+      authorization: 'Bearer ' + env.ADMIN_REVIEW_TOKEN,
+      'x-admin-actor': 'test-admin',
+    };
     const overview = await a.request('GET', '/admin/overview', undefined, reviewer);
     assert.equal(overview.status, 200);
     assert.equal(overview.data.users.total, 2);
@@ -535,7 +540,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(published.status, 200);
     const publicStories = await b.request('GET', '/square?view=public');
     assert.equal(publicStories.data.items.length, 1);
-    assert.equal(publicStories.data.items[0].authorName, '一位萤火朋友');
+    assert.equal(publicStories.data.items[0].authorName, '萤火朋友');
     const rejected = await a.request(
       'PATCH',
       '/admin/stories/' + publicStory.data.id,
@@ -633,8 +638,25 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     env.AI.run = async () => {
       throw Error('model temporarily unavailable');
     };
-    const failed = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+    const safetyFollowup = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
       text: '还有呢',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
+    assert.equal(safetyFollowup.status, 200);
+    assert.match(safetyFollowup.data.items[1].text, /现在安全/);
+    assert.equal(prompts.length, promptsBeforeCrisis, '未确认安全前不应恢复人物模拟');
+    const safe = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '现在安全',
+      aiConsent: true,
+      memoryIds: [],
+      clientMessageId: crypto.randomUUID(),
+    });
+    assert.equal(safe.status, 200);
+    assert.match(safe.data.items[1].text, /信任的人/);
+    const failed = await a.request('POST', '/profiles/' + profile.data.id + '/messages', {
+      text: '再聊点别的',
       aiConsent: true,
       memoryIds: [],
       clientMessageId: crypto.randomUUID(),
@@ -642,7 +664,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(failed.status, 503);
     assert.equal(
       (await a.request('GET', '/profiles/' + profile.data.id + '/messages')).data.items.length,
-      6,
+      10,
     );
     const reset = await a.request('POST', '/profiles/' + profile.data.id + '/messages/reset');
     assert.equal(reset.status, 200);
@@ -683,7 +705,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(exported.status, 200);
     assert.equal(
       exported.data.messages.length,
-      1009,
+      1013,
       'export includes every page and archived conversations',
     );
     for (const key of ['profilePreferences', 'profileAvatars', 'consents', 'feedback']) {
