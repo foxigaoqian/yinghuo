@@ -1118,7 +1118,7 @@ checkbox:not([hidden]) .uni-checkbox-input:has(svg) {
   width: 100%;
   height: auto;
   padding: 10px 10px 26px;
-  background: #fffefb;
+  background-color: #fffefb;
   border: 1px solid var(--line-soft);
   border-radius: 4px;
   box-shadow:
@@ -5164,6 +5164,209 @@ button.text-button.danger-text {
 .publish-photo-item > button .app-icon {
   width: 14px;
   height: 14px;
+}
+
+/* 2026-10 UX audit: touch, pagination, safety and desktop adaptation */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.topbar .icon-button,
+.topbar-spacer,
+.text-button,
+.profile-tab,
+.story-reply-button,
+.account-switch-link,
+.comment-more,
+.chat-load-older {
+  min-width: 44px;
+  min-height: 44px;
+}
+.library-filters .profile-tab {
+  min-height: 44px;
+  padding: 8px 15px;
+}
+.chat-load-older {
+  display: block;
+  margin: 0 auto 12px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fffaf0c9;
+  color: var(--muted);
+  font-size: 12px;
+}
+.safety-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 44px 2px;
+  padding: 12px;
+  border: 1px solid #e5cfac;
+  border-radius: 16px;
+  background: #fffaf0e8;
+}
+.safety-quick-actions button {
+  min-height: 44px;
+  border: 1px solid #d8c7aa;
+  border-radius: 999px;
+  background: #fffefa;
+  color: var(--text);
+  font-weight: 650;
+}
+.safety-quick-actions .support-call {
+  grid-column: 1 / -1;
+  background: var(--ink);
+  color: #fff;
+}
+.square-load-more {
+  width: min(100%, 280px);
+  margin: 16px auto 86px;
+}
+.comment-pending {
+  display: block;
+  margin-top: 2px;
+  color: var(--gold-ink);
+  font-size: 11px;
+}
+.comment-more {
+  margin-left: 6px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.recovery-reminder-prominent {
+  border-color: #d7b35c;
+  background: linear-gradient(135deg, #fff9e9, #f8edd1);
+  box-shadow: 0 8px 22px #6e52121a;
+}
+.recovery-reminder-prominent > view {
+  display: grid;
+  gap: 3px;
+}
+.recovery-reminder-prominent strong,
+.recovery-reminder-prominent small {
+  display: block;
+}
+.community-name-card {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: #fffefabf;
+}
+.community-name-card small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.community-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.community-name-row input {
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 16px;
+}
+.community-name-row .btn {
+  width: auto;
+  min-width: 76px;
+  margin: 0;
+}
+.avatar-crop-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #241e16a6;
+}
+.avatar-crop-card {
+  width: min(100%, 390px);
+  padding: 22px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px #0004;
+}
+.avatar-crop-card h2 {
+  margin: 0 0 5px;
+}
+.avatar-crop-card p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.avatar-crop-preview {
+  width: 190px;
+  height: 190px;
+  margin: 0 auto 16px;
+  overflow: hidden;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line), 0 10px 28px #3f321f22;
+}
+.avatar-crop-preview image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-crop-card input[type='range'] {
+  width: 100%;
+  min-height: 44px;
+}
+.avatar-crop-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.avatar-crop-actions .btn {
+  margin: 0;
+}
+
+@media (min-width: 760px) and (min-height: 600px) {
+  .app-shell:not(.chat-screen) {
+    width: min(calc(100% - 48px), 820px);
+    max-width: 820px;
+  }
+  .app-shell:not(.chat-screen) > .content {
+    width: min(100%, 720px);
+    margin-inline: auto;
+  }
+  .app-shell:not(.chat-screen) .bottom-nav {
+    width: min(calc(100% - 48px), 820px);
+  }
+  .page-square > .content {
+    width: min(100%, 760px) !important;
+  }
+  .page-square .square-feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .page-square .square-welcome,
+  .page-square .square-privacy-note,
+  .page-square .square-load-more {
+    grid-column: 1 / -1;
+  }
 }
 
 /* 我的发布：装饰萤点归位、列表节律 */
