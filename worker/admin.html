@@ -1207,6 +1207,16 @@
             />
           </div>
         </div>
+        <div class="field" style="margin-top:12px">
+          <label for="actorInput">管理员姓名</label>
+          <input
+            id="actorInput"
+            autocomplete="name"
+            maxlength="40"
+            placeholder="用于记录每次后台操作"
+            required
+          />
+        </div>
         <button id="loginButton" class="primary login-submit" type="submit">进入后台</button>
         <p id="loginError" class="form-error" role="alert"></p>
         <div class="login-note">
@@ -1230,11 +1240,17 @@
             <svg class="icon"><use href="#i-review" /></svg><span>故事审核</span
             ><span id="pendingBadge" class="badge" hidden>0</span>
           </button>
+          <button class="nav-btn" data-view="comments">
+            <svg class="icon"><use href="#i-chat" /></svg><span>留言审核</span>
+          </button>
           <button class="nav-btn" data-view="users">
             <svg class="icon"><use href="#i-users" /></svg><span>用户管理</span>
           </button>
           <button class="nav-btn" data-view="feedback">
             <svg class="icon"><use href="#i-message" /></svg><span>意见反馈</span>
+          </button>
+          <button class="nav-btn" data-view="audit">
+            <svg class="icon"><use href="#i-lock" /></svg><span>操作记录</span>
           </button>
         </nav>
         <div class="sidebar-foot">
@@ -1288,9 +1304,12 @@
       const $ = (id) => document.getElementById(id);
       const state = {
         token: sessionStorage.getItem('yinghuo.admin') || '',
+        actor: sessionStorage.getItem('yinghuo.admin.actor') || '',
         view: 'overview',
         overview: null,
         stories: [],
+        comments: [],
+        audit: [],
         users: [],
         feedback: [],
         storyFilter: 'pending',
@@ -1302,8 +1321,10 @@
       const pages = {
         overview: ['数据概览', '查看萤火当前的运营与社区状态'],
         stories: ['故事审核', '审核公开申请，维护广场内容质量'],
+        comments: ['留言审核', '处理待审与被举报的广场留言'],
         users: ['用户管理', '查看账号状态与使用情况'],
         feedback: ['意见反馈', '集中查看用户提交的问题与建议'],
+        audit: ['操作记录', '查看管理员、时间与具体操作'],
       };
       const icon = (name) =>
         '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
@@ -1339,7 +1360,11 @@
       async function api(path, method = 'GET', data) {
         const response = await fetch('/api/v1/admin/' + path, {
           method,
-          headers: { authorization: 'Bearer ' + state.token, 'content-type': 'application/json' },
+          headers: {
+            authorization: 'Bearer ' + state.token,
+            'content-type': 'application/json',
+            'x-admin-actor': encodeURIComponent(state.actor),
+          },
           ...(data === undefined ? {} : { body: JSON.stringify(data) }),
         });
         const result = await response.json().catch(() => ({}));
@@ -1358,12 +1383,17 @@
       async function login(event) {
         event?.preventDefault();
         state.token = $('tokenInput').value.trim() || state.token;
-        if (!state.token) return;
+        state.actor = $('actorInput').value.trim() || state.actor;
+        if (!state.token || !state.actor) {
+          $('loginError').textContent = '请输入管理员口令和姓名';
+          return;
+        }
         busy(true);
         $('loginError').textContent = '';
         try {
           state.overview = await api('overview');
           sessionStorage.setItem('yinghuo.admin', state.token);
+          sessionStorage.setItem('yinghuo.admin.actor', state.actor);
           $('tokenInput').value = '';
           $('loginScreen').hidden = true;
           $('shell').hidden = false;
@@ -1380,6 +1410,7 @@
       function logout(message = true) {
         state.token = '';
         sessionStorage.removeItem('yinghuo.admin');
+        sessionStorage.removeItem('yinghuo.admin.actor');
         $('shell').hidden = true;
         $('loginScreen').hidden = false;
         $('loginError').textContent = '';
@@ -1409,8 +1440,10 @@
           if (state.view === 'overview') state.overview = await api('overview');
           if (state.view === 'stories')
             state.stories = (await api('stories?status=' + state.storyFilter)).items;
+          if (state.view === 'comments') state.comments = (await api('comments')).items;
           if (state.view === 'users') state.users = (await api('users')).items;
           if (state.view === 'feedback') state.feedback = (await api('feedback')).items;
+          if (state.view === 'audit') state.audit = (await api('audit')).items;
           if (state.view !== 'overview') state.overview = await api('overview');
           badge();
           render();
@@ -1679,7 +1712,7 @@
               esc(x.displayName || '萤火用户') +
               '</strong><small>' +
               esc(account(x.accountKind)) +
-              '</small></span></div></td><td data-label="找回卡"><span class="mono">' +
+              '</small></span></div></td><td data-label="萤火号"><span class="mono">' +
               esc(x.familyCode || '—') +
               '</span></td><td data-label="手机">' +
               (x.phoneLast4 ? '尾号 ' + esc(x.phoneLast4) : '未保存') +
@@ -1726,9 +1759,9 @@
           icon('search') +
           '<input id="userSearch" type="search" value="' +
           esc(state.search) +
-          '" placeholder="搜索找回卡、尾号或用户 ID" aria-label="搜索用户"></label></div>' +
+          '" placeholder="搜索萤火号、尾号或用户 ID" aria-label="搜索用户"></label></div>' +
           (rows
-            ? '<div class="panel table-panel"><table class="data-table"><thead><tr><th>用户</th><th>找回卡</th><th>手机</th><th>内容</th><th>注册时间</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
+            ? '<div class="panel table-panel"><table class="data-table"><thead><tr><th>用户</th><th>萤火号</th><th>手机</th><th>内容</th><th>注册时间</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
               rows +
               '</tbody></table></div>'
             : empty(q ? '没有搜索结果' : '暂无用户', '符合条件的用户会显示在这里')) +
@@ -1782,6 +1815,64 @@
           '</div></section>'
         );
       }
+      function comments() {
+        const cards = state.comments
+          .map(
+            (item) =>
+              '<article class="story-card"><div class="story-top"><span class="avatar">留</span><div class="story-author"><strong>' +
+              (item.reportCount ? '被举报 ' + item.reportCount + ' 次' : '自动审核待确认') +
+              '</strong><span>' +
+              date(item.createdAt) +
+              '</span></div><span class="pill pending-pill">' +
+              (item.moderation === 'pending' ? '待审核' : '需复核') +
+              '</span></div><div class="story-body"><p>' +
+              esc(item.body) +
+              '</p>' +
+              (item.reportReasons?.length
+                ? '<div class="reason">举报原因：' + esc(item.reportReasons.join('；')) + '</div>'
+                : '') +
+              '</div><div class="story-actions"><button class="secondary" data-comment-action="rejected" data-id="' +
+              item.id +
+              '">' +
+              icon('x') +
+              '隐藏留言</button><button class="primary" data-comment-action="published" data-id="' +
+              item.id +
+              '">' +
+              icon('check') +
+              '保留留言</button></div></article>',
+          )
+          .join('');
+        return (
+          '<section class="view"><div class="story-list">' +
+          (cards || empty('留言队列已清空', '待审或被举报的留言会显示在这里')) +
+          '</div></section>'
+        );
+      }
+      function audit() {
+        const rows = state.audit
+          .map(
+            (item) =>
+              '<tr><td data-label="管理员"><strong>' +
+              esc(item.actor) +
+              '</strong></td><td data-label="操作">' +
+              esc(item.action) +
+              '</td><td data-label="对象"><span class="mono">' +
+              esc(item.targetType + ' · ' + item.targetId.slice(0, 12)) +
+              '</span></td><td data-label="时间">' +
+              date(item.createdAt) +
+              '</td></tr>',
+          )
+          .join('');
+        return (
+          '<section class="view">' +
+          (rows
+            ? '<div class="panel table-panel"><table class="data-table"><thead><tr><th>管理员</th><th>操作</th><th>对象</th><th>时间</th></tr></thead><tbody>' +
+              rows +
+              '</tbody></table></div>'
+            : empty('还没有操作记录', '审核和用户管理操作会显示在这里')) +
+          '</section>'
+        );
+      }
       function render() {
         const y = scrollY;
         $('main').innerHTML =
@@ -1789,9 +1880,13 @@
             ? overview()
             : state.view === 'stories'
               ? stories()
+              : state.view === 'comments'
+                ? comments()
               : state.view === 'users'
                 ? users()
-                : feedback();
+                : state.view === 'feedback'
+                  ? feedback()
+                  : audit();
         requestAnimationFrame(() => scrollTo(0, y));
         if (state.view === 'overview') quickStories();
       }
@@ -1866,6 +1961,25 @@
           toast(error.message, true);
         }
       }
+      async function moderateComment(id, decision) {
+        const keep = decision === 'published';
+        if (
+          !(await ask({
+            title: keep ? '保留这条留言？' : '隐藏这条留言？',
+            description: keep ? '留言会继续显示在广场。' : '留言将从前台隐藏。',
+            confirmLabel: keep ? '确认保留' : '确认隐藏',
+            danger: !keep,
+          }))
+        )
+          return;
+        try {
+          await api('comments/' + id, 'PATCH', { decision });
+          toast(keep ? '留言已保留' : '留言已隐藏');
+          await refresh(true);
+        } catch (error) {
+          toast(error.message, true);
+        }
+      }
       $('loginForm').addEventListener('submit', login);
       $('logoutButton').addEventListener('click', () => logout());
       $('refreshButton').addEventListener('click', () => refresh());
@@ -1889,6 +2003,7 @@
           render();
         }
         if (b.dataset.storyAction) moderate(b.dataset.id, b.dataset.storyAction);
+        if (b.dataset.commentAction) moderateComment(b.dataset.id, b.dataset.commentAction);
         if (b.dataset.userAction) userStatus(b.dataset.id, b.dataset.userAction, b.dataset.name);
       });
       document.addEventListener('input', (event) => {
