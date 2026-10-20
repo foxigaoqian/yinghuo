@@ -74,7 +74,7 @@ const activeTab = computed(() =>
     ? 'home'
     : ['story'].includes(props.page)
       ? 'square'
-      : ['privacy', 'terms', 'support', 'orders', 'plans', 'shares'].includes(props.page)
+      : ['privacy', 'terms', 'support', 'orders', 'plans', 'shares', 'memories'].includes(props.page)
         ? 'me'
         : props.page,
 );
@@ -110,7 +110,10 @@ function back() {
 <template>
   <view
     class="app-shell"
-    :class="{ 'focused-screen': immersivePage, 'chat-screen': focused }"
+    :class="[
+      'page-' + page,
+      { 'focused-screen': immersivePage, 'chat-screen': focused },
+    ]"
     :style="
       focused && visibleHeight
         ? {
