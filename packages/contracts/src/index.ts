@@ -119,6 +119,9 @@ export const accountAvatarInput = z
   .refine((input) => input.removeAvatar || Boolean(input.avatarDataUrl), {
     message: '请选择头像或移除当前头像',
   });
+export const communityNameInput = z
+  .object({ communityName: z.string().trim().max(20, '广场昵称最多 20 个字') })
+  .strict();
 export const idParam = z.string().uuid();
 export type Profile = {
   id: string;
@@ -180,6 +183,10 @@ export type StoryComment = {
   authorName: string;
   authorAvatarUrl?: string | null;
   isMine: boolean;
+  moderation?: 'pending' | 'published' | 'rejected';
+  canDelete?: boolean;
+  canHide?: boolean;
+  canReport?: boolean;
   parentId?: string | null;
   replyToName?: string | null;
   createdAt: string;
@@ -222,6 +229,7 @@ export type BootstrapState = {
   gender: 'male' | 'female' | null;
   birthYear: number | null;
   userAvatarUrl: string | null;
+  communityName?: string;
   profileCount: number;
   recentProfileId: string | null;
   recentConversationId: string | null;
