@@ -26,6 +26,9 @@ export const useAppStore = defineStore('app', () => {
   const orders = ref<Order[]>([]);
   const posts = ref<Post[]>([]);
   const publicPosts = ref<Post[]>([]);
+  const publicPostsHasMore = ref(true);
+  const publicPostsLoadingMore = ref(false);
+  const publicPostsCursor = ref('');
   const storyComments = ref<Record<string, StoryComment[]>>({});
   const libraryMemories = ref<Memory[]>([]);
   const libraryReady = ref(false);
@@ -37,6 +40,9 @@ export const useAppStore = defineStore('app', () => {
   const hydrated = ref(false);
   const messagesHydrated = ref(false);
   const messagesProfileId = ref('');
+  const messagesHasMore = ref(false);
+  const messagesLoadingOlder = ref(false);
+  const messagesCursor = ref('');
   const postsHydrated = ref(false);
   const current = computed(() => profiles.value.find((p) => p.id === currentId.value));
   const messagesReady = computed(
@@ -74,6 +80,8 @@ export const useAppStore = defineStore('app', () => {
       messages.value = [];
       messagesHydrated.value = false;
       messagesProfileId.value = '';
+      messagesHasMore.value = false;
+      messagesCursor.value = '';
       pendingMessage = null;
     }
     if (accountChanged) {
@@ -98,6 +106,8 @@ export const useAppStore = defineStore('app', () => {
       messages.value = state.messages;
       messagesHydrated.value = true;
       messagesProfileId.value = state.currentProfileId || '';
+      messagesHasMore.value = state.messages.length >= 40;
+      messagesCursor.value = state.messages[0]?.createdAt || '';
     }
     orders.value = state.orders;
     if (includePosts) {
@@ -160,6 +170,8 @@ export const useAppStore = defineStore('app', () => {
     pendingMessage = null;
     messagesHydrated.value = false;
     messagesProfileId.value = '';
+    messagesHasMore.value = false;
+    messagesCursor.value = '';
     if (session.value.userId) uni.setStorageSync('yinghuo.current.' + session.value.userId, id);
   }
   async function login() {
@@ -202,6 +214,8 @@ export const useAppStore = defineStore('app', () => {
     messages.value = [];
     posts.value = [];
     publicPosts.value = [];
+    publicPostsHasMore.value = true;
+    publicPostsCursor.value = '';
     storyComments.value = {};
     libraryMemories.value = [];
     libraryReady.value = false;
@@ -359,6 +373,24 @@ export const useAppStore = defineStore('app', () => {
     messages.value = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     pendingMessage = null;
   }
+  async function fetchOlderMessages() {
+    if (!currentId.value || messagesLoadingOlder.value || !messagesHasMore.value) return;
+    messagesLoadingOlder.value = true;
+    try {
+      const suffix = messagesCursor.value
+        ? '?before=' + encodeURIComponent(messagesCursor.value)
+        : '';
+      const result = await api<{ items: Message[]; hasMore: boolean; nextCursor: string | null }>(
+        '/profiles/' + currentId.value + '/messages' + suffix,
+      );
+      const byId = new Map([...result.items, ...messages.value].map((item) => [item.id, item]));
+      messages.value = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      messagesHasMore.value = result.hasMore;
+      messagesCursor.value = result.nextCursor || result.items[0]?.createdAt || '';
+    } finally {
+      messagesLoadingOlder.value = false;
+    }
+  }
   async function buy(productId: Product['id']) {
     await api(
       '/orders',
@@ -372,9 +404,26 @@ export const useAppStore = defineStore('app', () => {
     const post = await api<Post>('/square', 'POST', input);
     posts.value = [post, ...posts.value.filter((item) => item.id !== post.id)];
   }
-  async function fetchPublicPosts() {
-    const result = await api<{ items: Post[] }>('/square?view=public');
-    publicPosts.value = result.items;
+  async function fetchPublicPosts(reset = true) {
+    if (publicPostsLoadingMore.value) return;
+    publicPostsLoadingMore.value = true;
+    try {
+      const before = !reset && publicPostsCursor.value
+        ? '&before=' + encodeURIComponent(publicPostsCursor.value)
+        : '';
+      const result = await api<{ items: Post[]; hasMore: boolean; nextCursor: string | null }>(
+        '/square?view=public' + before,
+      );
+      if (reset) publicPosts.value = result.items;
+      else {
+        const byId = new Map([...publicPosts.value, ...result.items].map((item) => [item.id, item]));
+        publicPosts.value = [...byId.values()];
+      }
+      publicPostsHasMore.value = result.hasMore;
+      publicPostsCursor.value = result.nextCursor || '';
+    } finally {
+      publicPostsLoadingMore.value = false;
+    }
   }
   async function fetchOwnPosts() {
     const result = await api<{ items: Post[] }>('/square?view=mine');
@@ -440,6 +489,27 @@ export const useAppStore = defineStore('app', () => {
       commentPreview: [...(source?.commentPreview || []), comment].slice(-2),
     });
     return comment;
+  }
+  async function deleteStoryComment(storyId: string, commentId: string) {
+    await api<{ ok: true }>('/square/' + storyId + '/comments/' + commentId, 'DELETE', {});
+    storyComments.value = {
+      ...storyComments.value,
+      [storyId]: (storyComments.value[storyId] || []).filter((item) => item.id !== commentId),
+    };
+  }
+  async function reportStoryComment(storyId: string, commentId: string) {
+    await api<{ ok: true }>(
+      '/square/' + storyId + '/comments/' + commentId + '/report',
+      'POST',
+      { reason: '不友善或不合适' },
+    );
+  }
+  async function updateCommunityName(communityName: string) {
+    const result = await api<{ communityName: string }>('/account/community-name', 'PATCH', {
+      communityName,
+    });
+    if (bootstrap.value) bootstrap.value.communityName = result.communityName;
+    return result;
   }
   async function updatePost(id: string, input: unknown) {
     const post = await api<Post>('/square/' + id, 'PATCH', input);
@@ -508,10 +578,14 @@ export const useAppStore = defineStore('app', () => {
     orders,
     posts,
     publicPosts,
+    publicPostsHasMore,
+    publicPostsLoadingMore,
     storyComments,
     libraryMemories,
     libraryReady,
     messagesReady,
+    messagesHasMore,
+    messagesLoadingOlder,
     postsReady,
     products,
     currentId,
@@ -538,6 +612,7 @@ export const useAppStore = defineStore('app', () => {
     updateMemory,
     deleteMemory,
     send,
+    fetchOlderMessages,
     buy,
     publish,
     fetchPublicPosts,
@@ -546,6 +621,9 @@ export const useAppStore = defineStore('app', () => {
     setStoryLight,
     fetchStoryComments,
     addStoryComment,
+    deleteStoryComment,
+    reportStoryComment,
+    updateCommunityName,
     updatePost,
     deletePost,
     exportAccount,
