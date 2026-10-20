@@ -85,6 +85,13 @@
       }
     },
     {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "个人资料",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/square/index",
       "style": {
         "navigationBarTitleText": "广场",
