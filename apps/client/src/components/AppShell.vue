@@ -58,6 +58,7 @@ const focusedPage = computed(
     immersivePage.value ||
     [
       'shares',
+      'profile',
       'memory',
       'story',
       'memories',
@@ -74,7 +75,7 @@ const activeTab = computed(() =>
     ? 'home'
     : ['story'].includes(props.page)
       ? 'square'
-      : ['privacy', 'terms', 'support', 'orders', 'plans', 'shares', 'memories'].includes(props.page)
+      : ['profile', 'privacy', 'terms', 'support', 'orders', 'plans', 'shares', 'memories'].includes(props.page)
         ? 'me'
         : props.page,
 );
@@ -99,7 +100,7 @@ function back() {
               ? 'chat'
               : props.page === 'story'
                 ? 'square'
-                : ['privacy', 'terms', 'support', 'orders', 'plans'].includes(props.page)
+                : ['profile', 'privacy', 'terms', 'support', 'orders', 'plans'].includes(props.page)
                   ? 'me'
                   : props.page === 'memories'
                     ? 'me'
