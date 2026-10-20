@@ -4103,7 +4103,7 @@ html button.square-comment-send[disabled] {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: -32px;
   padding: 14px 16px;
   border: 1px solid #e3cc8f80;
   border-radius: var(--radius-lg);
