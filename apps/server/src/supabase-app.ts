@@ -242,15 +242,22 @@ export class SupabaseProfilesController {
 
   @Post('profiles') async create(@Req() req: UserRequest, @Body() body: unknown) {
     const data = read(profileInput, body);
+    const relationship = data.relationship || data.name;
+    const displayName = data.nickname || relationship;
     const rows = await this.db.rpc<ProfileRow[]>('yinghuo_create_profile', {
       p_user_id: req.demoSession.userId,
-      p_display_name: data.name,
+      p_display_name: displayName,
       p_call_me: data.callMe,
       p_story: data.story,
       p_ai_consent: data.aiConsent,
     });
     const row = rows?.[0];
     if (!row?.id) throw new Error('Profile creation did not return a profile');
+    await this.db.patch<ProfileRow[]>(
+      'profiles',
+      { id: eq(row.id), creator_user_id: eq(req.demoSession.userId), deleted_at: 'is.null' },
+      { relationship, updated_at: new Date().toISOString() },
+    );
     return this.loadProfile(req.demoSession.userId, row.id);
   }
 
@@ -267,6 +274,8 @@ export class SupabaseProfilesController {
     const ownerId = req.demoSession.userId;
     await this.requireProfile(ownerId, profileId);
     const data = read(profileInput, body);
+    const relationship = data.relationship || data.name;
+    const displayName = data.nickname || relationship;
     await this.db.patch<ProfileRow[]>(
       'profiles',
       {
@@ -274,7 +283,11 @@ export class SupabaseProfilesController {
         creator_user_id: eq(ownerId),
         deleted_at: 'is.null',
       },
-      { display_name: data.name, updated_at: new Date().toISOString() },
+      {
+        display_name: displayName,
+        relationship,
+        updated_at: new Date().toISOString(),
+      },
     );
     await this.db.upsert<PreferenceRow[]>(
       'profile_preferences',
@@ -511,7 +524,7 @@ export class SupabaseProfilesController {
     return rows.map((row) => ({
       id: row.id,
       ownerId,
-      name: row.display_name,
+      name: row.relationship || row.display_name,
       relationship: row.relationship || row.display_name,
       nickname: row.relationship && row.display_name !== row.relationship ? row.display_name : '',
       avatarUrl: null,

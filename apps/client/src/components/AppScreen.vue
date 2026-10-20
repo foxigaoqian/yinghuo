@@ -61,6 +61,7 @@ const visibilityPickerOpen = ref(false);
 const squareCommentSheetOpen = ref(false);
 const activeSquarePostId = ref('');
 const lightingStoryId = ref('');
+const lightingStoryAction = ref<'light' | 'unlight' | ''>('');
 const squareComposerOpening = ref(false);
 const replyTarget = ref<{ id: string; name: string } | null>(null);
 const storyImages = ref<string[]>([]);
@@ -122,7 +123,7 @@ const isWeChat = computed(
 );
 const relationshipOptions = ['爸爸', '妈妈', '爷爷', '奶奶', '外公', '外婆', '爱人', '朋友'];
 const profileDisplayName = computed(
-  () => form.nickname.trim() || form.relationship.trim() || form.name.trim(),
+  () => form.relationship.trim() || form.name.trim() || form.nickname.trim(),
 );
 const recoveryNeeded = computed(
   () => app.profiles.length > 0 && !app.bootstrap?.recoveryConfigured,
@@ -462,6 +463,7 @@ function toggleStoryLight(post: { id: string; viewerHasLit?: boolean }) {
   if (app.busy || lightingStoryId.value) return;
   const nextActive = !post.viewerHasLit;
   lightingStoryId.value = post.id;
+  lightingStoryAction.value = nextActive ? 'light' : 'unlight';
   void app
     .run(async () => {
       await app.setStoryLight(post.id, nextActive);
@@ -469,10 +471,12 @@ function toggleStoryLight(post: { id: string; viewerHasLit?: boolean }) {
     })
     .finally(() => {
       lightingStoryId.value = '';
+      lightingStoryAction.value = '';
     });
 }
 function storyLightLabel(post: { id: string; viewerHasLit?: boolean; lightCount?: number }) {
-  if (lightingStoryId.value === post.id) return post.viewerHasLit ? '正在收回…' : '点亮中…';
+  if (lightingStoryId.value === post.id)
+    return lightingStoryAction.value === 'unlight' ? '正在收回…' : '点亮中…';
   return `${post.viewerHasLit ? '已点亮' : '点亮'} ${post.lightCount || 0}`;
 }
 function chooseSquareMemory(memory: { id: string; profileId: string }) {
@@ -614,7 +618,7 @@ function create() {
 }
 function profileInitial(profile: { name: string; relationship?: string; nickname?: string }) {
   return (
-    (profile.nickname || profile.name || profile.relationship || '萤').trim().charAt(0) || '萤'
+    (profile.name || profile.relationship || profile.nickname || '萤').trim().charAt(0) || '萤'
   );
 }
 function editCurrentProfile() {
@@ -3615,10 +3619,8 @@ function confirmDeleteAccount() {
             </template>
             <template v-else>
               <view class="bound-phone-row">
-                <view class="bound-phone-info">
-                  <small class="bound-phone-label">手机号</small>
-                  <strong class="bound-phone-value">{{ boundPhoneDisplay }}</strong>
-                </view>
+                <small class="bound-phone-label">手机号</small>
+                <strong class="bound-phone-value">{{ boundPhoneDisplay }}</strong>
                 <button
                   role="button"
                   class="text-button bound-phone-remove"

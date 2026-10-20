@@ -377,7 +377,7 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
       aiConsent: false,
     });
     assert.equal(profile.status, 200);
-    assert.equal(profile.data.name, '老爸');
+    assert.equal(profile.data.name, '爸爸');
     assert.equal(profile.data.relationship, '爸爸');
     assert.equal(profile.data.nickname, '老爸');
     assert.match(
@@ -389,6 +389,9 @@ test('Supabase H5 Pages adapter persists a private guest space and never opens p
     assert.equal(avatar.headers.get('content-type'), 'image/png');
     assert.equal(profile.data.aiConsent, false);
     assert.equal((await a.request('GET', '/profiles')).data.items.length, 1);
+    const profileState = await a.request('GET', '/app-state');
+    assert.equal(profileState.data.profiles[0].name, '爸爸');
+    assert.equal(profileState.data.profiles[0].nickname, '老爸');
     const recovered = client();
     assert.equal(
       (
