@@ -17,7 +17,11 @@ function collect(dir) {
   for (const file of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, file.name);
     if (file.isDirectory()) collect(full);
-    else if (!file.name.endsWith('.map') && file.name !== 'atlas.png')
+    else if (
+      !file.name.endsWith('.map') &&
+      file.name !== 'atlas.png' &&
+      !relative(root, full).startsWith(join('static', 'fonts'))
+    )
       items.push(['/' + relative(root, full), readFileSync(full)]);
   }
 }
