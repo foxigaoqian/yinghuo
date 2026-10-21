@@ -718,8 +718,48 @@ function loadBrowserImage(source: string) {
       reject(new Error('所选图片无法读取，请换一张图片后重试'));
     };
     image.src = source;
-    if (image.complete) queueMicrotask(finish);
+    if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) finish();
   });
+}
+
+function readBrowserImageFile(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && reader.result.startsWith('data:image/'))
+        resolve(reader.result);
+      else reject(new Error('所选图片无法读取，请换一张图片后重试'));
+    };
+    reader.onerror = () => reject(new Error('所选图片无法读取，请换一张图片后重试'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function selectedImageSource(
+  result: { tempFilePaths: string | string[]; tempFiles?: unknown | unknown[] },
+  index = 0,
+) {
+  const files = Array.isArray(result.tempFiles)
+    ? result.tempFiles
+    : result.tempFiles
+      ? [result.tempFiles]
+      : [];
+  const paths = Array.isArray(result.tempFilePaths)
+    ? result.tempFilePaths
+    : result.tempFilePaths
+      ? [result.tempFilePaths]
+      : [];
+  const file = files[index];
+  if (typeof Blob !== 'undefined' && file instanceof Blob) return readBrowserImageFile(file);
+  return paths[index] || '';
+}
+
+function selectedImageCount(result: { tempFilePaths: string | string[] }) {
+  return Array.isArray(result.tempFilePaths)
+    ? result.tempFilePaths.length
+    : result.tempFilePaths
+      ? 1
+      : 0;
 }
 
 async function compressAvatar(source: string, focusY = 50) {
@@ -777,11 +817,13 @@ function chooseStoryPhotos() {
     success: (result) => {
       void app.run(async () => {
         storyPhotoProcessing.value = true;
-        storyPhotoProgress.total = result.tempFilePaths.slice(0, remaining).length;
+        storyPhotoProgress.total = Math.min(remaining, selectedImageCount(result));
         storyPhotoProgress.done = 0;
         try {
           const next = [...storyImages.value];
-          for (const source of result.tempFilePaths.slice(0, remaining)) {
+          for (let index = 0; index < storyPhotoProgress.total; index += 1) {
+            const source = await selectedImageSource(result, index);
+            if (!source) continue;
             const photo = await compressStoryPhoto(source);
             if ([...next, photo].reduce((sum, item) => sum + item.length, 0) > 1_100_000)
               throw new Error('照片总大小超过限制，请减少一两张后再试');
@@ -807,11 +849,13 @@ function chooseProfileAvatar() {
     count: 1,
     sizeType: ['compressed'],
     success: (result) => {
-      const source = result.tempFilePaths[0];
-      if (!source) return;
-      avatarCropSource.value = source;
-      avatarCropY.value = 50;
-      avatarCropTarget.value = 'profile';
+      void (async () => {
+        const source = await selectedImageSource(result);
+        if (!source) return;
+        avatarCropSource.value = source;
+        avatarCropY.value = 50;
+        avatarCropTarget.value = 'profile';
+      })();
     },
   });
 }
@@ -825,11 +869,13 @@ function chooseAccountAvatar() {
     count: 1,
     sizeType: ['compressed'],
     success: (result) => {
-      const source = result.tempFilePaths[0];
-      if (!source) return;
-      avatarCropSource.value = source;
-      avatarCropY.value = 50;
-      avatarCropTarget.value = 'account';
+      void (async () => {
+        const source = await selectedImageSource(result);
+        if (!source) return;
+        avatarCropSource.value = source;
+        avatarCropY.value = 50;
+        avatarCropTarget.value = 'account';
+      })();
     },
   });
 }
@@ -1009,12 +1055,12 @@ function chooseChatPhoto(sourceType: 'album' | 'camera') {
     sizeType: ['compressed'],
     sourceType: [sourceType],
     success: (result) => {
-      const source = result.tempFilePaths[0];
-      if (!source) return;
       void (async () => {
         try {
           app.error = '';
           chatPhotoProcessing.value = true;
+          const source = await selectedImageSource(result);
+          if (!source) return;
           chatPhotoDraft.value = await compressChatPhoto(source);
           activeChatPanel.value = 'none';
           app.status = '照片已选好，可以补充一句说明，也可以直接发送。';
@@ -1513,8 +1559,10 @@ function choosePhoto() {
   uni.chooseImage({
     count: 1,
     success: (r) => {
-      preview.value = r.tempFilePaths[0] || '';
-      app.status = '仅本机预览，未上传，也未进行 AI 修复。';
+      void (async () => {
+        preview.value = await selectedImageSource(r);
+        app.status = '仅本机预览，未上传，也未进行 AI 修复。';
+      })();
     },
   });
 }
