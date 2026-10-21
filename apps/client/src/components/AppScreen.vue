@@ -697,10 +697,33 @@ function editCurrentProfile() {
 function formInitial() {
   return profileDisplayName.value.charAt(0) || '萤';
 }
+function loadBrowserImage(source: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      image.onload = null;
+      image.onerror = null;
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) resolve(image);
+      else reject(new Error('所选图片无法读取，请换一张图片后重试'));
+    };
+    image.onload = finish;
+    image.onerror = () => {
+      if (settled) return;
+      settled = true;
+      image.onload = null;
+      image.onerror = null;
+      reject(new Error('所选图片无法读取，请换一张图片后重试'));
+    };
+    image.src = source;
+    if (image.complete) queueMicrotask(finish);
+  });
+}
+
 async function compressAvatar(source: string, focusY = 50) {
-  const image = new Image();
-  image.src = source;
-  await image.decode();
+  const image = await loadBrowserImage(source);
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -727,9 +750,7 @@ async function compressAvatar(source: string, focusY = 50) {
   return result;
 }
 async function compressStoryPhoto(source: string) {
-  const image = new Image();
-  image.src = source;
-  await image.decode();
+  const image = await loadBrowserImage(source);
   const maxSide = 840;
   const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement('canvas');
@@ -954,9 +975,7 @@ function openChatMemoryPanel() {
 }
 
 async function compressChatPhoto(source: string) {
-  const image = new Image();
-  image.src = source;
-  await image.decode();
+  const image = await loadBrowserImage(source);
   const longest = Math.max(image.naturalWidth, image.naturalHeight);
   const target = Math.min(640, longest);
   const ratio = longest ? target / longest : 1;
