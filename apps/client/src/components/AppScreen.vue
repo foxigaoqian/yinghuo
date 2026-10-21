@@ -296,11 +296,12 @@ async function loadScreen() {
       (props.page === 'memories' && !app.libraryReady) ||
       (['square', 'shares'].includes(props.page) && !screenReady.value) ||
       (!['home', 'login'].includes(props.page) && !screenReady.value);
+    const publicPostsPromise = props.page === 'square' ? app.fetchPublicPosts() : null;
     await app.refresh(
       !['home', 'login'].includes(props.page),
       Boolean(props.query?.profileId),
       chatConversation.value,
-      ['square', 'shares', 'memories', 'compose'].includes(props.page),
+      ['shares', 'memories', 'compose'].includes(props.page),
     );
     if (props.page === 'login' && app.session.userId && !recovering.value) {
       replace(app.current ? 'home' : 'create');
@@ -314,7 +315,7 @@ async function loadScreen() {
       replace('shares');
       return;
     }
-    if (props.page === 'square') await app.fetchPublicPosts();
+    if (publicPostsPromise) await publicPostsPromise;
     if (props.page === 'shares') await app.fetchOwnPosts();
     if (['memories', 'me'].includes(props.page)) await app.fetchLibrary();
     if (
@@ -2965,6 +2966,7 @@ function confirmDeleteAccount() {
                 :src="story.authorAvatarUrl"
                 class="profile-avatar"
                 mode="aspectFill"
+                :lazy-load="true"
                 :aria-label="storyAuthor(story) + '的头像'"
               />
               <view v-else class="profile-avatar fallback">{{ storyAvatar(story) }}</view>
@@ -2994,6 +2996,7 @@ function confirmDeleteAccount() {
                   :key="story.id + '-photo-' + photoIndex"
                   :src="photo"
                   :mode="story.media.length === 1 ? 'widthFix' : 'aspectFit'"
+                  :lazy-load="true"
                   :aria-label="`动态照片 ${photoIndex + 1}`"
                 />
               </view>
@@ -3112,6 +3115,7 @@ function confirmDeleteAccount() {
                   :src="comment.authorAvatarUrl"
                   class="profile-avatar"
                   mode="aspectFill"
+                  :lazy-load="true"
                   :aria-label="comment.authorName + '的头像'"
                 />
                 <view v-else class="profile-avatar fallback">{{
@@ -3185,6 +3189,7 @@ function confirmDeleteAccount() {
                 :src="post.authorAvatarUrl"
                 class="profile-avatar"
                 mode="aspectFill"
+                :lazy-load="true"
               />
               <view v-else class="profile-avatar fallback">{{
                 post.profileRelationship?.slice(0, 1) || '我'
@@ -3197,7 +3202,12 @@ function confirmDeleteAccount() {
             <text class="share-status" :class="post.moderation">{{ postStatus(post) }}</text>
             <p v-if="post.body">{{ post.body }}</p>
             <view v-if="post.media?.length" class="square-media-grid count-1">
-              <image :src="post.media[0]" mode="widthFix" aria-label="发布照片" />
+              <image
+                :src="post.media[0]"
+                mode="widthFix"
+                :lazy-load="true"
+                aria-label="发布照片"
+              />
             </view>
             <small v-if="post.moderation === 'rejected' && post.moderationReason">{{
               post.moderationReason
@@ -3254,6 +3264,7 @@ function confirmDeleteAccount() {
                 :key="selectedPost.id + '-detail-photo-' + photoIndex"
                 :src="photo"
                 :mode="selectedPost.media.length === 1 ? 'widthFix' : 'aspectFit'"
+                :lazy-load="true"
                 :aria-label="`纪念照片 ${photoIndex + 1}`"
               />
             </view>
@@ -3301,6 +3312,7 @@ function confirmDeleteAccount() {
                     :src="comment.authorAvatarUrl"
                     class="profile-avatar"
                     mode="aspectFill"
+                    :lazy-load="true"
                     :aria-label="comment.authorName + '的头像'"
                   />
                   <view v-else class="profile-avatar fallback">{{
