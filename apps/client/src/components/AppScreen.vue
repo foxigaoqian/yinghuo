@@ -69,7 +69,6 @@ const storyImages = ref<string[]>([]);
 const storyPhotoProcessing = ref(false);
 const storyPhotoProgress = reactive({ done: 0, total: 0 });
 const avatarCropSource = ref('');
-const avatarCropY = ref(50);
 const avatarCropTarget = ref<'profile' | 'account'>('profile');
 const preview = ref('');
 const chatText = ref('');
@@ -839,7 +838,6 @@ function chooseProfileAvatar() {
         const source = await selectedImageSource(result);
         if (!source) return;
         avatarCropSource.value = source;
-        avatarCropY.value = 50;
         avatarCropTarget.value = 'profile';
       })();
     },
@@ -859,7 +857,6 @@ function chooseAccountAvatar() {
         const source = await selectedImageSource(result);
         if (!source) return;
         avatarCropSource.value = source;
-        avatarCropY.value = 50;
         avatarCropTarget.value = 'account';
       })();
     },
@@ -872,7 +869,7 @@ function confirmAvatarCrop() {
   const source = avatarCropSource.value;
   if (!source || app.busy) return;
   void app.run(async () => {
-    const result = await compressAvatar(source, avatarCropY.value);
+    const result = await compressAvatar(source, 50);
     if (avatarCropTarget.value === 'profile') {
       form.avatarDataUrl = result;
       form.removeAvatar = false;
@@ -3968,16 +3965,6 @@ function confirmDeleteAccount() {
             </button>
           </view>
           <view v-if="app.error" class="notice error" role="alert">{{ app.error }}</view>
-          <button
-            v-if="app.bootstrap?.userAvatarUrl"
-            role="button"
-            class="text-button me-avatar-remove"
-            :disabled="app.busy"
-            @click="removeAccountAvatar"
-          >
-            移除个人头像
-          </button>
-
           <view class="me-settings">
             <button role="button" class="me-setting-row" @click="go('profile')">
               <view class="me-setting-icon"><AppIcon name="edit" /></view>
@@ -4039,27 +4026,19 @@ function confirmDeleteAccount() {
       @click.self="cancelAvatarCrop"
     >
       <view class="avatar-crop-card">
-        <h2 id="avatar-crop-title">调整头像位置</h2>
-        <p>上下拖动滑杆，让脸部或主体完整显示在圆形区域内。</p>
+        <h2 id="avatar-crop-title">预览个人头像</h2>
+        <p>头像会自动居中显示在圆形区域内。</p>
         <view class="avatar-crop-preview">
           <image
             :src="avatarCropSource"
             mode="aspectFill"
-            :style="{ objectPosition: '50% ' + avatarCropY + '%' }"
             aria-label="头像裁剪预览"
           />
         </view>
-        <input
-          v-model.number="avatarCropY"
-          type="range"
-          min="0"
-          max="100"
-          aria-label="调整头像上下位置"
-        />
         <view class="avatar-crop-actions">
           <button role="button" class="btn secondary" @click="cancelAvatarCrop">取消</button>
           <button role="button" class="btn" :disabled="app.busy" @click="confirmAvatarCrop">
-            {{ app.busy ? '正在处理…' : '使用这个位置' }}
+            {{ app.busy ? '正在处理…' : '使用这张头像' }}
           </button>
         </view>
       </view>
