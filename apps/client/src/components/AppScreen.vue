@@ -638,20 +638,6 @@ function saveCommunityName() {
       : '已恢复默认昵称“萤火朋友”。';
   });
 }
-async function shareStoryLink() {
-  if (!selectedPost.value || typeof window === 'undefined') return;
-  const url = window.location.origin + '/pages/story/index?id=' + encodeURIComponent(selectedPost.value.id);
-  try {
-    if (navigator.share) await navigator.share({ title: selectedPost.value.title || '萤火故事', url });
-    else {
-      await navigator.clipboard.writeText(url);
-      app.status = '故事链接已复制。';
-    }
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') return;
-    app.error = '暂时无法分享，请稍后重试。';
-  }
-}
 function openProfileChat(id: string) {
   if (id !== app.currentId) {
     app.select(id);
@@ -3300,10 +3286,6 @@ function confirmDeleteAccount() {
               <button role="button" class="square-action" @click="focusStoryComment">
                 <AppIcon name="chat" />
                 <text>留言 {{ selectedPost.commentCount || 0 }}</text>
-              </button>
-              <button role="button" class="square-action" @click="shareStoryLink">
-                <AppIcon name="share" />
-                <text>分享</text>
               </button>
             </view>
             <view class="story-comments">
