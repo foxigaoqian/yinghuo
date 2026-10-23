@@ -2422,7 +2422,7 @@ checkbox:not([hidden]) .uni-checkbox-input:has(svg) {
   cursor: pointer;
 }
 .assistant-segment + .assistant-segment {
-  margin-top: 1px;
+  margin-top: 7px;
 }
 .message-time {
   margin: 8px 0 4px;
@@ -2462,8 +2462,14 @@ html button.chat-memory-save[disabled] {
   margin: 13px 0;
 }
 .typing-bubble {
+  width: 58px;
   min-width: 58px;
+  max-width: 58px;
+  min-height: 40px;
+  box-sizing: border-box;
+  flex: 0 0 58px;
   padding: 13px 15px;
+  overflow: visible;
 }
 .typing-dots {
   display: flex;
@@ -5340,7 +5346,9 @@ button.text-button.danger-text {
   overflow: hidden;
   border: 4px solid #fff;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--line), 0 10px 28px #3f321f22;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 10px 28px #3f321f22;
 }
 .avatar-crop-preview image {
   display: block;

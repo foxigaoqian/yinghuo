@@ -633,9 +633,7 @@ function saveCommunityName() {
   if (app.busy) return;
   void app.run(async () => {
     await app.updateCommunityName(form.communityName.trim());
-    app.status = form.communityName.trim()
-      ? '广场昵称已保存。'
-      : '已恢复默认昵称“萤火朋友”。';
+    app.status = form.communityName.trim() ? '广场昵称已保存。' : '已恢复默认昵称“萤火朋友”。';
   });
 }
 function openProfileChat(id: string) {
@@ -1248,15 +1246,33 @@ function saveChatMessageAsMemory(text: string) {
 function splitAssistantMessage(text: string) {
   const normalized = text.trim();
   if (!normalized) return [''];
-  const paragraphParts = normalized
+  const paragraphs = normalized
     .split(/\n{2,}/)
-    .map((part) => part.trim())
+    .map((part) => part.replace(/\s*\n\s*/g, '').trim())
     .filter(Boolean);
-  if (paragraphParts.length > 1) return paragraphParts.slice(0, 3);
-  const sentences = normalized.match(/[^。！？!?]+[。！？!?]?/g)?.map((part) => part.trim()) || [];
-  if (sentences.length <= 1) return [normalized];
-  if (sentences.length <= 3) return sentences;
-  return [sentences[0], sentences[1], sentences.slice(2).join('')];
+  const source = paragraphs.length > 1 ? paragraphs : [normalized.replace(/\s*\n\s*/g, '')];
+  const segments: string[] = [];
+  for (const paragraph of source) {
+    if (paragraph.length <= 72) {
+      segments.push(paragraph);
+      continue;
+    }
+    const sentences = paragraph.match(/[^。！？!?]+[。！？!?]?/g)?.map((part) => part.trim()) || [];
+    if (sentences.length <= 1) {
+      for (let start = 0; start < paragraph.length; start += 72)
+        segments.push(paragraph.slice(start, start + 72));
+      continue;
+    }
+    let current = '';
+    for (const sentence of sentences) {
+      if (current && current.length + sentence.length > 72) {
+        segments.push(current);
+        current = sentence;
+      } else current += sentence;
+    }
+    if (current) segments.push(current);
+  }
+  return segments.length ? segments : [normalized];
 }
 
 function chatMessageTimeLabel(index: number) {
@@ -1925,7 +1941,9 @@ function confirmDeleteAccount() {
       </template>
       <template v-else-if="page === 'login'">
         <view class="sprite2 pose-fly login-mascot" role="img" aria-label="小萤" />
-        <h1 :class="{ 'sr-only': recovering }">{{ recovering ? '找回我的萤火' : '从一句话开始' }}</h1>
+        <h1 :class="{ 'sr-only': recovering }">
+          {{ recovering ? '找回我的萤火' : '从一句话开始' }}
+        </h1>
         <p class="caption">
           {{
             recovering
@@ -2028,7 +2046,7 @@ function confirmDeleteAccount() {
             ><text>TA 与你的关系（必填）</text
             ><input
               v-model="form.relationship"
-                aria-label="TA 与你的关系"
+              aria-label="TA 与你的关系"
               maxlength="40"
               placeholder="例如：老师、阿明"
           /></label>
@@ -2629,9 +2647,14 @@ function confirmDeleteAccount() {
                       >{{ profileInitial(app.current) }}</view
                     >
                     <view class="message-content" :class="{ user: message.role === 'user' }">
-                      <view v-if="message.role === 'assistant'" class="bubble assistant-segment"
-                        ><text>{{ message.text }}</text></view
-                      >
+                      <template v-if="message.role === 'assistant'">
+                        <view
+                          v-for="(segment, segmentIndex) in splitAssistantMessage(message.text)"
+                          :key="message.id + '-segment-' + segmentIndex"
+                          class="bubble assistant-segment"
+                          ><text>{{ segment }}</text></view
+                        >
+                      </template>
                       <view
                         v-else
                         class="bubble user"
@@ -2680,14 +2703,16 @@ function confirmDeleteAccount() {
                 <view
                   v-if="pendingChatText || pendingChatPhoto"
                   class="message-row user pending-message"
-                  ><view class="bubble user"
-                    ><image
-                      v-if="pendingChatPhoto"
-                      class="chat-message-photo"
-                      :src="pendingChatPhoto"
-                      mode="aspectFit"
-                      aria-label="正在发送的照片"
-                    /><text v-if="pendingChatText">{{ pendingChatText }}</text></view
+                  ><view class="message-content user"
+                    ><view class="bubble user"
+                      ><image
+                        v-if="pendingChatPhoto"
+                        class="chat-message-photo"
+                        :src="pendingChatPhoto"
+                        mode="aspectFit"
+                        aria-label="正在发送的照片"
+                      /><text v-if="pendingChatText">{{ pendingChatText }}</text></view
+                    ></view
                   ></view
                 >
                 <view v-if="chatReplyPending" class="message-row typing-row" role="status">
@@ -2710,7 +2735,12 @@ function confirmDeleteAccount() {
                   ></view>
                 </view>
               </view>
-              <view v-if="safetyCheckActive" class="safety-quick-actions" role="group" aria-label="安全状态快捷回复">
+              <view
+                v-if="safetyCheckActive"
+                class="safety-quick-actions"
+                role="group"
+                aria-label="安全状态快捷回复"
+              >
                 <button role="button" :disabled="app.busy" @click="sendSafetyAnswer('现在安全')">
                   我现在安全
                 </button>
@@ -3128,14 +3158,18 @@ function confirmDeleteAccount() {
                     >{{ comment.body }}
                   </p>
                   <small>{{ squareDate(comment.createdAt) }} · 回复</small>
-                  <small v-if="comment.moderation === 'pending'" class="comment-pending">审核中 · 仅你可见</small>
+                  <small v-if="comment.moderation === 'pending'" class="comment-pending"
+                    >审核中 · 仅你可见</small
+                  >
                   <button
                     v-if="comment.canDelete || comment.canHide || comment.canReport"
                     role="button"
                     class="comment-more"
                     aria-label="留言操作"
                     @click.stop="manageComment(comment)"
-                  >操作</button>
+                  >
+                    操作
+                  </button>
                 </view>
               </view>
             </view>
@@ -3202,12 +3236,7 @@ function confirmDeleteAccount() {
             <text class="share-status" :class="post.moderation">{{ postStatus(post) }}</text>
             <p v-if="post.body">{{ post.body }}</p>
             <view v-if="post.media?.length" class="square-media-grid count-1">
-              <image
-                :src="post.media[0]"
-                mode="widthFix"
-                :lazy-load="true"
-                aria-label="发布照片"
-              />
+              <image :src="post.media[0]" mode="widthFix" :lazy-load="true" aria-label="发布照片" />
             </view>
             <small v-if="post.moderation === 'rejected' && post.moderationReason">{{
               post.moderationReason
@@ -3320,7 +3349,9 @@ function confirmDeleteAccount() {
                   }}</view>
                   <view
                     ><strong>{{ comment.authorName }}</strong>
-                    <small v-if="comment.moderation === 'pending'" class="comment-pending">审核中 · 仅你可见</small>
+                    <small v-if="comment.moderation === 'pending'" class="comment-pending"
+                      >审核中 · 仅你可见</small
+                    >
                     <p>
                       <text v-if="comment.replyToName">回复 {{ comment.replyToName }}：</text
                       >{{ comment.body }}
@@ -3333,7 +3364,9 @@ function confirmDeleteAccount() {
                       role="button"
                       class="story-reply-button"
                       @click="manageComment(comment)"
-                    >操作</button></view
+                    >
+                      操作
+                    </button></view
                   >
                 </view>
               </view>
@@ -4041,11 +4074,7 @@ function confirmDeleteAccount() {
         <h2 id="avatar-crop-title">预览个人头像</h2>
         <p>头像会自动居中显示在圆形区域内。</p>
         <view class="avatar-crop-preview">
-          <image
-            :src="avatarCropSource"
-            mode="aspectFill"
-            aria-label="头像裁剪预览"
-          />
+          <image :src="avatarCropSource" mode="aspectFill" aria-label="头像裁剪预览" />
         </view>
         <view class="avatar-crop-actions">
           <button role="button" class="btn secondary" @click="cancelAvatarCrop">取消</button>
